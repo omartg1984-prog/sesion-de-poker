@@ -12,13 +12,18 @@ import {
   signed,
 } from './money'
 
-const FELT_TOP = '#0f6b3f'
-const FELT_BOTTOM = '#083f26'
-const GOLD = '#e8c56a'
-const GOLD_SOFT = '#f7d774'
-const CREAM = '#dfeee4'
-const WIN = '#2ecc71'
-const LOSS = '#ff5c5c'
+/*
+ * Mismos colores que la app (ver index.css). Sobre el fieltro oscuro el oro va en tres
+ * intensidades para que no se aplane todo en un solo dorado: el más brillante es el de
+ * las ganancias, que es lo que la gente busca primero al abrir la imagen.
+ */
+const FELT_TOP = '#243020'
+const FELT_BOTTOM = '#1b241a'
+const GOLD = '#b48e43' // marco y etiquetas
+const GOLD_SOFT = '#d9b063' // títulos
+const CREAM = '#d8d2c4' // cifras neutras
+const WIN = '#f0d190' // ganancias: el oro más brillante
+const LOSS = '#e4695e' // pérdidas: crimson aclarado para que lea sobre oscuro
 const MEDALS = ['🥇', '🥈', '🥉']
 
 function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
@@ -49,7 +54,7 @@ function paintTable(ctx: CanvasRenderingContext2D, w: number, h: number) {
   g.addColorStop(1, FELT_BOTTOM)
   ctx.fillStyle = g
   ctx.fillRect(0, 0, w, h)
-  ctx.strokeStyle = 'rgba(232,197,106,.85)'
+  ctx.strokeStyle = 'rgba(180,142,67,.9)'
   ctx.lineWidth = 5
   roundRect(ctx, 16, 16, w - 32, h - 32, 26)
   ctx.stroke()
@@ -148,7 +153,7 @@ export function drawCashCanvas(s: SessionState): HTMLCanvasElement {
     ctx.fillText(r.recompra > 0 ? moneyShort(r.recompra) : '—', cRec, midY)
     ctx.fillText(moneyShort(r.fin), cFin, midY)
 
-    ctx.fillStyle = r.pl > 0.005 ? WIN : r.pl < -0.005 ? LOSS : '#9fb3a8'
+    ctx.fillStyle = r.pl > 0.005 ? WIN : r.pl < -0.005 ? LOSS : '#9d9483'
     ctx.font = "700 26px 'Oswald',Arial,sans-serif"
     ctx.fillText(signed(r.pl), cRes, midY)
     ry += rowH
@@ -203,7 +208,7 @@ export function drawTournamentCanvas(s: SessionState): HTMLCanvasElement {
   ctx.fillStyle = 'rgba(255,255,255,.06)'
   roundRect(ctx, pad, headerH - 6, W - 2 * pad, poolH - 16, 16)
   ctx.fill()
-  ctx.strokeStyle = 'rgba(232,197,106,.6)'
+  ctx.strokeStyle = 'rgba(180,142,67,.65)'
   ctx.lineWidth = 2
   roundRect(ctx, pad, headerH - 6, W - 2 * pad, poolH - 16, 16)
   ctx.stroke()

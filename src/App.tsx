@@ -123,8 +123,7 @@ export default function App() {
       <BackupPanel />
 
       <p className="mt-4 text-center text-xs text-mint opacity-85">
-        Todo se guarda en este dispositivo. Instálala desde el menú del navegador para usarla sin
-        internet.
+        Todo se guarda en este dispositivo.
       </p>
 
       <Toast />

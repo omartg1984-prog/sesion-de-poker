@@ -1,20 +1,34 @@
 @import 'tailwindcss';
 
+/*
+ * Paleta "Salón privado": verde musgo y chocolate de fondo, oro antiguo de acento,
+ * tarjetas crema y crimson reservado para las pérdidas.
+ *
+ * Toda la app lee estos nombres (`bg-gold`, `text-ink`, …); ningún componente conoce
+ * un color concreto, así que retocar un tono se hace aquí y en ningún otro lado.
+ *
+ * Ganancia y pérdida llevan dos tonos cada uno porque un mismo color no puede leerse
+ * sobre las tarjetas crema y sobre el fondo oscuro: `-alto` es la versión para fondo
+ * oscuro. Los cuatro valores están medidos y pasan AA (4.5:1) sobre su fondo —
+ * el oro de la paleta (#b48e43) da 2.53 sobre crema, por eso "ganó" usa bronce.
+ */
 @theme {
-  --color-felt: #0d5c37;
-  --color-felt-deep: #083f26;
-  --color-felt-line: #0a4a2b;
-  --color-gold: #e8c56a;
-  --color-gold-soft: #f7d774;
-  --color-paper: #f6f2e8;
-  --color-paper-soft: #fbf9f2;
-  --color-paper-line: #e2dbc9;
-  --color-ink: #20281f;
-  --color-ink-soft: #5c6357;
-  --color-win: #177a44;
-  --color-loss: #c0392b;
-  --color-mint: #cfe6d8;
-  --color-mint-soft: #bfe0cc;
+  --color-felt: #243020;
+  --color-felt-deep: #1b241a;
+  --color-felt-line: #12190f;
+  --color-gold: #b48e43;
+  --color-gold-soft: #d9b063;
+  --color-paper: #f1e9da;
+  --color-paper-soft: #f7f1e6;
+  --color-paper-line: #ddd2bc;
+  --color-ink: #2e1a11;
+  --color-ink-soft: #6b5b4b;
+  --color-win: #7a5d20;
+  --color-win-alto: #d9b063;
+  --color-loss: #8b1a1a;
+  --color-loss-alto: #e4695e;
+  --color-mint: #c9c3b2;
+  --color-mint-soft: #b5ae9c;
 
   --font-display: 'Oswald', 'Arial Narrow', system-ui, sans-serif;
   --font-body: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
@@ -22,6 +36,7 @@
   --radius-card: 16px;
 }
 
+/* ---- A · Salón privado (la de por defecto) ---- */
 @layer base {
   html,
   body {
@@ -32,10 +47,14 @@
   body {
     font-family: var(--font-body);
     color: var(--color-ink);
-    background: radial-gradient(120% 90% at 50% 0%, var(--color-felt) 0%, var(--color-felt-deep) 70%) fixed;
+    /* Verde musgo que se funde a chocolate: la mesa vista desde un salón en penumbra. */
+    background: radial-gradient(120% 90% at 50% 0%, #243020 0%, #1b241a 55%, #2e1a11 100%) fixed;
     min-height: 100vh;
     min-height: 100dvh;
     -webkit-text-size-adjust: 100%;
+    /* La barra de estado de Android se comía el título dentro del APK. */
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
   }
 
   /* Foco siempre visible al navegar con teclado. */
