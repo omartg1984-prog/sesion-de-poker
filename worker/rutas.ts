@@ -35,12 +35,23 @@ function leerCookie(peticion: Request, nombre: string): string | null {
   return null
 }
 
-function cookieSesion(token: string, dias = DIAS_SESION): string {
-  const attrs = `Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${Math.round(dias * 86400)}`
-  return `${COOKIE}=${token}; ${attrs}`
+/**
+ * `Secure` solo cuando la conexión de verdad es HTTPS. En producción siempre lo es,
+ * pero el servidor de desarrollo se abre por http desde el celular (192.168.x.x) y
+ * ahí el navegador descarta en silencio cualquier cookie marcada como Secure: el
+ * registro funcionaría y la sesión se perdería en la siguiente petición.
+ */
+function cookieSesion(token: string, seguro: boolean, dias = DIAS_SESION): string {
+  const attrs = ['Path=/', 'HttpOnly', 'SameSite=Lax', `Max-Age=${Math.round(dias * 86400)}`]
+  if (seguro) attrs.push('Secure')
+  return `${COOKIE}=${token}; ${attrs.join('; ')}`
 }
 
-const cookieBorrada = `${COOKIE}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`
+function cookieBorrada(seguro: boolean): string {
+  const attrs = ['Path=/', 'HttpOnly', 'SameSite=Lax', 'Max-Age=0']
+  if (seguro) attrs.push('Secure')
+  return `${COOKIE}=; ${attrs.join('; ')}`
+}
 
 async function usuarioDe(peticion: Request, env: Env): Promise<FilaUsuario | null> {
   const token = leerCookie(peticion, COOKIE)
@@ -77,6 +88,7 @@ export async function rutas(
 ): Promise<Response | null> {
   const partes = url.pathname.replace(/^\/api\/?/, '').split('/').filter(Boolean)
   const metodo = peticion.method
+  const seguro = url.protocol === 'https:'
   const cuerpo = async <T>(): Promise<T> => {
     try {
       return (await peticion.json()) as T
@@ -118,7 +130,7 @@ export async function rutas(
       .run()
 
     const fila = await env.DB.prepare('SELECT * FROM usuarios WHERE id = ?').bind(id).first<FilaUsuario>()
-    return json({ usuario: aPublico(fila!) }, 201, { 'set-cookie': cookieSesion(token) })
+    return json({ usuario: aPublico(fila!) }, 201, { 'set-cookie': cookieSesion(token, seguro) })
   }
 
   if (partes[0] === 'entrar' && metodo === 'POST') {
@@ -152,14 +164,14 @@ export async function rutas(
       .bind(th, fila.id, ahora(), enDias(DIAS_SESION))
       .run()
 
-    return json({ usuario: aPublico(fila) }, 200, { 'set-cookie': cookieSesion(token) })
+    return json({ usuario: aPublico(fila) }, 200, { 'set-cookie': cookieSesion(token, seguro) })
   }
 
   if (partes[0] === 'salir' && metodo === 'POST') {
     const token = leerCookie(peticion, COOKIE)
     if (token)
       await env.DB.prepare('DELETE FROM sesiones WHERE token_hash = ?').bind(await hashearToken(token)).run()
-    return json({ ok: true }, 200, { 'set-cookie': cookieBorrada })
+    return json({ ok: true }, 200, { 'set-cookie': cookieBorrada(seguro) })
   }
 
   /* ===== de aquí en adelante hace falta sesión ===== */
