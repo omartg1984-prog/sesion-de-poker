@@ -1,8 +1,12 @@
 # Sesión de Póker
 
+**▶ https://sesion-de-poker.omartg-1984.workers.dev**
+
 App web instalable (PWA) para llevar la cuenta de las partidas de póker en casa: cuánto pone
 cada quien, cómo se reparten las fichas físicas según el inventario que tienes, y quién ganó.
 Funciona sin internet, guarda todo sola en el dispositivo y no manda nada a ningún servidor.
+
+Cada `git push` a `main` la republica sola en Cloudflare (~1 min).
 
 ## Cómo correrla
 
