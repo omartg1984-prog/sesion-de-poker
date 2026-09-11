@@ -79,7 +79,8 @@ export default defineConfig(({ mode }) => {
     test: {
       globals: true,
       environment: "node",
-      include: ["src/**/*.test.ts"],
+      // El worker también tiene pruebas: su lógica de puntos es aritmética pura.
+      include: ["src/**/*.test.ts", "worker/**/*.test.ts"],
     },
   };
 });

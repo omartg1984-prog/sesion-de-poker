@@ -154,6 +154,7 @@ export interface Posicion {
   ganadas: number
   podios: number
   ultimos: number
+  puntos: number
 
   /** Positiva = noches ganando seguidas; negativa = perdiendo. */
   rachaActual: number

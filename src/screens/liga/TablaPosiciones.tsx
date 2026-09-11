@@ -8,10 +8,16 @@ import { EPS, money, signed } from '../../lib/money'
 import type { DatosLiga } from '../../lib/imagenTablas'
 import type { Posicion, TablaPosiciones as Tabla } from '../../lib/api'
 
-type Orden = 'balance' | 'roi' | 'promedio' | 'partidas'
+type Orden = 'balance' | 'puntos' | 'roi' | 'promedio' | 'partidas'
 
 const ORDENES: { id: Orden; label: string; ayuda: string }[] = [
   { id: 'balance', label: 'Saldo', ayuda: 'Lo que lleva ganado o perdido en total.' },
+  {
+    id: 'puntos',
+    label: 'Campeonato',
+    ayuda:
+      'Un punto por cada jugador al que le ganaste esa noche, más uno por presentarte. Aquí no importa cuánto se apostó: gana el más constante, no el que más arriesga.',
+  },
   {
     id: 'roi',
     label: 'Rendimiento',
@@ -133,6 +139,7 @@ export default function TablaPosiciones({
   const enPositivo = porSaldo.filter((p) => p.balance > EPS)
 
   const ordenadas = [...tabla.posiciones].sort((a, b) => {
+    if (orden === 'puntos') return b.puntos - a.puntos || b.balance - a.balance
     if (orden === 'roi') return b.roi - a.roi
     if (orden === 'promedio') return b.promedio - a.promedio
     if (orden === 'partidas') return b.partidas - a.partidas
@@ -283,16 +290,30 @@ export default function TablaPosiciones({
               </span>
 
               <span className="shrink-0 text-right">
-                <span className={`block font-display font-bold ${claseSaldo(p.balance)}`}>
-                  {orden === 'roi'
-                    ? pct(p.roi)
-                    : orden === 'partidas'
-                      ? p.partidas
-                      : signed(orden === 'promedio' ? p.promedio : p.balance)}
-                </span>
-                <span className="block text-[11px] text-ink-soft">
-                  {orden === 'balance' ? pct(p.roi) : signed(p.balance)}
-                </span>
+                {orden === 'puntos' ? (
+                  <>
+                    <span className="block font-display font-bold text-ink">
+                      {p.puntos}
+                      <span className="text-[11px] font-normal text-ink-soft"> pts</span>
+                    </span>
+                    <span className={`block text-[11px] ${claseSaldo(p.balance)}`}>
+                      {signed(p.balance)}
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <span className={`block font-display font-bold ${claseSaldo(p.balance)}`}>
+                      {orden === 'roi'
+                        ? pct(p.roi)
+                        : orden === 'partidas'
+                          ? p.partidas
+                          : signed(orden === 'promedio' ? p.promedio : p.balance)}
+                    </span>
+                    <span className="block text-[11px] text-ink-soft">
+                      {orden === 'balance' ? pct(p.roi) : signed(p.balance)}
+                    </span>
+                  </>
+                )}
               </span>
             </li>
           ))}

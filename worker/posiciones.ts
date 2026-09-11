@@ -11,6 +11,17 @@ import type { ColorFicha, Env } from './tipos'
  * cuánto ganó o perdió esa noche.
  */
 
+/**
+ * Puntos de campeonato de una noche: uno por cada jugador al que le ganaste, más uno
+ * por presentarte.
+ *
+ * Se reparte así y no con una tabla fija (10-7-5-3…) porque las mesas no siempre son
+ * del mismo tamaño: ganarle a siete vale más que ganarle a tres, y con una tabla fija
+ * las dos noches pagarían igual. El punto por asistir premia al que no falla, que es
+ * justo lo que el saldo en dinero no mide.
+ */
+export const puntosDeLaNoche = (lugar: number, deCuantos: number) => deCuantos - lugar + 1
+
 interface FilaParticipacion {
   partida_id: string
   usuario_id: string
@@ -58,6 +69,8 @@ export interface Posicion {
   podios: number
   /** Veces que terminó último. */
   ultimos: number
+  /** Campeonato: suma de los puntos de cada noche. Ordena por constancia, no por dinero. */
+  puntos: number
 
   /** Positiva = noches ganando seguidas; negativa = perdiendo. */
   rachaActual: number
@@ -315,6 +328,7 @@ export async function calcularPosiciones(env: Env, ligaId: string): Promise<Tabl
       // Un podio en una mesa de tres no dice nada: los tres estarían en él.
       podios: noches.filter((n) => n.lugarEnLaMesa <= 3 && n.deCuantos > 3).length,
       ultimos: noches.filter((n) => n.lugarEnLaMesa === n.deCuantos && n.deCuantos > 1).length,
+      puntos: noches.reduce((a, n) => a + puntosDeLaNoche(n.lugarEnLaMesa, n.deCuantos), 0),
       rachaActual: rachaAlCierre(noches),
       mejorRacha: mejorRachaDe(noches),
       recompras: noches.reduce((a, n) => a + n.recompras, 0),
