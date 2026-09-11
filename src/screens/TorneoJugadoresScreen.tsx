@@ -1,3 +1,4 @@
+import { Plus } from 'lucide-react'
 import PlayerHeading from '../components/PlayerHeading'
 import Stepper from '../components/Stepper'
 import { money, paidOf, poolOf } from '../lib/money'
@@ -12,7 +13,7 @@ export default function TorneoJugadoresScreen() {
 
   return (
     <>
-      <div className="mb-3.5 rounded-xl bg-gradient-to-br from-[#0f6b3f] to-[#0a4a2b] px-4 py-3.5 text-center text-gold-soft shadow-[0_6px_16px_rgba(0,0,0,.2)]">
+      <div className="mb-3.5 rounded-xl bg-gradient-to-br from-[#2c3a26] to-[#1b241a] ring-1 ring-gold/25 px-4 py-3.5 text-center text-gold-soft shadow-[0_6px_16px_rgba(0,0,0,.2)]">
         <div className="text-xs tracking-[1px] text-mint uppercase opacity-85">Bolsa acumulada</div>
         <div className="mt-0.5 font-display text-[34px] font-bold" aria-live="polite">
           {money(poolOf(players, tournament))}
@@ -48,7 +49,8 @@ export default function TorneoJugadoresScreen() {
       ))}
 
       <button type="button" className="btn btn-gold" onClick={addPlayer}>
-        ＋ Agregar jugador
+        <Plus size={18} strokeWidth={2.6} />
+        Agregar jugador
       </button>
     </>
   )

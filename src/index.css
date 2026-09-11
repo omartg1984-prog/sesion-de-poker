@@ -36,7 +36,18 @@
   --radius-card: 16px;
 }
 
-/* ---- A · Salón privado (la de por defecto) ---- */
+/* Entrada suave al cambiar de sección. */
+@keyframes entrar {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
 @layer base {
   html,
   body {
@@ -131,7 +142,10 @@
   }
 
   .balance {
-    @apply mb-3 rounded-[9px] px-3 py-2.5 text-center text-[13px] font-semibold;
+    @apply mb-3 flex items-center justify-center gap-2 rounded-[9px] px-3 py-2.5 text-center text-[13px] font-semibold;
+  }
+  .balance svg {
+    @apply shrink-0;
   }
   .balance-ok {
     @apply bg-[#e2f2e6] text-win;

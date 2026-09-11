@@ -1,3 +1,4 @@
+import { ClipboardCopy, Download, Share2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { copyText } from '../lib/backup'
@@ -57,11 +58,12 @@ export default function ShareBlock({ plainText, alt }: Props) {
           disabled={busy}
           onClick={() =>
             run(async () =>
-              (await shareImage(session)) === 'shared' ? 'Listo ✅' : 'Imagen descargada',
+              (await shareImage(session)) === 'shared' ? 'Compartido' : 'Imagen descargada',
             )
           }
         >
-          📤 Compartir
+          <Share2 size={17} strokeWidth={2.4} />
+          Compartir
         </button>
         <button
           type="button"
@@ -74,16 +76,18 @@ export default function ShareBlock({ plainText, alt }: Props) {
             })
           }
         >
-          ⬇ Descargar
+          <Download size={17} strokeWidth={2.4} />
+          Descargar
         </button>
       </div>
 
       <button
         type="button"
         className="btn btn-ghost"
-        onClick={async () => showToast((await copyText(plainText())) ? 'Copiado ✅' : 'No se pudo copiar')}
+        onClick={async () => showToast((await copyText(plainText())) ? 'Copiado' : 'No se pudo copiar')}
       >
-        📋 Copiar texto
+        <ClipboardCopy size={17} strokeWidth={2.4} />
+        Copiar texto
       </button>
 
       <p className="mt-2 text-center text-xs text-ink-soft">

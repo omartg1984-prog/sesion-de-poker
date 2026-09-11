@@ -1,3 +1,4 @@
+import { AlertTriangle, Check, Plus, X } from 'lucide-react'
 import MoneyInput from '../components/MoneyInput'
 import NumInput from '../components/NumInput'
 import { EPS, money, payoutAmount, pctSum } from '../lib/money'
@@ -86,17 +87,32 @@ export default function TorneoConfigScreen() {
               aria-label={`Quitar el lugar ${i + 1}`}
               onClick={() => removePayout(i)}
             >
-              ✕
+              <X size={14} strokeWidth={2.5} />
             </button>
           </div>
         ))}
 
-        <button type="button" className="btn-dashed mb-3" onClick={addPayout}>
-          ＋ Agregar lugar
+        <button
+          type="button"
+          className="btn-dashed mb-3 flex items-center justify-center gap-1.5"
+          onClick={addPayout}
+        >
+          <Plus size={15} strokeWidth={2.6} />
+          Agregar lugar
         </button>
 
         <div className={`balance ${cuadra ? 'balance-ok' : 'balance-off'} mb-0`}>
-          {cuadra ? 'Suma: 100% ✓' : `Suma: ${sum}% ⚠ (debe sumar 100%)`}
+          {cuadra ? (
+            <>
+              <Check size={16} strokeWidth={2.6} />
+              Suma: 100%
+            </>
+          ) : (
+            <>
+              <AlertTriangle size={16} strokeWidth={2.4} />
+              Suma: {sum}% — debe sumar 100%
+            </>
+          )}
         </div>
       </section>
     </>

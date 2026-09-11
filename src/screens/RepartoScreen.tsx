@@ -1,3 +1,4 @@
+import { AlertTriangle, Check, ClipboardCopy, Pencil, RotateCcw } from 'lucide-react'
 import { useMemo } from 'react'
 import Chip from '../components/Chip'
 import NumInput from '../components/NumInput'
@@ -51,8 +52,11 @@ export default function RepartoScreen() {
 
         {!hasInventory ? (
           <div className="balance balance-off">
-            ⚠ Aún no indicas tu inventario. Ábrelo en 💰 Valor de las fichas (campo “Fichas que
-            tengo”). Mientras tanto, el reparto va sin límite.
+            <AlertTriangle size={16} strokeWidth={2.4} />
+            <span>
+              Aún no dices cuántas fichas tienes. Ponlo en Ajustes (el engrane, arriba a la
+              derecha). Mientras tanto el reparto va sin límite.
+            </span>
           </div>
         ) : (
           <label className="flex cursor-pointer items-center gap-2 text-[13px] font-semibold text-ink-soft">
@@ -67,7 +71,8 @@ export default function RepartoScreen() {
         )}
 
         <button type="button" className="btn-dashed mt-3" onClick={clearAllDeals}>
-          🔄 Recalcular todo en automático
+          <RotateCcw size={15} strokeWidth={2.6} />
+          Recalcular todo en automático
         </button>
       </section>
 
@@ -79,8 +84,9 @@ export default function RepartoScreen() {
             </span>
             <span className="min-w-0 truncate font-semibold">{r.name}</span>
             {r.manual && (
-              <span className="rounded-[20px] bg-[#fdf1c9] px-2 py-0.5 text-[11px] font-bold text-[#8a6d00]">
-                ✏️ Manual
+              <span className="inline-flex items-center gap-1 rounded-full bg-gold/20 px-2 py-0.5 text-[11px] font-bold text-[#7a5d20]">
+                <Pencil size={11} strokeWidth={2.8} />
+                Manual
               </span>
             )}
             <span className="ml-auto font-body text-base font-bold text-ink-soft">
@@ -110,28 +116,30 @@ export default function RepartoScreen() {
                 'Sin entrada capturada'
               ) : Math.abs(r.leftover) < EPS ? (
                 <>
-                  Total: <b className="text-ink">{money(r.total)}</b> ✓
+                  Total: <b className="text-ink">{money(r.total)}</b>{' '}
+                  <Check size={13} strokeWidth={3} className="inline text-win" />
                 </>
               ) : r.leftover > 0 ? (
                 <>
                   Total: <b className="text-ink">{money(r.total)}</b> · faltan {money(r.leftover)}{' '}
-                  <span className="text-loss">⚠</span>
+                  <AlertTriangle size={13} strokeWidth={2.6} className="inline text-loss" />
                 </>
               ) : (
                 <>
                   Total: <b className="text-ink">{money(r.total)}</b> · te pasas {money(-r.leftover)}{' '}
-                  <span className="text-loss">⚠</span>
+                  <AlertTriangle size={13} strokeWidth={2.6} className="inline text-loss" />
                 </>
               )}
             </p>
             {r.manual && (
               <button
                 type="button"
-                className="icon-btn ml-auto h-[34px] w-auto px-3 text-[13px] font-bold"
+                className="icon-btn ml-auto h-[34px] w-auto gap-1.5 px-3 text-[13px] font-bold"
                 title="Volver al reparto automático"
                 onClick={() => clearDeal(r.id)}
               >
-                🔄 Auto
+                <RotateCcw size={13} strokeWidth={2.8} />
+                Auto
               </button>
             )}
           </div>
@@ -145,13 +153,19 @@ export default function RepartoScreen() {
 
         {dist.anyOver ? (
           <div className="balance balance-off">
-            ⚠ Estás repartiendo más fichas de las que tienes en algún color. Ajusta a mano o baja
-            cantidades.
+            <AlertTriangle size={16} strokeWidth={2.4} />
+            <span>
+              Estás repartiendo más fichas de las que tienes en algún color. Ajusta a mano o baja
+              cantidades.
+            </span>
           </div>
         ) : dist.anyShortfall ? (
           <div className="balance balance-off">
-            ⚠ No alcanzó para repartir exacto a todos. Agrega más fichas pequeñas al inventario,
-            sube su cantidad, o edita a mano.
+            <AlertTriangle size={16} strokeWidth={2.4} />
+            <span>
+              No alcanzó para repartir exacto a todos. Agrega más fichas chicas al inventario,
+              sube su cantidad, o edita a mano.
+            </span>
           </div>
         ) : null}
 
@@ -171,7 +185,7 @@ export default function RepartoScreen() {
                   {ignore
                     ? `${u.used} repartidas`
                     : u.over
-                      ? `${u.used} / ${u.inventory}  ⚠ te pasas`
+                      ? `${u.used} / ${u.inventory} · te pasas`
                       : `${u.used} / ${u.inventory}  (sobran ${u.inventory - u.used})`}
                 </span>
               </li>
@@ -184,11 +198,12 @@ export default function RepartoScreen() {
           className="btn btn-share"
           onClick={async () =>
             showToast(
-              (await copyText(distributionText(dist, colors, money))) ? 'Copiado ✅' : 'No se pudo copiar',
+              (await copyText(distributionText(dist, colors, money))) ? 'Copiado' : 'No se pudo copiar',
             )
           }
         >
-          📋 Copiar reparto
+          <ClipboardCopy size={17} strokeWidth={2.4} />
+          Copiar reparto
         </button>
       </section>
     </>

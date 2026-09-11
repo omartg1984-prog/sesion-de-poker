@@ -1,8 +1,8 @@
+import { AlertTriangle, Check } from 'lucide-react'
+import Medalla from '../components/Medalla'
 import ShareBlock from '../components/ShareBlock'
 import { EPS, finalValueOf, investedOf, money, plOf, signed } from '../lib/money'
 import { useSession } from '../store/session'
-
-const MEDALS = ['🥇', '🥈', '🥉']
 
 /** Cierre de la partida en cash: cuadre, ranking e imagen para el chat. */
 export default function ResultadoScreen() {
@@ -21,7 +21,8 @@ export default function ResultadoScreen() {
   const plainText = () => {
     const lines = [`🃏 ${sessionName || 'Sesión de Póker'}`, '']
     ranking.forEach((r, i) => {
-      lines.push(`${r.pl > EPS ? MEDALS[i] || '•' : '•'} ${r.name}: ${signed(r.pl)}`)
+      const medalla = ['🥇', '🥈', '🥉'][i]
+      lines.push(`${r.pl > EPS && medalla ? medalla : '•'} ${r.name}: ${signed(r.pl)}`)
     })
     lines.push('', `Total en la mesa: ${money(totalInv)}`)
     return lines.join('\n')
@@ -47,11 +48,20 @@ export default function ResultadoScreen() {
       {totalInv === 0 && totalFin === 0 ? (
         <div className="balance balance-ok">Aún sin datos</div>
       ) : Math.abs(diff) < EPS ? (
-        <div className="balance balance-ok">✓ Las fichas cuadran con el dinero</div>
+        <div className="balance balance-ok">
+          <Check size={16} strokeWidth={2.6} />
+          Las fichas cuadran con el dinero
+        </div>
       ) : diff > 0 ? (
-        <div className="balance balance-off">⚠ Hay {money(diff)} de más en fichas contadas</div>
+        <div className="balance balance-off">
+          <AlertTriangle size={16} strokeWidth={2.4} />
+          Hay {money(diff)} de más en fichas contadas
+        </div>
       ) : (
-        <div className="balance balance-off">⚠ Faltan {money(-diff)} en fichas contadas</div>
+        <div className="balance balance-off">
+          <AlertTriangle size={16} strokeWidth={2.4} />
+          Faltan {money(-diff)} en fichas contadas
+        </div>
       )}
 
       <ul className="m-0 mb-3.5 list-none p-0">
@@ -61,7 +71,7 @@ export default function ResultadoScreen() {
             className="flex items-center justify-between border-b border-dashed border-paper-line px-1 py-2.5 font-semibold last:border-b-0"
           >
             <span className="flex min-w-0 items-center gap-2">
-              <span>{r.pl > EPS ? MEDALS[i] ?? '' : ''}</span>
+              {r.pl > EPS && <Medalla lugar={i + 1} />}
               <span className="truncate">{r.name}</span>
             </span>
             <span

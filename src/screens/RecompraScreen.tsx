@@ -1,3 +1,4 @@
+import { Plus, X } from 'lucide-react'
 import ChipsGrid from '../components/ChipsGrid'
 import MoneyInput from '../components/MoneyInput'
 import PlayerHeading from '../components/PlayerHeading'
@@ -35,7 +36,7 @@ export default function RecompraScreen() {
                     aria-label={`Quitar recompra ${ri + 1}`}
                     onClick={() => removeRecompra(p.id, ri)}
                   >
-                    ✕
+                    <X size={14} strokeWidth={2.5} />
                   </button>
                 </div>
                 <MoneyInput
@@ -57,8 +58,13 @@ export default function RecompraScreen() {
             )
           })}
 
-          <button type="button" className="btn-dashed" onClick={() => addRecompra(p.id)}>
-            ＋ Agregar recompra
+          <button
+            type="button"
+            className="btn-dashed flex items-center justify-center gap-1.5"
+            onClick={() => addRecompra(p.id)}
+          >
+            <Plus size={15} strokeWidth={2.6} />
+            Agregar recompra
           </button>
 
           <p className="mt-2.5 mb-0 text-right text-xs text-ink-soft">

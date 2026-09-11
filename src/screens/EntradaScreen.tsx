@@ -1,3 +1,4 @@
+import { Plus } from 'lucide-react'
 import ChipsGrid from '../components/ChipsGrid'
 import MoneyInput from '../components/MoneyInput'
 import PlayerHeading from '../components/PlayerHeading'
@@ -39,7 +40,8 @@ export default function EntradaScreen() {
       })}
 
       <button type="button" className="btn btn-gold" onClick={addPlayer}>
-        ＋ Agregar jugador
+        <Plus size={18} strokeWidth={2.6} />
+        Agregar jugador
       </button>
     </>
   )

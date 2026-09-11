@@ -1,3 +1,4 @@
+import { X } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { useSession } from '../store/session'
 import type { Player } from '../store/types'
@@ -43,7 +44,7 @@ export default function PlayerHeading({ player, index, editable = false, right }
           aria-label={`Quitar a ${player.name || `Jugador ${index + 1}`}`}
           onClick={() => removePlayer(player.id)}
         >
-          ✕
+          <X size={16} strokeWidth={2.5} />
         </button>
       )}
     </div>

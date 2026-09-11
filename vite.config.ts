@@ -14,6 +14,10 @@ export default defineConfig(({ mode }) => {
 
   return {
     build: soloArchivo ? { outDir: "dist-archivo" } : {},
+    // lucide-react son miles de módulos sueltos; si Vite no los pre-empaqueta acaban
+    // importando una instancia de React distinta a la del app y los hooks revientan.
+    optimizeDeps: { include: ["lucide-react"] },
+    resolve: { dedupe: ["react", "react-dom"] },
     plugins: [
       react(),
       tailwindcss(),
