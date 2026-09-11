@@ -1,64 +1,75 @@
 import { ClipboardCopy, Download, Share2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { useShallow } from 'zustand/react/shallow'
 import { copyText } from '../lib/backup'
-import { buildCanvas, downloadImage, shareImage } from '../lib/shareImage'
-import { currentSession, useSession } from '../store/session'
+import {
+  compartirImagen,
+  construirLienzo,
+  descargarImagen,
+  type DatosImagen,
+} from '../lib/shareImage'
+import { useApp } from '../store/app'
 
 interface Props {
+  datos: DatosImagen
   /** Texto plano alternativo, por si prefieren pegarlo en el chat. */
-  plainText: () => string
+  texto: () => string
   alt: string
 }
 
 /** Vista previa de la imagen + compartir / descargar / copiar texto. */
-export default function ShareBlock({ plainText, alt }: Props) {
-  const session = useSession(useShallow(currentSession))
-  const showToast = useSession((s) => s.showToast)
+export default function ShareBlock({ datos, texto, alt }: Props) {
+  const avisar = useApp((s) => s.avisar)
   const [src, setSrc] = useState<string | null>(null)
-  const [busy, setBusy] = useState(false)
+  const [ocupado, setOcupado] = useState(false)
 
-  // La vista previa se redibuja sola cuando cambian los datos de la sesión.
+  // La vista previa se redibuja sola cuando cambian los datos. Se compara el contenido,
+  // no la identidad del objeto, que el padre rehace en cada render.
+  const huella = JSON.stringify(datos)
   useEffect(() => {
-    let cancelled = false
-    buildCanvas(session)
+    let cancelado = false
+    construirLienzo(datos)
       .then((cv) => {
-        if (!cancelled) setSrc(cv.toDataURL('image/png'))
+        if (!cancelado) setSrc(cv.toDataURL('image/png'))
       })
       .catch(() => {
-        if (!cancelled) setSrc(null)
+        if (!cancelado) setSrc(null)
       })
     return () => {
-      cancelled = true
+      cancelado = true
     }
-  }, [session])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [huella])
 
-  const run = async (fn: () => Promise<string>) => {
-    if (busy) return
-    setBusy(true)
+  const correr = async (fn: () => Promise<string>) => {
+    if (ocupado) return
+    setOcupado(true)
     try {
-      showToast(await fn())
+      avisar(await fn())
     } catch {
-      showToast('No se pudo generar la imagen')
+      avisar('No se pudo generar la imagen')
     } finally {
-      setBusy(false)
+      setOcupado(false)
     }
   }
 
   return (
     <>
       {src && (
-        <img src={src} alt={alt} className="my-3 w-full rounded-xl shadow-[0_8px_20px_rgba(0,0,0,.25)]" />
+        <img
+          src={src}
+          alt={alt}
+          className="my-3 w-full rounded-xl shadow-[0_8px_20px_rgba(0,0,0,.25)]"
+        />
       )}
 
       <div className="mb-2.5 flex gap-2.5">
         <button
           type="button"
           className="btn btn-share"
-          disabled={busy}
+          disabled={ocupado}
           onClick={() =>
-            run(async () =>
-              (await shareImage(session)) === 'shared' ? 'Compartido' : 'Imagen descargada',
+            correr(async () =>
+              (await compartirImagen(datos)) === 'compartida' ? 'Compartido' : 'Imagen descargada',
             )
           }
         >
@@ -68,10 +79,10 @@ export default function ShareBlock({ plainText, alt }: Props) {
         <button
           type="button"
           className="btn btn-ghost"
-          disabled={busy}
+          disabled={ocupado}
           onClick={() =>
-            run(async () => {
-              await downloadImage(session)
+            correr(async () => {
+              await descargarImagen(datos)
               return 'Imagen descargada'
             })
           }
@@ -84,14 +95,14 @@ export default function ShareBlock({ plainText, alt }: Props) {
       <button
         type="button"
         className="btn btn-ghost"
-        onClick={async () => showToast((await copyText(plainText())) ? 'Copiado' : 'No se pudo copiar')}
+        onClick={async () => avisar((await copyText(texto())) ? 'Copiado' : 'No se pudo copiar')}
       >
         <ClipboardCopy size={17} strokeWidth={2.4} />
         Copiar texto
       </button>
 
-      <p className="mt-2 text-center text-xs text-ink-soft">
-        Consejo: también puedes mantener presionada la imagen para compartirla o guardarla.
+      <p className="mt-2 mb-0 text-center text-xs text-ink-soft">
+        También puedes mantener presionada la imagen para compartirla o guardarla.
       </p>
     </>
   )

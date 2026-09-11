@@ -1,5 +1,5 @@
 import type { SessionState } from '../store/types'
-import { downloadBlob } from './shareImage'
+import { descargarBlob } from './shareImage'
 
 /** Nombre de archivo a partir del nombre de la sesión, sin caracteres raros. */
 function backupName(sessionName: string): string {
@@ -13,7 +13,7 @@ function backupName(sessionName: string): string {
 
 export function exportBackup(s: SessionState) {
   const blob = new Blob([JSON.stringify(s, null, 2)], { type: 'application/json' })
-  downloadBlob(blob, backupName(s.sessionName))
+  descargarBlob(blob, backupName(s.sessionName))
 }
 
 /** Lee un respaldo `.json`. Rechaza cualquier archivo que no traiga colores y jugadores. */

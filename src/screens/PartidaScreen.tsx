@@ -1,31 +1,28 @@
-import { AlertTriangle, ArrowLeft, Check, Coins, Lock, RotateCcw, UserPlus, Users } from 'lucide-react'
+import { ArrowLeft, Coins, Lock, UserPlus, Users } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import Chip from '../components/Chip'
-import ChipsGrid from '../components/ChipsGrid'
-import Medalla from '../components/Medalla'
-import MoneyInput from '../components/MoneyInput'
 import NumInput from '../components/NumInput'
 import Sheet from '../components/Sheet'
-import { computeDistribution } from '../lib/distribution'
-import type { DealPlayer } from '../lib/distribution'
-import { EPS, chipValue, money, num, signed } from '../lib/money'
-import { api, leerJson, type DetallePartida, type Miembro, type Participacion } from '../lib/api'
+import { api, leerJson, type ConfigTorneo, type DetallePartida, type Miembro, type Participacion } from '../lib/api'
 import { conAviso, useApp } from '../store/app'
-import type { Chips } from '../store/types'
+import PartidaCash, { PESTANAS_CASH, type PestanaCash } from './partida/PartidaCash'
+import PartidaTorneo, {
+  PESTANAS_TORNEO,
+  TORNEO_POR_DEFECTO,
+  type PestanaTorneo,
+} from './partida/PartidaTorneo'
 
-type Pestana = 'jugadores' | 'reparto' | 'final' | 'resultado'
+type Pestana = PestanaCash | PestanaTorneo
 
-const PESTANAS: { id: Pestana; label: string }[] = [
-  { id: 'jugadores', label: 'Jugadores' },
-  { id: 'reparto', label: 'Reparto' },
-  { id: 'final', label: 'Final' },
-  { id: 'resultado', label: 'Resultado' },
-]
-
-/** Junta los cambios seguidos y manda uno solo: escribir dinero no dispara una petición por tecla. */
+/**
+ * Junta los cambios seguidos y manda uno solo por campo: teclear un monto no dispara
+ * una petición por tecla. La clave agrupa por participación + campo, así dos ediciones
+ * distintas del mismo jugador no se pisan.
+ */
 function useGuardadoDiferido(ms = 600) {
   const pendientes = useRef(new Map<string, () => Promise<unknown>>())
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => () => { if (timer.current) clearTimeout(timer.current) }, [])
 
   return (clave: string, fn: () => Promise<unknown>) => {
     pendientes.current.set(clave, fn)
@@ -52,6 +49,7 @@ export default function PartidaScreen() {
   const [eligiendo, setEligiendo] = useState(false)
   const [seleccion, setSeleccion] = useState<Record<string, number>>({})
   const [ocupado, setOcupado] = useState(false)
+  const [torneo, setTorneo] = useState<ConfigTorneo>(TORNEO_POR_DEFECTO)
 
   const diferido = useGuardadoDiferido()
 
@@ -59,6 +57,8 @@ export default function PartidaScreen() {
     const d = await conAviso(() => api.partida(partidaId))
     if (d) {
       setDatos(d)
+      setTorneo(leerJson<ConfigTorneo>(d.partida.torneo, TORNEO_POR_DEFECTO))
+      if (d.partida.tipo === 'torneo') setPestana((p) => (p === 'final' ? 'torneo' : p))
       const l = await conAviso(() => api.liga(d.partida.liga_id))
       if (l) setMiembros(l.miembros)
     }
@@ -70,30 +70,28 @@ export default function PartidaScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [partidaId])
 
-  const colores = datos?.liga.colores ?? []
+  const colores = useMemo(() => datos?.liga.colores ?? [], [datos])
+  const esTorneo = datos?.partida.tipo === 'torneo'
   const cerrada = datos?.partida.estado === 'cerrada'
   const puedeEditar = !!datos?.soyAdmin && !cerrada
+  const pestanas = esTorneo ? PESTANAS_TORNEO : PESTANAS_CASH
 
   /** Cambia una participación en pantalla al instante y la manda al servidor con retraso. */
-  const tocar = (id: string, cambios: Partial<Participacion>, aGuardar: Parameters<typeof api.guardarParticipacion>[1]) => {
+  const tocar = (id: string, enPantalla: Partial<Participacion>, aGuardar: Record<string, unknown>) => {
     setDatos((d) =>
       d
-        ? { ...d, participaciones: d.participaciones.map((p) => (p.id === id ? { ...p, ...cambios } : p)) }
+        ? { ...d, participaciones: d.participaciones.map((p) => (p.id === id ? { ...p, ...enPantalla } : p)) }
         : d,
     )
-    diferido(id + Object.keys(aGuardar).join(), () => api.guardarParticipacion(id, aGuardar))
+    diferido(id + ':' + Object.keys(aGuardar).join(), () =>
+      api.guardarParticipacion(id, aGuardar as Parameters<typeof api.guardarParticipacion>[1]),
+    )
   }
 
-  const reparto = useMemo(() => {
-    if (!datos) return null
-    const jugadores: DealPlayer[] = datos.participaciones.map((p) => ({
-      id: p.id,
-      name: p.nombre,
-      buyIn: Math.round(num(p.entrada)),
-      deal: p.fichas_manual ? leerJson<Chips>(p.fichas_manual, {}) : null,
-    }))
-    return computeDistribution(jugadores, colores)
-  }, [datos, colores])
+  const cambiarTorneo = (t: ConfigTorneo) => {
+    setTorneo(t)
+    diferido('torneo', () => api.guardarPartida(partidaId, { torneo: t }))
+  }
 
   if (cargando) return <p className="mt-20 text-center text-sm text-mint-soft">Cargando…</p>
   if (!datos) return null
@@ -110,7 +108,11 @@ export default function PartidaScreen() {
   const guardarJugadores = async () => {
     if (ocupado) return
     setOcupado(true)
-    const jugadores = Object.entries(seleccion).map(([usuarioId, entrada]) => ({ usuarioId, entrada }))
+    const jugadores = Object.entries(seleccion).map(([usuarioId, entrada]) => ({
+      usuarioId,
+      // En torneo todos pagan lo mismo: el costo de entrada manda.
+      entrada: esTorneo ? torneo.buyIn : entrada,
+    }))
     const r = await conAviso(() => api.cargarJugadores(partidaId, jugadores))
     setOcupado(false)
     if (r) {
@@ -128,17 +130,10 @@ export default function PartidaScreen() {
     }
   }
 
-  /* ---- cálculos ---- */
-  const conResultados = datos.participaciones.map((p) => {
-    const recompras = leerJson<{ dinero: number }[]>(p.recompras, [])
-    const invertido = num(p.entrada) + recompras.reduce((a, r) => a + num(r.dinero), 0)
-    const final = chipValue(leerJson<Chips>(p.fichas_final, {}), colores)
-    return { ...p, invertido, final, pl: final - invertido }
-  })
-  const totalInvertido = conResultados.reduce((a, p) => a + p.invertido, 0)
-  const totalFinal = conResultados.reduce((a, p) => a + p.final, 0)
-  const diferencia = totalFinal - totalInvertido
-  const ranking = [...conResultados].sort((a, b) => b.pl - a.pl)
+  const comunes = { datos, colores, puedeEditar, tocar, recargar: cargar }
+  // La configuración del torneo se tiene que poder abrir ANTES de cargar a nadie:
+  // ahí se define el costo de entrada con el que entran todos.
+  const sinJugadores = datos.participaciones.length === 0 && pestana !== 'torneo'
 
   return (
     <div className="mx-auto max-w-[640px] px-3.5 pb-10">
@@ -152,14 +147,19 @@ export default function PartidaScreen() {
           >
             <ArrowLeft size={18} strokeWidth={2.4} />
           </button>
-          <h1 className="m-0 min-w-0 flex-1 truncate font-display text-[17px] font-bold tracking-[.5px] text-gold-soft uppercase">
-            {datos.partida.nombre || datos.partida.fecha}
-          </h1>
+          <div className="min-w-0 flex-1">
+            <h1 className="m-0 truncate font-display text-[17px] leading-tight font-bold tracking-[.5px] text-gold-soft uppercase">
+              {datos.partida.nombre || datos.partida.fecha}
+            </h1>
+            <span className="text-[11px] text-mint-soft">
+              {esTorneo ? 'Torneo' : 'Cash'} · {datos.liga.nombre}
+            </span>
+          </div>
           {cerrada && <Lock size={15} className="shrink-0 text-mint-soft" />}
         </div>
 
         <div className="no-scrollbar mt-2 flex gap-1 overflow-x-auto rounded-xl bg-black/30 p-1">
-          {PESTANAS.map((t) => (
+          {pestanas.map((t) => (
             <button
               key={t.id}
               type="button"
@@ -175,13 +175,15 @@ export default function PartidaScreen() {
         </div>
       </header>
 
-      {datos.participaciones.length === 0 && (
+      {sinJugadores ? (
         <section className="panel text-center">
           <Users size={30} className="mx-auto mb-2 text-ink-soft/45" strokeWidth={1.8} />
           <p className="m-0 mb-1 font-display text-lg font-semibold text-ink">Nadie cargado aún</p>
           <p className="mx-auto mb-3 max-w-[300px] text-[13px] leading-snug text-ink-soft">
             {datos.soyAdmin
-              ? 'Elige quiénes llegaron y con cuánto entra cada uno.'
+              ? esTorneo
+                ? 'Pon el costo de entrada en la pestaña Torneo y luego elige quiénes llegaron.'
+                : 'Elige quiénes llegaron y con cuánto entra cada uno.'
               : 'Un admin de la liga tiene que cargar a los jugadores.'}
           </p>
           {puedeEditar && (
@@ -191,238 +193,37 @@ export default function PartidaScreen() {
             </button>
           )}
         </section>
+      ) : esTorneo ? (
+        <PartidaTorneo
+          {...comunes}
+          pestana={pestana as PestanaTorneo}
+          torneo={torneo}
+          cambiarTorneo={cambiarTorneo}
+        />
+      ) : (
+        <PartidaCash {...comunes} pestana={pestana as PestanaCash} />
       )}
 
-      {/* ---------- JUGADORES ---------- */}
-      {pestana === 'jugadores' && datos.participaciones.length > 0 && (
-        <>
-          {conResultados.map((p, i) => (
-            <section key={p.id} className="panel">
-              <div className="mb-2 flex items-center gap-2.5">
-                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-felt font-display text-[13px] text-white">
-                  {i + 1}
-                </span>
-                <b className="min-w-0 flex-1 truncate font-display text-xl font-semibold text-ink">
-                  {p.nombre}
-                </b>
-              </div>
-              {puedeEditar ? (
-                <MoneyInput
-                  label="Entra con"
-                  value={p.entrada}
-                  onChange={(v) => tocar(p.id, { entrada: v }, { entrada: v })}
-                />
-              ) : (
-                <p className="m-0 text-[13px] text-ink-soft">
-                  Entra con <b className="text-ink">{money(p.entrada)}</b>
-                </p>
-              )}
-            </section>
-          ))}
-          {puedeEditar && (
-            <button type="button" className="btn btn-ghost" onClick={abrirSelector}>
-              <UserPlus size={17} strokeWidth={2.4} />
-              Cambiar quiénes juegan
-            </button>
-          )}
-        </>
+      {!sinJugadores && puedeEditar && pestana === 'jugadores' && (
+        <button type="button" className="btn btn-ghost" onClick={abrirSelector}>
+          <UserPlus size={17} strokeWidth={2.4} />
+          Cambiar quiénes juegan
+        </button>
       )}
 
-      {/* ---------- REPARTO ---------- */}
-      {pestana === 'reparto' && reparto && datos.participaciones.length > 0 && (
-        <>
-          <section className="panel">
-            <p className="panel-title">
-              <span>Reparto de fichas</span>
-            </p>
-            <p className="mt-0 mb-0 text-[13px] leading-snug text-ink-soft">
-              Calculado con las fichas de la liga. Puedes editar a mano y los demás se reacomodan.
-            </p>
-          </section>
-
-          {reparto.rows.map((r) => (
-            <section key={r.id} className="panel">
-                <div className="mb-2.5 flex items-center gap-2">
-                  <b className="min-w-0 flex-1 truncate font-display text-lg font-semibold text-ink">
-                    {r.name}
-                  </b>
-                  {r.manual && (
-                    <button
-                      type="button"
-                      disabled={!puedeEditar}
-                      onClick={() => tocar(r.id, { fichas_manual: null }, { fichasManual: null })}
-                      className="flex cursor-pointer items-center gap-1 rounded-full border-none bg-gold/20 px-2 py-1 text-[11px] font-bold text-[#7a5d20]"
-                    >
-                      <RotateCcw size={11} strokeWidth={3} />
-                      Auto
-                    </button>
-                  )}
-                  <span className="font-bold text-ink-soft">{money(r.buyIn)}</span>
-                </div>
-
-                <div className="grid grid-cols-[repeat(auto-fit,minmax(58px,1fr))] gap-1.5">
-                  {colores.map((c) => (
-                    <label key={c.key} className="flex flex-col items-center gap-1">
-                      <Chip color={c} />
-                      <span className="sr-only">{c.label}</span>
-                      <NumInput
-                        value={r.counts[c.key] ?? 0}
-                        showZero
-                        aria-label={`Fichas ${c.label} para ${r.name}`}
-                        className="w-full rounded-lg border border-paper-line bg-white px-0.5 py-2 text-center text-[15px] font-semibold outline-none focus:border-gold disabled:opacity-60"
-                        onChange={(v) => {
-                          if (!puedeEditar) return
-                          const nuevas = { ...r.counts, [c.key]: v }
-                          tocar(r.id, { fichas_manual: JSON.stringify(nuevas) }, { fichasManual: nuevas })
-                        }}
-                      />
-                    </label>
-                  ))}
-                </div>
-
-                <p className="mt-2.5 mb-0 flex items-center gap-1.5 text-xs text-ink-soft">
-                  Total: <b className="text-ink">{money(r.total)}</b>
-                  {Math.abs(r.leftover) < EPS ? (
-                    <Check size={13} strokeWidth={3} className="text-win" />
-                  ) : (
-                    <>
-                      <span>· {r.leftover > 0 ? `faltan ${money(r.leftover)}` : `te pasas ${money(-r.leftover)}`}</span>
-                      <AlertTriangle size={13} strokeWidth={2.6} className="text-loss" />
-                    </>
-                  )}
-                </p>
-            </section>
-          ))}
-
-          <section className="panel">
-            <p className="panel-title">
-              <span>Inventario usado</span>
-            </p>
-            {reparto.anyOver && (
-              <div className="balance balance-off">
-                <AlertTriangle size={16} strokeWidth={2.4} />
-                <span>Estás repartiendo más fichas de las que tiene la liga en algún color.</span>
-              </div>
-            )}
-            <ul className="m-0 list-none p-0">
-              {colores.map((c) => {
-                const u = reparto.usage[c.key]
-                return (
-                  <li
-                    key={c.key}
-                    className="flex items-center justify-between border-b border-dashed border-paper-line py-2.5 last:border-b-0"
-                  >
-                    <span className="flex items-center gap-2">
-                      <Chip color={c} />
-                      <span className="font-semibold text-ink">{c.label}</span>
-                    </span>
-                    <span className={`font-display font-bold ${u.over ? 'text-loss' : 'text-ink-soft'}`}>
-                      {u.used} / {u.inventory}
-                    </span>
-                  </li>
-                )
-              })}
-            </ul>
-          </section>
-        </>
-      )}
-
-      {/* ---------- FINAL ---------- */}
-      {pestana === 'final' && datos.participaciones.length > 0 && (
-        <>
-          {conResultados.map((p) => {
-            const finales = leerJson<Chips>(p.fichas_final, {})
-            return (
-              <section key={p.id} className="panel">
-                <b className="mb-2.5 block truncate font-display text-lg font-semibold text-ink">
-                  {p.nombre}
-                </b>
-                <ChipsGrid
-                  colors={colores}
-                  chips={finales}
-                  onChange={(key, v) => {
-                    if (!puedeEditar) return
-                    const nuevas = { ...finales, [key]: v }
-                    tocar(p.id, { fichas_final: JSON.stringify(nuevas) }, { fichasFinal: nuevas })
-                  }}
-                />
-                <div className="mt-3 flex items-center gap-2.5 rounded-xl bg-felt-line px-3.5 py-2.5 text-[#eafff2]">
-                  <span className="text-[10px] tracking-[.6px] uppercase opacity-70">Invertido</span>
-                  <b className="font-display">{money(p.invertido)}</b>
-                  <span className="ml-auto font-display text-lg font-bold" style={{ color: p.pl > EPS ? '#d9b063' : p.pl < -EPS ? '#e4695e' : '#9d9483' }}>
-                    {signed(p.pl)}
-                  </span>
-                </div>
-              </section>
-            )
-          })}
-        </>
-      )}
-
-      {/* ---------- RESULTADO ---------- */}
-      {pestana === 'resultado' && datos.participaciones.length > 0 && (
-        <section className="panel">
-          <p className="panel-title">
-            <span>Resultado</span>
-          </p>
-
-          <div className="mb-3 grid grid-cols-2 gap-2.5">
-            <div className="stat">
-              <div className="stat-k">Total en la mesa</div>
-              <div className="stat-v">{money(totalInvertido)}</div>
-            </div>
-            <div className="stat">
-              <div className="stat-k">Fichas contadas</div>
-              <div className="stat-v">{money(totalFinal)}</div>
-            </div>
-          </div>
-
-          {Math.abs(diferencia) < EPS ? (
-            <div className="balance balance-ok">
-              <Check size={16} strokeWidth={2.6} />
-              Las fichas cuadran con el dinero
-            </div>
-          ) : (
-            <div className="balance balance-off">
-              <AlertTriangle size={16} strokeWidth={2.4} />
-              {diferencia > 0
-                ? `Hay ${money(diferencia)} de más en fichas contadas`
-                : `Faltan ${money(-diferencia)} en fichas contadas`}
-            </div>
-          )}
-
-          <ul className="m-0 mb-3 list-none p-0">
-            {ranking.map((r, i) => (
-              <li
-                key={r.id}
-                className="flex items-center justify-between border-b border-dashed border-paper-line py-2.5 last:border-b-0 font-semibold"
-              >
-                <span className="flex min-w-0 items-center gap-2">
-                  {r.pl > EPS && <Medalla lugar={i + 1} />}
-                  <span className="truncate text-ink">{r.nombre}</span>
-                </span>
-                <span
-                  className={`font-display font-bold ${r.pl > EPS ? 'text-win' : r.pl < -EPS ? 'text-loss' : 'text-ink-soft'}`}
-                >
-                  {signed(r.pl)}
-                </span>
-              </li>
-            ))}
-          </ul>
-
-          {puedeEditar && (
-            <button type="button" className="btn btn-ghost" onClick={() => void cerrarPartida()}>
-              <Lock size={17} strokeWidth={2.4} />
-              Cerrar partida
-            </button>
-          )}
-        </section>
+      {!sinJugadores && puedeEditar && pestana === 'resultado' && (
+        <button type="button" className="btn btn-ghost mt-2" onClick={() => void cerrarPartida()}>
+          <Lock size={17} strokeWidth={2.4} />
+          Cerrar partida
+        </button>
       )}
 
       {/* ---- elegir quiénes jugaron ---- */}
       <Sheet abierta={eligiendo} onCerrar={() => setEligiendo(false)} titulo="¿Quiénes jugaron?">
         <p className="mt-0 mb-3 text-[13px] leading-snug text-ink-soft">
-          Marca a los que llegaron y pon con cuánto entra cada uno.
+          {esTorneo
+            ? `Marca a los que llegaron. Todos entran con ${money0(torneo.buyIn)}, el costo de entrada del torneo.`
+            : 'Marca a los que llegaron y pon con cuánto entra cada uno.'}
         </p>
         <ul className="m-0 mb-4 list-none p-0">
           {miembros.map((m) => {
@@ -438,14 +239,14 @@ export default function PartidaScreen() {
                     onChange={(e) =>
                       setSeleccion((s) => {
                         const n = { ...s }
-                        if (e.target.checked) n[m.id] = 0
+                        if (e.target.checked) n[m.id] = esTorneo ? torneo.buyIn : 0
                         else delete n[m.id]
                         return n
                       })
                     }
                   />
                   <b className="min-w-0 flex-1 truncate text-[15px] text-ink">{m.nombre}</b>
-                  {puesto && (
+                  {puesto && !esTorneo && (
                     <div className="flex w-[120px] shrink-0 items-center rounded-lg border border-paper-line bg-white px-2">
                       <span className="font-bold text-ink-soft">$</span>
                       <NumInput
@@ -469,4 +270,9 @@ export default function PartidaScreen() {
       </Sheet>
     </div>
   )
+}
+
+/** Formato corto de dinero para textos cortos dentro de la interfaz. */
+function money0(n: number): string {
+  return '$' + Math.round(n).toLocaleString('es-MX')
 }
