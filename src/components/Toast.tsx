@@ -1,26 +1,28 @@
 import { useEffect } from 'react'
-import { useSession } from '../store/session'
+import { useApp } from '../store/app'
 
 /** Aviso breve abajo de la pantalla. */
 export default function Toast() {
-  const toast = useSession((s) => s.toast)
-  const clearToast = useSession((s) => s.clearToast)
+  const aviso = useApp((s) => s.aviso)
+  const limpiarAviso = useApp((s) => s.limpiarAviso)
 
   useEffect(() => {
-    if (!toast) return
-    const t = setTimeout(clearToast, 1800)
+    if (!aviso) return
+    const t = setTimeout(limpiarAviso, 2600)
     return () => clearTimeout(t)
-  }, [toast, clearToast])
+  }, [aviso, limpiarAviso])
 
   return (
     <div
       role="status"
       aria-live="polite"
-      className={`fixed bottom-6 left-1/2 z-60 -translate-x-1/2 rounded-full bg-[#111] px-5 py-3 text-sm font-semibold text-white shadow-[0_8px_24px_rgba(0,0,0,.4)] transition-opacity ${
-        toast ? 'opacity-100' : 'pointer-events-none opacity-0'
+      className={`pointer-events-none fixed inset-x-0 bottom-[max(1.5rem,calc(env(safe-area-inset-bottom)+1rem))] z-60 flex justify-center px-4 transition-opacity ${
+        aviso ? 'opacity-100' : 'opacity-0'
       }`}
     >
-      {toast ?? ''}
+      <span className="max-w-full rounded-full bg-[#111] px-5 py-3 text-center text-sm font-semibold text-white shadow-[0_8px_24px_rgba(0,0,0,.4)]">
+        {aviso ?? ''}
+      </span>
     </div>
   )
 }

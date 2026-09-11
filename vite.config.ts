@@ -18,6 +18,13 @@ export default defineConfig(({ mode }) => {
     // importando una instancia de React distinta a la del app y los hooks revientan.
     optimizeDeps: { include: ["lucide-react"] },
     resolve: { dedupe: ["react", "react-dom"] },
+    // En desarrollo el API lo atiende `wrangler dev` en el 8787; Vite le reenvía /api
+    // para que el navegador vea todo en el mismo origen y la cookie de sesión funcione.
+    server: {
+      proxy: {
+        "/api": { target: "http://127.0.0.1:8787", changeOrigin: false },
+      },
+    },
     plugins: [
       react(),
       tailwindcss(),
