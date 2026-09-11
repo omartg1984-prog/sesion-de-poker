@@ -1,4 +1,4 @@
-import { Capacitor } from '@capacitor/core'
+import { Capacitor, registerPlugin } from '@capacitor/core'
 import { Directory, Filesystem } from '@capacitor/filesystem'
 import { Share } from '@capacitor/share'
 
@@ -86,5 +86,27 @@ export async function compartirTextoNativo(texto: string, titulo: string): Promi
   } catch (err) {
     if (String(err).toLowerCase().includes('cancel')) return true
     throw err
+  }
+}
+
+/*
+ * La barra de estado del teléfono (hora, wifi, batería).
+ *
+ * Android decide solo de qué color pintar esos iconos y le atina al revés: como no
+ * sabe que el fondo de la app es negro, los pone oscuros y quedan invisibles. Hay que
+ * decírselo. `SystemBars` viene dentro de Capacitor, así que no hace falta instalar
+ * nada ni repartir un APK nuevo para que esto surta efecto.
+ */
+const SystemBars = registerPlugin<{
+  setStyle(opciones: { style: 'DARK' | 'LIGHT' | 'DEFAULT' }): Promise<void>
+}>('SystemBars')
+
+/** 'DARK' quiere decir «fondo oscuro», así que los iconos salen blancos. */
+export async function ajustarBarraDeEstado(): Promise<void> {
+  if (!esNativo()) return
+  try {
+    await SystemBars.setStyle({ style: 'DARK' })
+  } catch {
+    /* si el plugin no está, la barra se queda como la deje el sistema */
   }
 }
