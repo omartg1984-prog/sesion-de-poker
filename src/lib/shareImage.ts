@@ -2,8 +2,8 @@ import { moneyShort, signed } from './money'
 import { dibujarLiga, dibujarNumeros, type DatosLiga, type DatosNumeros } from './imagenTablas'
 import {
   CREAM,
-  GOLD,
-  GOLD_SOFT,
+  MARCA,
+  MARCA_ALTA,
   LOSS,
   MEDALS,
   NEUTRO,
@@ -112,7 +112,7 @@ function dibujarCash(d: DatosCash): HTMLCanvasElement {
       nameX = colName + 34
     }
     ctx.fillStyle = '#ffffff'
-    ctx.font = "600 26px 'Oswald',Arial,sans-serif"
+    ctx.font = "26px 'Anton',Arial,sans-serif"
     ctx.fillText(ellipsis(r.nombre, 16), nameX, midY)
 
     ctx.textAlign = 'right'
@@ -123,14 +123,14 @@ function dibujarCash(d: DatosCash): HTMLCanvasElement {
     ctx.fillText(moneyShort(r.final), cFin, midY)
 
     ctx.fillStyle = r.pl > 0.005 ? WIN : r.pl < -0.005 ? LOSS : NEUTRO
-    ctx.font = "700 26px 'Oswald',Arial,sans-serif"
+    ctx.font = "26px 'Anton',Arial,sans-serif"
     ctx.fillText(signed(r.pl), cRes, midY)
     ry += rowH
   })
 
   lineaTenue(ctx, pad, W - pad, ry + 8)
   ctx.textAlign = 'left'
-  ctx.fillStyle = GOLD
+  ctx.fillStyle = MARCA
   ctx.font = "600 22px 'Inter',Arial,sans-serif"
   ctx.fillText('Total en la mesa: ' + moneyShort(d.totalMesa), colName, ry + 50)
   ctx.textAlign = 'right'
@@ -159,7 +159,7 @@ function dibujarTorneo(d: DatosTorneo): HTMLCanvasElement {
   ctx.fillStyle = 'rgba(255,255,255,.06)'
   roundRect(ctx, pad, headerH - 6, W - 2 * pad, poolH - 16, 16)
   ctx.fill()
-  ctx.strokeStyle = 'rgba(180,142,67,.65)'
+  ctx.strokeStyle = 'rgba(223,31,46,.7)'
   ctx.lineWidth = 2
   roundRect(ctx, pad, headerH - 6, W - 2 * pad, poolH - 16, 16)
   ctx.stroke()
@@ -167,8 +167,8 @@ function dibujarTorneo(d: DatosTorneo): HTMLCanvasElement {
   ctx.fillStyle = CREAM
   ctx.font = "600 18px 'Inter',Arial,sans-serif"
   ctx.fillText('BOLSA A REPARTIR', W / 2, headerH + 34)
-  ctx.fillStyle = GOLD_SOFT
-  ctx.font = "700 46px 'Oswald',Arial,sans-serif"
+  ctx.fillStyle = MARCA_ALTA
+  ctx.font = "46px 'Anton',Arial,sans-serif"
   ctx.fillText(moneyShort(d.bolsa), W / 2, headerH + 82)
 
   const colName = pad + 22
@@ -200,7 +200,7 @@ function dibujarTorneo(d: DatosTorneo): HTMLCanvasElement {
     ctx.font = "26px 'Inter',Arial,sans-serif"
     ctx.fillStyle = '#ffffff'
     ctx.fillText(MEDALS[i] || '🎖', colName, midY)
-    ctx.font = "700 28px 'Oswald',Arial,sans-serif"
+    ctx.font = "28px 'Anton',Arial,sans-serif"
     ctx.fillText(po.lugar + 'º', colName + 44, midY)
 
     ctx.textAlign = 'right'
@@ -208,18 +208,18 @@ function dibujarTorneo(d: DatosTorneo): HTMLCanvasElement {
     ctx.fillStyle = CREAM
     ctx.fillText(po.pct + '%', cPct, midY)
     ctx.fillStyle = WIN
-    ctx.font = "700 26px 'Oswald',Arial,sans-serif"
+    ctx.font = "26px 'Anton',Arial,sans-serif"
     ctx.fillText(moneyShort(po.premio), cPrize, midY)
 
     ctx.fillStyle = '#ffffff'
-    ctx.font = "600 24px 'Oswald',Arial,sans-serif"
+    ctx.font = "24px 'Anton',Arial,sans-serif"
     ctx.fillText(ellipsis(po.ganador || '—', 14), cWin, midY)
     ry += rowH
   })
 
   lineaTenue(ctx, pad, W - pad, ry + 8)
   ctx.textAlign = 'left'
-  ctx.fillStyle = GOLD
+  ctx.fillStyle = MARCA
   ctx.font = "600 20px 'Inter',Arial,sans-serif"
   ctx.fillText(
     `${d.jugadores} jugadores · ${d.recompras} recompras · ${d.addons} add-ons`,

@@ -58,7 +58,7 @@ export default function PartidaCash({
           return (
             <section key={p.id} className="panel">
               <div className="mb-2.5 flex items-center gap-2.5">
-                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-felt font-display text-[13px] text-white">
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-noche font-display text-[13px] text-white">
                   {i + 1}
                 </span>
                 <b className="min-w-0 flex-1 truncate font-display text-xl font-semibold text-ink">
@@ -172,7 +172,7 @@ export default function PartidaCash({
           return (
             <section
               key={p.id}
-              className={`panel ${yaContado ? '' : 'opacity-95 ring-1 ring-gold/25'}`}
+              className={`panel ${yaContado ? '' : 'opacity-95 ring-1 ring-marca/25'}`}
             >
               <div className="mb-1 flex items-center gap-2">
                 <b className="min-w-0 flex-1 truncate font-display text-lg font-semibold text-ink">
@@ -184,7 +184,7 @@ export default function PartidaCash({
                     Contado
                   </span>
                 ) : (
-                  <span className="shrink-0 rounded-full bg-gold/20 px-2 py-0.5 text-[11px] font-bold text-[#7a5d20]">
+                  <span className="shrink-0 rounded-full bg-marca/20 px-2 py-0.5 text-[11px] font-bold text-marca-tinta">
                     Falta
                   </span>
                 )}
@@ -200,7 +200,7 @@ export default function PartidaCash({
                 }}
               />
 
-              <div className="mt-3 flex items-center gap-3 rounded-xl bg-felt-line px-3.5 py-3 text-[#eafff2]">
+              <div className="mt-3 flex items-center gap-3 rounded-xl bg-noche-linea px-3.5 py-3 text-paper">
                 <span className="min-w-0">
                   <span className="block text-[10px] tracking-[.6px] uppercase opacity-70">Puso</span>
                   <b className="font-display text-base">{money(p.invertido)}</b>

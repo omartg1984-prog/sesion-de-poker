@@ -67,7 +67,7 @@ export default function EditorFichas({ colores, onChange, soloLectura = false }:
               value={c.label}
               placeholder="Color"
               aria-label="Nombre del color"
-              className="min-w-0 flex-1 rounded-lg border border-paper-line bg-white p-2 text-sm font-semibold outline-none focus:border-gold"
+              className="min-w-0 flex-1 rounded-lg border border-paper-line bg-white p-2 text-sm font-semibold outline-none focus:border-marca"
               onChange={(e) => cambiar(c.key, { label: e.target.value })}
             />
             <button

@@ -24,7 +24,7 @@ export default function ChipsGrid({ colors, chips, onChange, showZero = false }:
             onChange={(v) => onChange(c.key, v)}
             showZero={showZero}
             aria-label={`Fichas ${c.label || c.key} (valor ${c.value})`}
-            className="w-full rounded-lg border border-paper-line bg-white px-0.5 py-2 text-center text-[15px] font-semibold outline-none focus:border-gold"
+            className="w-full rounded-lg border border-paper-line bg-white px-0.5 py-2 text-center text-[15px] font-semibold outline-none focus:border-marca"
           />
         </label>
       ))}

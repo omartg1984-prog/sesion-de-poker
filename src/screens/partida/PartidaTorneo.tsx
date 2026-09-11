@@ -63,9 +63,9 @@ export default function PartidaTorneo({
   const cuadra = Math.abs(suma - 100) < EPS
 
   const Banner = ({ titulo }: { titulo: string }) => (
-    <div className="mb-3.5 rounded-xl bg-gradient-to-br from-[#2c3a26] to-[#1b241a] px-4 py-3.5 text-center ring-1 ring-gold/25">
-      <div className="text-[10px] tracking-[1px] text-mint-soft uppercase">{titulo}</div>
-      <div className="mt-0.5 font-display text-[34px] font-bold text-gold-soft">{money(bolsa)}</div>
+    <div className="mb-3.5 rounded-xl bg-gradient-to-br from-[#2a1016] to-[#100e12] px-4 py-3.5 text-center ring-1 ring-marca/25">
+      <div className="text-[10px] tracking-[1px] text-tiza-suave uppercase">{titulo}</div>
+      <div className="mt-0.5 font-display text-[34px] font-bold text-marca-alta">{money(bolsa)}</div>
     </div>
   )
 
@@ -109,7 +109,7 @@ export default function PartidaTorneo({
                   key={pr.label}
                   type="button"
                   onClick={() => cambiarTorneo({ ...torneo, payouts: pr.pcts.map((pct) => ({ pct })) })}
-                  className="cursor-pointer rounded-full border border-paper-line bg-white px-2.5 py-1.5 text-xs font-semibold text-ink-soft hover:border-gold hover:text-ink"
+                  className="cursor-pointer rounded-full border border-paper-line bg-white px-2.5 py-1.5 text-xs font-semibold text-ink-soft hover:border-marca hover:text-ink"
                 >
                   {pr.label}
                 </button>

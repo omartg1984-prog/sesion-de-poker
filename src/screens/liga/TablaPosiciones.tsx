@@ -58,23 +58,25 @@ function Racha({ n }: { n: number }) {
 }
 
 const ALTURA_ESCALON = ['h-[86px]', 'h-[62px]', 'h-[46px]']
-const TONO_ESCALON = ['bg-gold-soft', 'bg-[#b9b3a4]', 'bg-[#a9764a]']
+const TONO_ESCALON = ['bg-marca', 'bg-[#c9c5bd]', 'bg-[#a9764a]']
+/* El 1º y el 3º son oscuros y el 2º claro: el número se adapta o se pierde. */
+const TINTA_ESCALON = ['text-white', 'text-[#17171b]', 'text-white']
 
 /** El podio: el 1º en medio y más alto, como en el de verdad. */
 function Podio({ top }: { top: Posicion[] }) {
   const orden = [1, 0, 2].filter((i) => top[i])
   return (
-    <div className="mb-3.5 overflow-hidden rounded-xl bg-gradient-to-br from-[#2c3a26] to-[#1b241a] px-3 pt-4 pb-0 ring-1 ring-gold/25">
+    <div className="mb-3.5 overflow-hidden rounded-xl bg-gradient-to-br from-[#2a1016] to-[#100e12] px-3 pt-4 pb-0 ring-1 ring-marca/35">
       <div className="flex items-end justify-center gap-2">
         {orden.map((i) => {
           const p = top[i]
           return (
             <div key={p.usuarioId} className="flex min-w-0 flex-1 flex-col items-center">
-              <span className="mb-1.5 h-11 w-11 shrink-0 overflow-hidden rounded-full bg-white/10 ring-2 ring-gold/40">
+              <span className="mb-1.5 h-11 w-11 shrink-0 overflow-hidden rounded-full bg-white/10 ring-2 ring-marca/40">
                 {p.foto ? (
                   <img src={p.foto} alt="" className="h-full w-full object-cover" />
                 ) : (
-                  <span className="flex h-full w-full items-center justify-center font-display text-lg font-bold text-gold-soft">
+                  <span className="flex h-full w-full items-center justify-center font-display text-lg font-bold text-marca-alta">
                     {p.nombre.charAt(0).toUpperCase()}
                   </span>
                 )}
@@ -84,14 +86,14 @@ function Podio({ top }: { top: Posicion[] }) {
               </span>
               <span
                 className="font-display text-lg font-bold"
-                style={{ color: p.balance > EPS ? '#d9b063' : p.balance < -EPS ? '#e4695e' : '#9d9483' }}
+                style={{ color: p.balance > EPS ? '#4fc785' : p.balance < -EPS ? '#ff6b6b' : '#8d8a86' }}
               >
                 {signed(p.balance)}
               </span>
               <div
                 className={`mt-1.5 flex w-full items-start justify-center rounded-t-lg pt-2 ${ALTURA_ESCALON[i]} ${TONO_ESCALON[i]}`}
               >
-                <span className="font-display text-xl font-bold text-[#20281f]">{i + 1}º</span>
+                <span className={`font-display text-xl font-bold ${TINTA_ESCALON[i]}`}>{i + 1}º</span>
               </div>
             </div>
           )
@@ -247,7 +249,7 @@ export default function TablaPosiciones({
               aria-pressed={orden === o.id}
               onClick={() => setOrden(o.id)}
               className={`flex-1 cursor-pointer rounded-lg border-none px-2.5 py-1.5 text-[12px] font-bold whitespace-nowrap transition-colors ${
-                orden === o.id ? 'bg-gold text-[#2e1a11]' : 'bg-transparent text-ink-soft'
+                orden === o.id ? 'bg-marca text-white' : 'bg-transparent text-ink-soft'
               }`}
             >
               {o.label}
@@ -392,7 +394,7 @@ export default function TablaPosiciones({
         <ShareBlock datos={datosImagen} texto={texto} alt="Tabla acumulada de la liga" />
       </section>
 
-      <p className="flex items-start gap-2 px-1 text-xs leading-snug text-mint-soft">
+      <p className="flex items-start gap-2 px-1 text-xs leading-snug text-tiza-suave">
         <Info size={14} strokeWidth={2.4} className="mt-0.5 shrink-0" />
         <span>
           Suma {tabla.partidasContadas}{' '}

@@ -1,4 +1,5 @@
 import { Loader2 } from 'lucide-react'
+import Logo from './components/Logo'
 import { useEffect } from 'react'
 import Toast from './components/Toast'
 import AdminScreen from './screens/AdminScreen'
@@ -22,8 +23,8 @@ export default function App() {
   if (comprobando) {
     return (
       <div className="flex min-h-[100dvh] flex-col items-center justify-center gap-3">
-        <div className="text-sm tracking-[8px] text-gold">♠ ♥ ♣ ♦</div>
-        <Loader2 size={22} className="animate-spin text-gold-soft" />
+        <Logo size={56} conFondo />
+        <Loader2 size={22} className="animate-spin text-marca-alta" />
       </div>
     )
   }

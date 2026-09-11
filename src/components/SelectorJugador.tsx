@@ -82,14 +82,14 @@ export default function SelectorJugador({
                     setAbierto(false)
                   }}
                   className={`flex w-full cursor-pointer items-center gap-3 border-none border-b border-dashed border-paper-line px-1 py-3 text-left ${
-                    activo ? 'bg-gold/12' : 'bg-transparent'
+                    activo ? 'bg-marca/12' : 'bg-transparent'
                   }`}
                 >
                   <Avatar o={o} size={36} />
                   <span className="min-w-0 flex-1 truncate text-base font-semibold text-ink">
                     {o.nombre}
                   </span>
-                  {activo && <Check size={18} strokeWidth={3} className="shrink-0 text-[#7a5d20]" />}
+                  {activo && <Check size={18} strokeWidth={3} className="shrink-0 text-marca-tinta" />}
                 </button>
               </li>
             )

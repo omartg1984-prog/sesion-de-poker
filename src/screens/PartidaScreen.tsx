@@ -160,28 +160,28 @@ export default function PartidaScreen() {
 
   return (
     <div className="mx-auto max-w-[640px] px-3.5 pb-10">
-      <header className="sticky top-0 z-30 -mx-3.5 mb-3 border-b border-white/8 bg-[#1b241a]/85 px-3.5 pt-[max(0.75rem,env(safe-area-inset-top))] pb-2 backdrop-blur-xl">
+      <header className="sticky top-0 z-30 -mx-3.5 mb-3 border-b border-white/8 bg-marca/92 px-3.5 pt-[max(0.75rem,env(safe-area-inset-top))] pb-2 backdrop-blur-xl">
         <div className="flex items-center gap-3">
           <button
             type="button"
             onClick={volver}
             aria-label="Volver a la liga"
-            className="flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-full border-none bg-white/8 text-mint active:scale-90"
+            className="flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-full border-none bg-white/15 text-white active:scale-90"
           >
             <ArrowLeft size={18} strokeWidth={2.4} />
           </button>
           <div className="min-w-0 flex-1">
-            <h1 className="m-0 truncate font-display text-[17px] leading-tight font-bold tracking-[.5px] text-gold-soft uppercase">
+            <h1 className="m-0 truncate font-display text-[17px] leading-tight font-bold tracking-[.5px] text-white uppercase">
               {datos.partida.nombre || datos.partida.fecha}
             </h1>
-            <span className="text-[11px] text-mint-soft">
+            <span className="text-[11px] text-white/70">
               {esTorneo ? 'Torneo' : 'Cash'} · {datos.liga.nombre}
             </span>
           </div>
-          {cerrada && <Lock size={15} className="shrink-0 text-mint-soft" />}
+          {cerrada && <Lock size={15} className="shrink-0 text-white/70" />}
         </div>
 
-        <div className="no-scrollbar mt-2 flex gap-1 overflow-x-auto rounded-xl bg-black/30 p-1">
+        <div className="no-scrollbar mt-2 flex gap-1 overflow-x-auto rounded-xl bg-black/25 p-1">
           {pestanas.map((t) => (
             <button
               key={t.id}
@@ -189,7 +189,7 @@ export default function PartidaScreen() {
               aria-current={pestana === t.id ? 'page' : undefined}
               onClick={() => setPestana(t.id)}
               className={`flex-1 cursor-pointer rounded-[9px] border-none px-3 py-2 text-[12.5px] font-bold whitespace-nowrap transition-colors ${
-                pestana === t.id ? 'bg-gold text-[#2e1a11]' : 'bg-transparent text-mint-soft'
+                pestana === t.id ? 'bg-white text-marca-tinta' : 'bg-transparent text-white/70'
               }`}
             >
               {t.label}
@@ -210,7 +210,7 @@ export default function PartidaScreen() {
               : 'Un admin de la liga tiene que cargar a los jugadores.'}
           </p>
           {puedeEditar && (
-            <button type="button" className="btn btn-gold" onClick={abrirSelector}>
+            <button type="button" className="btn btn-marca" onClick={abrirSelector}>
               <UserPlus size={18} strokeWidth={2.5} />
               Cargar jugadores
             </button>
@@ -323,7 +323,7 @@ export default function PartidaScreen() {
             )
           })}
         </ul>
-        <button type="button" className="btn btn-gold mb-2" disabled={ocupado} onClick={() => void guardarJugadores()}>
+        <button type="button" className="btn btn-marca mb-2" disabled={ocupado} onClick={() => void guardarJugadores()}>
           <Coins size={17} strokeWidth={2.4} />
           Guardar y repartir fichas
         </button>

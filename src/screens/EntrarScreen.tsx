@@ -1,5 +1,6 @@
 import { AlertTriangle, Loader2 } from 'lucide-react'
 import { useState } from 'react'
+import Logo from '../components/Logo'
 import PinInput from '../components/PinInput'
 import { ErrorApi } from '../lib/api'
 import { useApp } from '../store/app'
@@ -56,8 +57,8 @@ export default function EntrarScreen() {
   return (
     <div className="mx-auto flex min-h-[100dvh] max-w-[420px] flex-col justify-center px-5 py-8">
       <header className="mb-7 text-center">
-        <div className="text-sm tracking-[8px] text-gold">♠ ♥ ♣ ♦</div>
-        <h1 className="mt-2 font-display text-[34px] leading-none font-bold tracking-[1.5px] text-gold-soft uppercase [text-shadow:0_2px_0_rgba(0,0,0,.35)]">
+        <Logo size={72} conFondo className="mx-auto mb-3" />
+        <h1 className="font-display text-[34px] leading-none font-bold tracking-[1.5px] text-white uppercase [text-shadow:0_2px_0_rgba(0,0,0,.35)]">
           Sesión de Póker
         </h1>
       </header>
@@ -77,7 +78,7 @@ export default function EntrarScreen() {
               aria-selected={modo === m}
               onClick={() => cambiarModo(m)}
               className={`flex-1 cursor-pointer rounded-[9px] border-none py-2.5 text-sm font-bold transition-colors ${
-                modo === m ? 'bg-gold text-[#2e1a11] shadow-sm' : 'bg-transparent text-ink-soft'
+                modo === m ? 'bg-marca text-white shadow-sm' : 'bg-transparent text-ink-soft'
               }`}
             >
               {texto}
@@ -102,7 +103,7 @@ export default function EntrarScreen() {
               value={usuario}
               onChange={(e) => setUsuario(e.target.value.toLowerCase().replace(/\s/g, ''))}
               placeholder="ej. omar"
-              className="mt-1 w-full rounded-xl border border-paper-line bg-white px-3 py-3 text-base font-semibold text-ink outline-none focus:border-gold"
+              className="mt-1 w-full rounded-xl border border-paper-line bg-white px-3 py-3 text-base font-semibold text-ink outline-none focus:border-marca"
             />
           </label>
 
@@ -115,7 +116,7 @@ export default function EntrarScreen() {
                 value={nombre}
                 onChange={(e) => setNombre(e.target.value)}
                 placeholder="Como quieres que te vean"
-                className="mt-1 w-full rounded-xl border border-paper-line bg-white px-3 py-3 text-base font-semibold text-ink outline-none focus:border-gold"
+                className="mt-1 w-full rounded-xl border border-paper-line bg-white px-3 py-3 text-base font-semibold text-ink outline-none focus:border-marca"
               />
             </label>
           )}
@@ -141,7 +142,7 @@ export default function EntrarScreen() {
             </div>
           )}
 
-          <button type="submit" className="btn btn-gold" disabled={!listo || ocupado}>
+          <button type="submit" className="btn btn-marca" disabled={!listo || ocupado}>
             {ocupado && <Loader2 size={17} className="animate-spin" />}
             {modo === 'entrar' ? 'Entrar' : 'Crear mi cuenta'}
           </button>

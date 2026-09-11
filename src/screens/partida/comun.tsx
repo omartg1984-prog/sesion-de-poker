@@ -34,7 +34,7 @@ export const finalDe = (p: Participacion, colores: ChipColor[]) => {
 }
 
 /** Color del número según gane, pierda o quede igual. Sobre fondo oscuro. */
-export const tonoOscuro = (v: number) => (v > EPS ? '#d9b063' : v < -EPS ? '#e4695e' : '#9d9483')
+export const tonoOscuro = (v: number) => (v > EPS ? '#4fc785' : v < -EPS ? '#ff6b6b' : '#8d8a86')
 
 /** Clase de Tailwind para el número sobre las tarjetas crema. */
 export const claseClara = (v: number) =>
@@ -93,7 +93,7 @@ export function PestanaReparto({
               <button
                 type="button"
                 onClick={() => tocar(r.id, { fichas_manual: null }, { fichasManual: null })}
-                className="flex cursor-pointer items-center gap-1 rounded-full border-none bg-gold/20 px-2 py-1 text-[11px] font-bold text-[#7a5d20] active:scale-95"
+                className="flex cursor-pointer items-center gap-1 rounded-full border-none bg-marca/20 px-2 py-1 text-[11px] font-bold text-marca-tinta active:scale-95"
               >
                 <RotateCcw size={11} strokeWidth={3} />
                 Auto
@@ -115,7 +115,7 @@ export function PestanaReparto({
                   value={r.counts[c.key] ?? 0}
                   showZero
                   aria-label={`Fichas ${c.label} para ${r.name}`}
-                  className="w-full rounded-lg border border-paper-line bg-white px-0.5 py-2 text-center text-[15px] font-semibold outline-none focus:border-gold"
+                  className="w-full rounded-lg border border-paper-line bg-white px-0.5 py-2 text-center text-[15px] font-semibold outline-none focus:border-marca"
                   onChange={(v) => {
                     if (!puedeEditar) return
                     const nuevas = { ...r.counts, [c.key]: v }

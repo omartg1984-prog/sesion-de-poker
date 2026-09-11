@@ -14,18 +14,19 @@ import {
 import type { IdTitulo, Titulo } from '../lib/api'
 
 /**
- * Los títulos son para presumir, así que cada uno se ve distinto: el del Rey manda,
- * los buenos van en dorado o verde, y los que no dan tanto orgullo —el Cajero, el
- * Batacazo, el que anda en seco— van en rojo, que es parte de la gracia.
+ * Los títulos son para presumir, así que cada uno se ve distinto: el del Rey se lleva
+ * el rojo de la marca a sangre, los buenos van en verde, y los que no dan tanto
+ * orgullo —el Cajero, el Batacazo, el que anda en seco— van en vino, que es parte
+ * de la gracia.
  */
 const ESTILO: Record<IdTitulo, { Icono: LucideIcon; clase: string }> = {
-  rey: { Icono: Crown, clase: 'bg-gold text-[#2e1a11]' },
+  rey: { Icono: Crown, clase: 'bg-marca text-white' },
   tiburon: { Icono: Fish, clase: 'bg-win/14 text-win' },
   palazo: { Icono: TrendingUp, clase: 'bg-win/14 text-win' },
   infalible: { Icono: Target, clase: 'bg-win/14 text-win' },
   racha: { Icono: Flame, clase: 'bg-win/14 text-win' },
-  fiel: { Icono: CalendarCheck, clase: 'bg-gold/20 text-[#7a5d20]' },
-  comefichas: { Icono: Utensils, clase: 'bg-gold/20 text-[#7a5d20]' },
+  fiel: { Icono: CalendarCheck, clase: 'bg-marca/20 text-marca-tinta' },
+  comefichas: { Icono: Utensils, clase: 'bg-marca/20 text-marca-tinta' },
   seco: { Icono: Snowflake, clase: 'bg-loss/10 text-loss' },
   cajero: { Icono: Landmark, clase: 'bg-loss/10 text-loss' },
   batacazo: { Icono: Skull, clase: 'bg-loss/10 text-loss' },

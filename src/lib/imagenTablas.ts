@@ -1,8 +1,8 @@
 import { moneyShort, signed } from './money'
 import {
   CREAM,
-  GOLD,
-  GOLD_SOFT,
+  MARCA,
+  MARCA_ALTA,
   LOSS,
   MEDALS,
   NEUTRO,
@@ -61,7 +61,9 @@ export interface DatosNumeros {
 
 /* ---------- tabla de la liga ---------- */
 
-const TONO_PUESTO = [GOLD_SOFT, '#b9b3a4', '#a9764a']
+const TONO_PUESTO = ['#df1f2e', '#c9c5bd', '#a9764a']
+/* El 1º y el 3º son oscuros y el 2º claro, así que el número no puede ir siempre igual. */
+const TINTA_PUESTO = ['#ffffff', '#17171b', '#ffffff']
 
 /** Podio de tres escalones. El primero va en medio y más alto, como en el pódium real. */
 function dibujarPodio(ctx: CanvasRenderingContext2D, filas: FilaLiga[], W: number, base: number) {
@@ -82,21 +84,21 @@ function dibujarPodio(ctx: CanvasRenderingContext2D, filas: FilaLiga[], W: numbe
       ctx.fill()
 
       ctx.textAlign = 'center'
-      ctx.fillStyle = '#20281f'
-      ctx.font = "700 32px 'Oswald',Arial,sans-serif"
+      ctx.fillStyle = TINTA_PUESTO[idx]
+      ctx.font = "32px 'Anton',Arial,sans-serif"
       ctx.fillText(`${idx + 1}º`, x + ancho / 2, cima + 38)
 
       // nombre, saldo y título por encima del escalón
       ctx.fillStyle = '#ffffff'
-      ctx.font = "600 25px 'Oswald',Arial,sans-serif"
+      ctx.font = "25px 'Anton',Arial,sans-serif"
       ctx.fillText(ellipsis(fila.nombre, 13), x + ancho / 2, cima - 40)
 
       ctx.fillStyle = fila.balance > 0.005 ? WIN : fila.balance < -0.005 ? LOSS : NEUTRO
-      ctx.font = "700 26px 'Oswald',Arial,sans-serif"
+      ctx.font = "26px 'Anton',Arial,sans-serif"
       ctx.fillText(signed(fila.balance), x + ancho / 2, cima - 14)
 
       if (fila.titulos[0]) {
-        ctx.fillStyle = GOLD
+        ctx.fillStyle = MARCA
         ctx.font = "600 15px 'Inter',Arial,sans-serif"
         ctx.fillText(ellipsis(fila.titulos[0], 16), x + ancho / 2, cima - 64)
       }
@@ -153,7 +155,7 @@ export function dibujarLiga(d: DatosLiga): HTMLCanvasElement {
       ctx.font = "500 20px 'Inter',Arial,sans-serif"
       ctx.fillText(`${f.puesto}º`, colName - 4, midY)
       ctx.fillStyle = '#ffffff'
-      ctx.font = "600 24px 'Oswald',Arial,sans-serif"
+      ctx.font = "24px 'Anton',Arial,sans-serif"
       ctx.fillText(ellipsis(f.nombre, 18), colName + 42, midY)
 
       ctx.textAlign = 'right'
@@ -162,7 +164,7 @@ export function dibujarLiga(d: DatosLiga): HTMLCanvasElement {
       ctx.fillText(String(f.partidas), cPartidas, midY)
       ctx.fillStyle = f.roi > 0 ? WIN : f.roi < 0 ? LOSS : NEUTRO
       ctx.fillText(`${f.roi > 0 ? '+' : ''}${f.roi.toFixed(0)}%`, cRoi, midY)
-      ctx.font = "700 24px 'Oswald',Arial,sans-serif"
+      ctx.font = "24px 'Anton',Arial,sans-serif"
       ctx.fillText(signed(f.balance), cSaldo, midY)
       ry += rowH
     })
@@ -170,7 +172,7 @@ export function dibujarLiga(d: DatosLiga): HTMLCanvasElement {
 
   lineaTenue(ctx, pad, W - pad, ry + 8)
   ctx.textAlign = 'left'
-  ctx.fillStyle = GOLD
+  ctx.fillStyle = MARCA
   ctx.font = "600 20px 'Inter',Arial,sans-serif"
   ctx.fillText(
     `${d.partidas} ${d.partidas === 1 ? 'partida' : 'partidas'} · ${moneyShort(d.dineroMovido)} movidos`,
@@ -216,8 +218,8 @@ export function dibujarNumeros(d: DatosNumeros): HTMLCanvasElement {
     ctx.fillStyle = 'rgba(255,255,255,.6)'
     ctx.font = "600 14px 'Inter',Arial,sans-serif"
     ctx.fillText(k, x + ancho / 2, headerH + 28)
-    ctx.fillStyle = GOLD_SOFT
-    ctx.font = "700 32px 'Oswald',Arial,sans-serif"
+    ctx.fillStyle = MARCA_ALTA
+    ctx.font = "32px 'Anton',Arial,sans-serif"
     ctx.fillText(v, x + ancho / 2, headerH + 72)
   })
 
@@ -255,7 +257,7 @@ export function dibujarNumeros(d: DatosNumeros): HTMLCanvasElement {
       nameX = colName + 32
     }
     ctx.fillStyle = '#ffffff'
-    ctx.font = "600 24px 'Oswald',Arial,sans-serif"
+    ctx.font = "24px 'Anton',Arial,sans-serif"
     ctx.fillText(ellipsis(f.nombre, 22), nameX, midY)
 
     ctx.textAlign = 'right'
@@ -264,14 +266,14 @@ export function dibujarNumeros(d: DatosNumeros): HTMLCanvasElement {
     ctx.fillText(moneyShort(f.puso), cPuso, midY)
     ctx.fillText(moneyShort(f.saco), cSaco, midY)
     ctx.fillStyle = f.resultado > 0.005 ? WIN : f.resultado < -0.005 ? LOSS : NEUTRO
-    ctx.font = "700 24px 'Oswald',Arial,sans-serif"
+    ctx.font = "24px 'Anton',Arial,sans-serif"
     ctx.fillText(signed(f.resultado), cRes, midY)
     ry += rowH
   })
 
   lineaTenue(ctx, pad, W - pad, ry + 8)
   ctx.textAlign = 'left'
-  ctx.fillStyle = GOLD
+  ctx.fillStyle = MARCA
   ctx.font = "600 20px 'Inter',Arial,sans-serif"
   ctx.fillText(
     d.recompras > 0

@@ -1,5 +1,6 @@
 import Esqueleto from '../components/Esqueleto'
-import { ChevronRight, KeyRound, LogOut, Plus, Shield, Spade, Ticket, UserCog } from 'lucide-react'
+import { ChevronRight, KeyRound, LogOut, Plus, Shield, Ticket, UserCog } from 'lucide-react'
+import Logo from '../components/Logo'
 import { useEffect, useState } from 'react'
 import EditorFichas from '../components/EditorFichas'
 import Sheet from '../components/Sheet'
@@ -66,13 +67,13 @@ export default function HomeScreen() {
 
   return (
     <div className="mx-auto max-w-[640px] px-3.5 pb-10">
-      <header className="sticky top-0 z-30 -mx-3.5 mb-4 flex items-center gap-3 border-b border-white/8 bg-[#1b241a]/85 px-3.5 pt-[max(0.75rem,env(safe-area-inset-top))] pb-3 backdrop-blur-xl">
-        <Spade size={20} className="text-gold" />
+      <header className="sticky top-0 z-30 -mx-3.5 mb-4 flex items-center gap-3 border-b border-white/8 bg-marca/92 px-3.5 pt-[max(0.75rem,env(safe-area-inset-top))] pb-3 backdrop-blur-xl">
+        <Logo size={34} />
         <div className="min-w-0 flex-1">
-          <div className="truncate font-display text-[17px] leading-tight font-bold tracking-[.5px] text-gold-soft uppercase">
+          <div className="truncate font-display text-[17px] leading-tight font-bold tracking-[.5px] text-white uppercase">
             Tus ligas
           </div>
-          <div className="truncate text-xs text-mint-soft">{usuario.nombre}</div>
+          <div className="truncate text-xs text-white/70">{usuario.nombre}</div>
         </div>
         <button
           type="button"
@@ -83,7 +84,7 @@ export default function HomeScreen() {
           {usuario.foto ? (
             <img src={usuario.foto} alt="" className="h-full w-full object-cover" />
           ) : (
-            <span className="flex h-full w-full items-center justify-center font-display text-base font-bold text-gold-soft">
+            <span className="flex h-full w-full items-center justify-center font-display text-base font-bold text-white">
               {usuario.nombre.charAt(0).toUpperCase()}
             </span>
           )}
@@ -112,7 +113,7 @@ export default function HomeScreen() {
               <div className="flex items-center gap-2">
                 <span className="truncate font-display text-xl font-semibold text-ink">{l.nombre}</span>
                 {l.es_admin === 1 && (
-                  <span className="flex shrink-0 items-center gap-1 rounded-full bg-gold/20 px-2 py-0.5 text-[10px] font-bold text-[#7a5d20] uppercase">
+                  <span className="flex shrink-0 items-center gap-1 rounded-full bg-marca/20 px-2 py-0.5 text-[10px] font-bold text-marca-tinta uppercase">
                     <Shield size={10} strokeWidth={3} />
                     Admin
                   </span>
@@ -129,7 +130,7 @@ export default function HomeScreen() {
       )}
 
       <div className="mt-2 flex gap-2.5">
-        <button type="button" className="btn btn-gold" onClick={() => setCreando(true)}>
+        <button type="button" className="btn btn-marca" onClick={() => setCreando(true)}>
           <Plus size={18} strokeWidth={2.6} />
           Crear liga
         </button>
@@ -148,7 +149,7 @@ export default function HomeScreen() {
             value={nombreLiga}
             onChange={(e) => setNombreLiga(e.target.value)}
             placeholder="ej. Los Viernes"
-            className="mt-1 w-full rounded-xl border border-paper-line bg-white px-3 py-3 text-base font-semibold text-ink outline-none focus:border-gold"
+            className="mt-1 w-full rounded-xl border border-paper-line bg-white px-3 py-3 text-base font-semibold text-ink outline-none focus:border-marca"
           />
         </label>
 
@@ -163,7 +164,7 @@ export default function HomeScreen() {
 
         <button
           type="button"
-          className="btn btn-gold mt-5 mb-2"
+          className="btn btn-marca mt-5 mb-2"
           disabled={!nombreLiga.trim() || ocupado}
           onClick={() => void crear()}
         >
@@ -185,11 +186,11 @@ export default function HomeScreen() {
           autoCapitalize="characters"
           autoCorrect="off"
           aria-label="Código de la liga"
-          className="w-full rounded-xl border border-paper-line bg-white px-3 py-3.5 text-center font-display text-2xl font-bold tracking-[6px] text-ink uppercase outline-none focus:border-gold"
+          className="w-full rounded-xl border border-paper-line bg-white px-3 py-3.5 text-center font-display text-2xl font-bold tracking-[6px] text-ink uppercase outline-none focus:border-marca"
         />
         <button
           type="button"
-          className="btn btn-gold mt-4 mb-2"
+          className="btn btn-marca mt-4 mb-2"
           disabled={codigo.trim().length < 4 || ocupado}
           onClick={() => void unirme()}
         >

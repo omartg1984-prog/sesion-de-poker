@@ -6,19 +6,20 @@
  * que a su vez llaman a los de imagenTablas.ts, y si las brochas vivieran junto a
  * ellos los dos archivos se importarían en círculo y el primero en cargar reventaría.
  *
- * Los colores son los mismos de la app (ver index.css). Sobre el fieltro oscuro el oro
- * va en tres intensidades para que no se aplane todo en un solo dorado: el más
- * brillante es el de las ganancias, que es lo que la gente busca al abrir la imagen.
+ * Los colores son los mismos de la app (ver index.css), en su versión para fondo
+ * oscuro. El rojo de la marca sube a #ff5560 porque el #df1f2e de la app se apaga
+ * sobre el negro; y el título grande va en blanco, no en rojo, para que el rojo
+ * siga significando algo cuando aparece.
  */
 
-export const FELT_TOP = '#243020'
-export const FELT_BOTTOM = '#1b241a'
-export const GOLD = '#b48e43'
-export const GOLD_SOFT = '#d9b063'
-export const CREAM = '#d8d2c4'
-export const WIN = '#f0d190'
-export const LOSS = '#e4695e'
-export const NEUTRO = '#9d9483'
+export const NOCHE_ALTO = '#2a1016'
+export const NOCHE_HONDO = '#100e12'
+export const MARCA = '#ff5560'
+export const MARCA_ALTA = '#ffffff'
+export const CREAM = '#cfcac2'
+export const WIN = '#4fc785'
+export const LOSS = '#ff6b6b'
+export const NEUTRO = '#8d8a86'
 export const MEDALS = ['🥇', '🥈', '🥉']
 
 export function roundRect(
@@ -52,7 +53,7 @@ export function makeCanvas(w: number, h: number) {
   return { cv, ctx }
 }
 
-/** Fondo de fieltro con marco dorado y encabezado, común a todas las imágenes. */
+/** Fondo oscuro con marco rojo y encabezado, común a todas las imágenes. */
 export function pintarMesa(
   ctx: CanvasRenderingContext2D,
   w: number,
@@ -62,21 +63,21 @@ export function pintarMesa(
   gorro: string,
 ) {
   const g = ctx.createRadialGradient(w / 2, 60, 80, w / 2, h * 0.4, h)
-  g.addColorStop(0, FELT_TOP)
-  g.addColorStop(1, FELT_BOTTOM)
+  g.addColorStop(0, NOCHE_ALTO)
+  g.addColorStop(1, NOCHE_HONDO)
   ctx.fillStyle = g
   ctx.fillRect(0, 0, w, h)
-  ctx.strokeStyle = 'rgba(180,142,67,.9)'
+  ctx.strokeStyle = 'rgba(223,31,46,.95)'
   ctx.lineWidth = 5
   roundRect(ctx, 16, 16, w - 32, h - 32, 26)
   ctx.stroke()
 
   ctx.textAlign = 'center'
-  ctx.fillStyle = GOLD
-  ctx.font = "600 22px 'Oswald',Arial,sans-serif"
+  ctx.fillStyle = MARCA
+  ctx.font = "22px 'Anton',Arial,sans-serif"
   ctx.fillText(gorro, w / 2, 58)
-  ctx.fillStyle = GOLD_SOFT
-  ctx.font = "700 48px 'Oswald',Arial,sans-serif"
+  ctx.fillStyle = MARCA_ALTA
+  ctx.font = "48px 'Anton',Arial,sans-serif"
   ctx.fillText(titulo.toUpperCase(), w / 2, 110)
   ctx.fillStyle = CREAM
   ctx.font = "400 24px 'Inter',Arial,sans-serif"

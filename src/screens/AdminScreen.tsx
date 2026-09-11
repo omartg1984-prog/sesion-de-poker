@@ -44,16 +44,16 @@ export default function AdminScreen() {
 
   return (
     <div className="mx-auto max-w-[640px] px-3.5 pb-10">
-      <header className="sticky top-0 z-30 -mx-3.5 mb-4 flex items-center gap-3 border-b border-white/8 bg-[#1b241a]/85 px-3.5 pt-[max(0.75rem,env(safe-area-inset-top))] pb-3 backdrop-blur-xl">
+      <header className="sticky top-0 z-30 -mx-3.5 mb-4 flex items-center gap-3 border-b border-white/8 bg-marca/92 px-3.5 pt-[max(0.75rem,env(safe-area-inset-top))] pb-3 backdrop-blur-xl">
         <button
           type="button"
           onClick={irAHome}
           aria-label="Volver"
-          className="flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-full border-none bg-white/8 text-mint active:scale-90"
+          className="flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-full border-none bg-white/15 text-white active:scale-90"
         >
           <ArrowLeft size={18} strokeWidth={2.4} />
         </button>
-        <h1 className="m-0 font-display text-[17px] font-bold tracking-[.5px] text-gold-soft uppercase">
+        <h1 className="m-0 font-display text-[17px] font-bold tracking-[.5px] text-white uppercase">
           Usuarios
         </h1>
       </header>
@@ -90,7 +90,7 @@ export default function AdminScreen() {
                   <span className="flex items-center gap-1.5">
                     <b className="truncate text-[15px] text-ink">{u.nombre}</b>
                     {u.es_admin_app === 1 && (
-                      <Shield size={12} strokeWidth={3} className="shrink-0 text-[#7a5d20]" />
+                      <Shield size={12} strokeWidth={3} className="shrink-0 text-marca-tinta" />
                     )}
                   </span>
                   <span className="block truncate text-xs text-ink-soft">
@@ -132,7 +132,7 @@ export default function AdminScreen() {
 
         <button
           type="button"
-          className="btn btn-gold mb-2"
+          className="btn btn-marca mb-2"
           disabled={pin.length !== 6 || ocupado}
           onClick={() => void resetear()}
         >

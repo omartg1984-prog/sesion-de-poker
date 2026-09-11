@@ -152,19 +152,19 @@ export default function LigaScreen() {
 
   return (
     <div className="mx-auto max-w-[640px] px-3.5 pb-10">
-      <header className="sticky top-0 z-30 -mx-3.5 mb-4 flex items-center gap-3 border-b border-white/8 bg-[#1b241a]/85 px-3.5 pt-[max(0.75rem,env(safe-area-inset-top))] pb-3 backdrop-blur-xl">
+      <header className="sticky top-0 z-30 -mx-3.5 mb-4 flex items-center gap-3 border-b border-white/8 bg-marca/92 px-3.5 pt-[max(0.75rem,env(safe-area-inset-top))] pb-3 backdrop-blur-xl">
         <button
           type="button"
           onClick={irAHome}
           aria-label="Volver a tus ligas"
-          className="flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-full border-none bg-white/8 text-mint active:scale-90"
+          className="flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-full border-none bg-white/15 text-white active:scale-90"
         >
           <ArrowLeft size={18} strokeWidth={2.4} />
         </button>
-        <h1 className="m-0 min-w-0 flex-1 truncate font-display text-[17px] font-bold tracking-[.5px] text-gold-soft uppercase">
+        <h1 className="m-0 min-w-0 flex-1 truncate font-display text-[17px] font-bold tracking-[.5px] text-white uppercase">
           {liga.nombre}
         </h1>
-        {soyAdmin && <Shield size={15} className="shrink-0 text-gold" />}
+        {soyAdmin && <Shield size={15} className="shrink-0 text-white/85" />}
       </header>
 
       {/* código para invitar */}
@@ -173,17 +173,17 @@ export default function LigaScreen() {
         onClick={async () =>
           avisar((await copyText(liga.codigo)) ? 'Código copiado' : 'No se pudo copiar')
         }
-        className="mb-3.5 flex w-full cursor-pointer items-center gap-3 rounded-xl border border-gold/25 bg-gradient-to-br from-[#2c3a26] to-[#1b241a] px-4 py-3 text-left active:scale-[.99]"
+        className="mb-3.5 flex w-full cursor-pointer items-center gap-3 rounded-xl border border-marca/25 bg-gradient-to-br from-[#2a1016] to-[#100e12] px-4 py-3 text-left active:scale-[.99]"
       >
         <div className="min-w-0 flex-1">
-          <div className="text-[10px] font-semibold tracking-[1px] text-mint-soft uppercase">
+          <div className="text-[10px] font-semibold tracking-[1px] text-tiza-suave uppercase">
             Código para invitar
           </div>
-          <div className="font-display text-2xl font-bold tracking-[4px] text-gold-soft">
+          <div className="font-display text-2xl font-bold tracking-[4px] text-marca-alta">
             {liga.codigo}
           </div>
         </div>
-        <ClipboardCopy size={18} className="shrink-0 text-gold" />
+        <ClipboardCopy size={18} className="shrink-0 text-marca-alta" />
       </button>
 
       <div className="mb-3.5 flex gap-1 rounded-xl bg-black/30 p-1">
@@ -199,7 +199,7 @@ export default function LigaScreen() {
             aria-current={pestana === id ? 'page' : undefined}
             onClick={() => setPestana(id)}
             className={`flex-1 cursor-pointer rounded-[9px] border-none py-2 text-[13px] font-bold transition-colors ${
-              pestana === id ? 'bg-gold text-[#2e1a11]' : 'bg-transparent text-mint-soft'
+              pestana === id ? 'bg-marca text-white' : 'bg-transparent text-tiza-suave'
             }`}
           >
             {texto}
@@ -230,9 +230,9 @@ export default function LigaScreen() {
                   className="flex w-full cursor-pointer items-center gap-2.5 border-none border-b border-dashed border-paper-line bg-transparent px-0.5 py-3 text-left last:border-b-0"
                 >
                   {p.tipo === 'torneo' ? (
-                    <Trophy size={17} className="shrink-0 text-[#7a5d20]" strokeWidth={2.3} />
+                    <Trophy size={17} className="shrink-0 text-marca-tinta" strokeWidth={2.3} />
                   ) : (
-                    <Banknote size={17} className="shrink-0 text-[#7a5d20]" strokeWidth={2.3} />
+                    <Banknote size={17} className="shrink-0 text-marca-tinta" strokeWidth={2.3} />
                   )}
                   <span className="min-w-0 flex-1">
                     <b className="block truncate text-[15px] text-ink">
@@ -349,7 +349,7 @@ export default function LigaScreen() {
               type="button"
               onClick={() => setTipo(t)}
               className={`flex flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-[9px] border-none py-2.5 text-sm font-bold transition-colors ${
-                tipo === t ? 'bg-gold text-[#2e1a11] shadow-sm' : 'bg-transparent text-ink-soft'
+                tipo === t ? 'bg-marca text-white shadow-sm' : 'bg-transparent text-ink-soft'
               }`}
             >
               <Icono size={15} strokeWidth={2.4} />
@@ -364,7 +364,7 @@ export default function LigaScreen() {
             type="date"
             value={fecha}
             onChange={(e) => setFecha(e.target.value)}
-            className="mt-1 w-full rounded-xl border border-paper-line bg-white px-3 py-3 text-base font-semibold text-ink outline-none focus:border-gold"
+            className="mt-1 w-full rounded-xl border border-paper-line bg-white px-3 py-3 text-base font-semibold text-ink outline-none focus:border-marca"
           />
         </label>
 
@@ -375,11 +375,11 @@ export default function LigaScreen() {
             value={nombrePartida}
             onChange={(e) => setNombrePartida(e.target.value)}
             placeholder="ej. Cumpleaños de Beto"
-            className="mt-1 w-full rounded-xl border border-paper-line bg-white px-3 py-3 text-base font-semibold text-ink outline-none focus:border-gold"
+            className="mt-1 w-full rounded-xl border border-paper-line bg-white px-3 py-3 text-base font-semibold text-ink outline-none focus:border-marca"
           />
         </label>
 
-        <button type="button" className="btn btn-gold mb-2" disabled={ocupado} onClick={() => void crearPartida()}>
+        <button type="button" className="btn btn-marca mb-2" disabled={ocupado} onClick={() => void crearPartida()}>
           Crear partida
         </button>
       </Sheet>
@@ -418,7 +418,7 @@ export default function LigaScreen() {
                 onClick={() => void alternarAdmin(m)}
                 aria-label={m.es_admin === 1 ? `Quitar admin a ${m.nombre}` : `Hacer admin a ${m.nombre}`}
                 className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border-none transition-colors ${
-                  m.es_admin === 1 ? 'bg-gold/22 text-[#7a5d20]' : 'bg-ink/8 text-ink-soft/45'
+                  m.es_admin === 1 ? 'bg-marca/22 text-marca-tinta' : 'bg-ink/8 text-ink-soft/45'
                 } ${soyAdmin ? 'cursor-pointer active:scale-95' : 'cursor-default'}`}
               >
                 <Shield size={15} strokeWidth={2.6} />
@@ -448,7 +448,7 @@ export default function LigaScreen() {
         {soyAdmin && (
           <button
             type="button"
-            className="btn btn-gold mt-4 mb-2"
+            className="btn btn-marca mt-4 mb-2"
             disabled={ocupado}
             onClick={() => void guardarFichas()}
           >

@@ -1,36 +1,41 @@
 @import 'tailwindcss';
 
 /*
- * Paleta "Salón privado": verde musgo y chocolate de fondo, oro antiguo de acento,
- * tarjetas crema y crimson reservado para las pérdidas.
+ * Paleta "Carta roja", sacada del logo: el rojo del rey, negro de tinta y blanco.
  *
- * Toda la app lee estos nombres (`bg-gold`, `text-ink`, …); ningún componente conoce
+ * El rojo manda en la barra de arriba y en los botones. El dinero NO lo usa: ganar
+ * va en verde billete y perder en vino oscuro, porque si el rojo de la marca fuera
+ * también el de "perdiste", media app se vería como una derrota.
+ *
+ * Toda la app lee estos nombres (`bg-marca`, `text-ink`, …); ningún componente conoce
  * un color concreto, así que retocar un tono se hace aquí y en ningún otro lado.
  *
  * Ganancia y pérdida llevan dos tonos cada uno porque un mismo color no puede leerse
  * sobre las tarjetas crema y sobre el fondo oscuro: `-alto` es la versión para fondo
- * oscuro. Los cuatro valores están medidos y pasan AA (4.5:1) sobre su fondo —
- * el oro de la paleta (#b48e43) da 2.53 sobre crema, por eso "ganó" usa bronce.
+ * oscuro. Los ocho valores están medidos y pasan AA (4.5:1) sobre su fondo, salvo
+ * `--color-marca` sobre negro (3.95), que por eso sólo se usa en piezas grandes.
  */
 @theme {
-  --color-felt: #243020;
-  --color-felt-deep: #1b241a;
-  --color-felt-line: #12190f;
-  --color-gold: #b48e43;
-  --color-gold-soft: #d9b063;
-  --color-paper: #f1e9da;
-  --color-paper-soft: #f7f1e6;
-  --color-paper-line: #ddd2bc;
-  --color-ink: #2e1a11;
-  --color-ink-soft: #6b5b4b;
-  --color-win: #7a5d20;
-  --color-win-alto: #d9b063;
-  --color-loss: #8b1a1a;
-  --color-loss-alto: #e4695e;
-  --color-mint: #c9c3b2;
-  --color-mint-soft: #b5ae9c;
+  --color-noche: #1a1419;
+  --color-noche-honda: #100e12;
+  --color-noche-linea: #070608;
+  --color-marca: #df1f2e;
+  --color-marca-alta: #ff5560;
+  /* Rojo de tinta: para texto encima de un fondo tenue de marca (`bg-marca/20`). */
+  --color-marca-tinta: #9c1420;
+  --color-paper: #f4f1ec;
+  --color-paper-soft: #faf8f4;
+  --color-paper-line: #e6e1d8;
+  --color-ink: #17171b;
+  --color-ink-soft: #5a554e;
+  --color-win: #1f7a45;
+  --color-win-alto: #4fc785;
+  --color-loss: #a51b28;
+  --color-loss-alto: #ff6b6b;
+  --color-tiza: #c9c5bd;
+  --color-tiza-suave: #b0aca4;
 
-  --font-display: 'Oswald', 'Arial Narrow', system-ui, sans-serif;
+  --font-display: 'Anton', 'Arial Narrow', system-ui, sans-serif;
   --font-body: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
 
   --radius-card: 16px;
@@ -58,8 +63,9 @@
   body {
     font-family: var(--font-body);
     color: var(--color-ink);
-    /* Verde musgo que se funde a chocolate: la mesa vista desde un salón en penumbra. */
-    background: radial-gradient(120% 90% at 50% 0%, #243020 0%, #1b241a 55%, #2e1a11 100%) fixed;
+    /* Negro de tinta con un rescoldo de rojo arriba: el salón a oscuras y el letrero
+       encendido en la entrada. */
+    background: radial-gradient(120% 90% at 50% 0%, #3a1218 0%, #1a1419 45%, #100e12 100%) fixed;
     min-height: 100vh;
     min-height: 100dvh;
     -webkit-text-size-adjust: 100%;
@@ -70,7 +76,7 @@
 
   /* Foco siempre visible al navegar con teclado. */
   :focus-visible {
-    outline: 3px solid var(--color-gold-soft);
+    outline: 3px solid var(--color-marca-alta);
     outline-offset: 2px;
   }
 
@@ -122,26 +128,26 @@
   .btn {
     @apply inline-flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl border-none px-4 py-3 font-body text-[15px] font-bold transition-colors;
   }
-  .btn-gold {
-    @apply bg-gold text-[#3a2f0e] shadow-[0_6px_16px_rgba(0,0,0,.25)] hover:bg-gold-soft;
+  .btn-marca {
+    @apply bg-marca text-white shadow-[0_6px_16px_rgba(0,0,0,.25)] hover:bg-marca-alta;
   }
-  /* Compartir es la acción principal de esa pantalla, así que lleva el dorado de la
+  /* Compartir es la acción principal de esa pantalla, así que lleva el rojo de la
      app. Antes era el verde de WhatsApp: reconocible, pero es lo único fosforescente
      en una interfaz de salón oscuro y cantaba muchísimo. */
   .btn-share {
-    @apply bg-gold text-[#2e1a11] shadow-[0_6px_16px_rgba(0,0,0,.25)] hover:bg-gold-soft;
+    @apply bg-marca text-white shadow-[0_6px_16px_rgba(0,0,0,.25)] hover:bg-marca-alta;
   }
   .btn-ghost {
-    @apply bg-[#efe8d6] text-ink-soft hover:bg-[#e6dcbf];
+    @apply bg-[#e6e1d8] text-ink-soft hover:bg-[#dbd5c9];
   }
   .btn-dashed {
-    @apply w-full cursor-pointer rounded-xl border-[1.5px] border-dashed border-paper-line bg-transparent px-3 py-2.5 text-[13px] font-semibold text-ink-soft hover:border-gold hover:bg-[#fbf7ea] hover:text-ink;
+    @apply w-full cursor-pointer rounded-xl border-[1.5px] border-dashed border-paper-line bg-transparent px-3 py-2.5 text-[13px] font-semibold text-ink-soft hover:border-marca hover:bg-[#fdf4f4] hover:text-ink;
   }
   .icon-btn {
-    @apply flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-[9px] border-none bg-[#efe8d6] text-base leading-none text-ink-soft;
+    @apply flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-[9px] border-none bg-[#e6e1d8] text-base leading-none text-ink-soft;
   }
   .icon-btn-danger {
-    @apply hover:bg-[#f6d7d3] hover:text-loss;
+    @apply hover:bg-[#f7dcdc] hover:text-loss;
   }
 
   .balance {
@@ -151,10 +157,10 @@
     @apply shrink-0;
   }
   .balance-ok {
-    @apply bg-[#e2f2e6] text-win;
+    @apply bg-[#e3f2e9] text-win;
   }
   .balance-off {
-    @apply bg-[#fdeceb] text-loss;
+    @apply bg-[#fbeaea] text-loss;
   }
 
   .stat {
@@ -168,7 +174,7 @@
   }
 
   .name-input {
-    @apply min-w-0 flex-1 border-none border-b-2 border-paper-line bg-transparent px-0.5 py-1 font-display text-xl font-semibold text-ink outline-none focus:border-b-gold;
+    @apply min-w-0 flex-1 border-none border-b-2 border-paper-line bg-transparent px-0.5 py-1 font-display text-xl font-semibold text-ink outline-none focus:border-b-marca;
     border-bottom-style: solid;
     border-bottom-width: 2px;
   }
@@ -184,4 +190,13 @@
   .subtle-card {
     @apply mb-2.5 rounded-xl border border-paper-line bg-paper-soft px-3 py-2.5;
   }
+}
+
+/*
+ * Fuera de @layer a propósito: las reglas sin capa le ganan a las utilidades de
+ * Tailwind. Anton trae un solo grosor, así que `font-bold` junto a `font-display`
+ * hacía que el navegador se inventara la negrita y las letras salían embarradas.
+ */
+.font-display {
+  font-weight: 400;
 }

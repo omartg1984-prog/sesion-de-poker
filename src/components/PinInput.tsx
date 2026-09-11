@@ -63,7 +63,7 @@ export default function PinInput({
               key={i}
               className={`flex h-12 w-11 items-center justify-center rounded-xl border-2 text-2xl transition-colors ${
                 activo
-                  ? 'border-gold bg-white'
+                  ? 'border-marca bg-white'
                   : lleno
                     ? 'border-paper-line bg-white'
                     : 'border-paper-line bg-white/60'

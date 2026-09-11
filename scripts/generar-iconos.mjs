@@ -17,7 +17,8 @@ const ORIGEN = join(RAIZ, 'assets/logo.jpg')
 /** El rojo del logo, para que el fondo del icono adaptable no haga costura. */
 const ROJO = { r: 223, g: 31, b: 46, alpha: 1 }
 /** Verde musgo de la app, para la pantalla de arranque. */
-const FIELTRO = { r: 27, g: 36, b: 26, alpha: 1 }
+/* Fondo de arranque: el negro de tinta de la app, no el verde de mesa de antes. */
+const NOCHE = { r: 16, g: 14, b: 18, alpha: 1 }
 const TRANSPARENTE = { r: 0, g: 0, b: 0, alpha: 0 }
 
 const salida = (ruta) => {
@@ -111,8 +112,8 @@ const trabajos = [
   ['public/rey.png', async () => sharp(await reyRecortado()).resize(256, 256, { fit: 'inside' }).png({ palette: true, colors: 32, effort: 10 })],
 
   // Pantalla de arranque: el logo chico sobre el fondo de la app
-  ['assets/splash.png', () => centrado(2732, 0.26, FIELTRO)],
-  ['assets/splash-dark.png', () => centrado(2732, 0.26, FIELTRO)],
+  ['assets/splash.png', () => centrado(2732, 0.26, NOCHE)],
+  ['assets/splash-dark.png', () => centrado(2732, 0.26, NOCHE)],
 ]
 
 for (const [ruta, hacer] of trabajos) {
