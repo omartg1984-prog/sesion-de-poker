@@ -105,8 +105,12 @@ export function PestanaReparto({
           <div className="grid grid-cols-[repeat(auto-fit,minmax(58px,1fr))] gap-1.5">
             {colores.map((c) => (
               <label key={c.key} className="flex flex-col items-center gap-1">
-                <Chip color={c} />
-                <span className="sr-only">{c.label}</span>
+                <Chip color={c} size={30} />
+                {/* Sin el valor dentro de la ficha, el nombre es lo único que
+                    distingue una columna de otra. */}
+                <span className="w-full truncate text-center text-[10px] font-semibold text-ink-soft">
+                  {c.label}
+                </span>
                 <NumInput
                   value={r.counts[c.key] ?? 0}
                   showZero

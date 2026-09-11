@@ -15,8 +15,10 @@ export default function ChipsGrid({ colors, chips, onChange, showZero = false }:
     <div className="grid grid-cols-[repeat(auto-fit,minmax(58px,1fr))] gap-1.5">
       {colors.map((c) => (
         <label key={c.key} className="flex flex-col items-center gap-1">
-          <Chip color={c} />
-          <span className="sr-only">{c.label || 'Color'}</span>
+          <Chip color={c} size={30} />
+          <span className="w-full truncate text-center text-[10px] font-semibold text-ink-soft">
+            {c.label || 'Color'}
+          </span>
           <NumInput
             value={chips[c.key] ?? 0}
             onChange={(v) => onChange(c.key, v)}

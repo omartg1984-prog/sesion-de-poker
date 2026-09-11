@@ -8,12 +8,15 @@ interface Props {
 }
 
 /*
- * Ficha de póker de verdad, no un círculo de color: cuerpo del color, muescas en el
- * canto, anillo punteado y disco central claro.
+ * Ficha de póker: cuerpo del color, muescas en el canto, anillo punteado y el logo
+ * en el disco central.
  *
- * En el centro va el VALOR, no un palo: en la mesa lo que necesitas saber de un
- * vistazo es cuánto vale ese montón. Se dibuja en SVG para que los detalles aguanten
- * igual a 28 px que a 34.
+ * El dibujo sale del color que se le pase, así que cualquier color que se agregue a
+ * una liga —ahora o después— se ve igual sin tocar nada aquí.
+ *
+ * El centro lleva el logo, no el valor. A cambio, donde las fichas van en rejilla se
+ * escribe el nombre del color al lado: sin número ni nombre, las cinco se verían
+ * idénticas a 32 px.
  */
 
 // 6 muescas repartidas en el canto. El radio del trazo es 44 y su circunferencia
@@ -33,7 +36,8 @@ export default function Chip({ color, size = 28 }: Props) {
       viewBox="0 0 100 100"
       width={size}
       height={size}
-      aria-hidden="true"
+      role="img"
+      aria-label={`Ficha ${color.label || 'de la casa'} de ${color.value}`}
       className="shrink-0 drop-shadow-[0_2px_3px_rgba(0,0,0,.3)]"
     >
       {/* cuerpo */}
@@ -66,18 +70,7 @@ export default function Chip({ color, size = 28 }: Props) {
         strokeDasharray="3 4"
       />
 
-      <text
-        x="50"
-        y="50"
-        textAnchor="middle"
-        dominantBaseline="central"
-        fontFamily="Oswald, Arial Narrow, sans-serif"
-        fontWeight="700"
-        fontSize={String(color.value).length > 2 ? 30 : 38}
-        fill="#20281f"
-      >
-        {color.value}
-      </text>
+      <image href="/rey.png" x="21" y="21" width="58" height="58" />
     </svg>
   )
 }

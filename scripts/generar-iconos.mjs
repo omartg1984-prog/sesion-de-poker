@@ -107,6 +107,9 @@ const trabajos = [
     () => sharp({ create: { width: 1024, height: 1024, channels: 4, background: ROJO } }).png(),
   ],
 
+  // El rey recortado, para poder usarlo dentro de las fichas de la app
+  ['public/rey.png', async () => sharp(await reyRecortado()).resize(256, 256, { fit: 'inside' }).png({ palette: true, colors: 32, effort: 10 })],
+
   // Pantalla de arranque: el logo chico sobre el fondo de la app
   ['assets/splash.png', () => centrado(2732, 0.26, FIELTRO)],
   ['assets/splash-dark.png', () => centrado(2732, 0.26, FIELTRO)],
