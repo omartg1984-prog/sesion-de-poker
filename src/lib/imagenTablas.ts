@@ -182,7 +182,7 @@ export function dibujarLiga(d: DatosLiga): HTMLCanvasElement {
   ctx.textAlign = 'right'
   ctx.fillStyle = 'rgba(255,255,255,.5)'
   ctx.font = "400 18px 'Inter',Arial,sans-serif"
-  ctx.fillText('♠ Sesión de Póker', W - pad, ry + 46)
+  ctx.fillText('♠ OnlyCards', W - pad, ry + 46)
 
   return cv
 }
@@ -285,7 +285,7 @@ export function dibujarNumeros(d: DatosNumeros): HTMLCanvasElement {
   ctx.textAlign = 'right'
   ctx.fillStyle = 'rgba(255,255,255,.5)'
   ctx.font = "400 18px 'Inter',Arial,sans-serif"
-  ctx.fillText('♠ Sesión de Póker', W - pad, ry + 44)
+  ctx.fillText('♠ OnlyCards', W - pad, ry + 44)
 
   return cv
 }

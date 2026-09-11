@@ -52,8 +52,8 @@ export default defineConfig(({ mode }) => {
           ],
         },
         manifest: {
-          name: "Sesión de Póker",
-          short_name: "Póker",
+          name: "OnlyCards",
+          short_name: "OnlyCards",
           description:
             "Lleva la cuenta de tus partidas de póker en casa: entradas, reparto de fichas y resultados.",
           lang: "es",

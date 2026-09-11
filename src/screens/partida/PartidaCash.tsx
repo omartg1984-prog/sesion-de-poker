@@ -226,7 +226,7 @@ export default function PartidaCash({
   /* ---- resultado ---- */
   const datosImagen: DatosCash = {
     tipo: 'cash',
-    titulo: 'Sesión de Póker',
+    titulo: 'OnlyCards',
     subtitulo: datos.partida.nombre || datos.partida.fecha,
     filas: conTotales.map((p) => ({
       nombre: p.nombre,

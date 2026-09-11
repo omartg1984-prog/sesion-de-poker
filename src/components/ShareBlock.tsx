@@ -81,10 +81,7 @@ export default function ShareBlock({ datos, texto, alt }: Props) {
           className="btn btn-ghost"
           disabled={ocupado}
           onClick={() =>
-            correr(async () => {
-              await descargarImagen(datos)
-              return 'Imagen descargada'
-            })
+            correr(async () => await descargarImagen(datos))
           }
         >
           <Download size={17} strokeWidth={2.4} />

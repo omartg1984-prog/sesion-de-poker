@@ -258,7 +258,7 @@ export default function PartidaTorneo({
 
   const datosImagen: DatosTorneo = {
     tipo: 'torneo',
-    titulo: 'Sesión de Póker',
+    titulo: 'OnlyCards',
     subtitulo: datos.partida.nombre || datos.partida.fecha,
     bolsa,
     jugadores: ps.length,

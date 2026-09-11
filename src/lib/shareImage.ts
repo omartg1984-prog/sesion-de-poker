@@ -1,4 +1,5 @@
 import { moneyShort, signed } from './money'
+import { compartirArchivoNativo, esNativo, guardarArchivoNativo } from './nativo'
 import { dibujarLiga, dibujarNumeros, type DatosLiga, type DatosNumeros } from './imagenTablas'
 import {
   CREAM,
@@ -136,7 +137,7 @@ function dibujarCash(d: DatosCash): HTMLCanvasElement {
   ctx.textAlign = 'right'
   ctx.fillStyle = 'rgba(255,255,255,.5)'
   ctx.font = "400 18px 'Inter',Arial,sans-serif"
-  ctx.fillText('♠ Sesión de Póker', W - pad, ry + 50)
+  ctx.fillText('♠ OnlyCards', W - pad, ry + 50)
 
   return cv
 }
@@ -229,7 +230,7 @@ function dibujarTorneo(d: DatosTorneo): HTMLCanvasElement {
   ctx.textAlign = 'right'
   ctx.fillStyle = 'rgba(255,255,255,.5)'
   ctx.font = "400 18px 'Inter',Arial,sans-serif"
-  ctx.fillText('♠ Sesión de Póker', W - pad, ry + 48)
+  ctx.fillText('♠ OnlyCards', W - pad, ry + 48)
 
   return cv
 }
@@ -269,14 +270,22 @@ export function descargarBlob(blob: Blob, nombre: string) {
 }
 
 export const NOMBRE_IMAGEN = 'resultados-poker.png'
+const TITULO_COMPARTIR = 'Resultados de póker'
 
-/** Comparte el PNG con la hoja nativa; si no se puede, lo descarga. */
+/** Comparte el PNG con la hoja del sistema; si no se puede, lo descarga. */
 export async function compartirImagen(d: DatosImagen): Promise<'compartida' | 'descargada'> {
   const blob = await lienzoABlob(await construirLienzo(d))
+
+  /* Dentro del APK, el WebView no trae `navigator.share`: hay que pasar por el plugin. */
+  if (esNativo()) {
+    await compartirArchivoNativo(blob, NOMBRE_IMAGEN, TITULO_COMPARTIR)
+    return 'compartida'
+  }
+
   const archivo = new File([blob], NOMBRE_IMAGEN, { type: 'image/png' })
   if (navigator.canShare?.({ files: [archivo] })) {
     try {
-      await navigator.share({ files: [archivo], title: 'Resultados de Póker' })
+      await navigator.share({ files: [archivo], title: TITULO_COMPARTIR })
       return 'compartida'
     } catch (err) {
       // el usuario canceló la hoja de compartir: no descargamos a sus espaldas
@@ -287,6 +296,11 @@ export async function compartirImagen(d: DatosImagen): Promise<'compartida' | 'd
   return 'descargada'
 }
 
-export async function descargarImagen(d: DatosImagen) {
-  descargarBlob(await lienzoABlob(await construirLienzo(d)), NOMBRE_IMAGEN)
+/** Guarda el PNG. Devuelve dónde quedó, que en el teléfono no es obvio. */
+export async function descargarImagen(d: DatosImagen): Promise<string> {
+  const blob = await lienzoABlob(await construirLienzo(d))
+  /* Una descarga que arranca la página se pierde sin avisar dentro del APK. */
+  if (esNativo()) return await guardarArchivoNativo(blob, NOMBRE_IMAGEN)
+  descargarBlob(blob, NOMBRE_IMAGEN)
+  return 'Imagen descargada'
 }

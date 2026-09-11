@@ -13,7 +13,7 @@ import type { CapacitorConfig } from '@capacitor/cli';
  */
 const config: CapacitorConfig = {
   appId: 'com.omartg.sesiondepoker',
-  appName: 'Sesión de Póker',
+  appName: 'OnlyCards',
   webDir: 'dist',
   server: {
     url: 'https://sesion-de-poker.omartg-1984.workers.dev',

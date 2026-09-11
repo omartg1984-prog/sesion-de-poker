@@ -58,8 +58,8 @@ export default function EntrarScreen() {
     <div className="mx-auto flex min-h-[100dvh] max-w-[420px] flex-col justify-center px-5 py-8">
       <header className="mb-7 text-center">
         <Logo size={72} conFondo className="mx-auto mb-3" />
-        <h1 className="font-display text-[34px] leading-none font-bold tracking-[1.5px] text-white uppercase [text-shadow:0_2px_0_rgba(0,0,0,.35)]">
-          Sesión de Póker
+        <h1 className="font-display text-[38px] leading-none font-bold tracking-[.5px] text-white [text-shadow:0_2px_0_rgba(0,0,0,.35)]">
+          OnlyCards
         </h1>
       </header>
 
