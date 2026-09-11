@@ -142,6 +142,18 @@ npm run apk:release
 
 Sale en `android/app/build/outputs/apk/release/app-release.apk`.
 
+Para repartirlo se copia a `public/OnlyCards.apk`, así el propio sitio lo sirve y el link
+que se manda por WhatsApp es del mismo dominio de la app:
+
+```
+https://sesion-de-poker.omartg-1984.workers.dev/OnlyCards.apk
+```
+
+Cuesta ~6 MB en el repositorio por cada versión del cascarón. Se paga a gusto porque el
+cascarón casi nunca cambia: las actualizaciones normales llegan solas desde Cloudflare.
+El service worker no lo precarga (`globPatterns` no incluye `.apk`), así que nadie se
+baja seis megas por abrir la web.
+
 La llave para firmarlo vive en `onlycards.keystore` y su contraseña en
 `keystore.properties`, los dos en la raíz del proyecto y **fuera de git**. Están fuera de
 `android/` a propósito: esa carpeta se regenera con `npx cap add android` y se llevaría la
