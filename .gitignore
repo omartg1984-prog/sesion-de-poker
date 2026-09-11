@@ -16,3 +16,7 @@ assets/
 *.keystore
 *.jks
 keystore.properties
+# Cualquier copia suelta: al abrir keystore.properties y guardarlo como .txt, Windows
+# toma la primera línea como nombre y el archivo se escapa de las reglas de arriba.
+*Credenciales*
+*.properties.txt
