@@ -162,6 +162,27 @@ export interface Posicion {
 
   /** `false` si ya no está en la liga pero jugó partidas que siguen contando. */
   esMiembro: boolean
+
+  /** Lo que se ganó presumir. */
+  titulos: Titulo[]
+}
+
+export type IdTitulo =
+  | 'rey'
+  | 'tiburon'
+  | 'racha'
+  | 'seco'
+  | 'cajero'
+  | 'comefichas'
+  | 'infalible'
+  | 'fiel'
+  | 'palazo'
+  | 'batacazo'
+
+export interface Titulo {
+  id: IdTitulo
+  etiqueta: string
+  porque: string
 }
 
 export interface RecordLiga {

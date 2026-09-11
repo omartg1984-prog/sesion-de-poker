@@ -2,14 +2,21 @@ import { Flame, Info, Snowflake, Trophy } from 'lucide-react'
 import { useState } from 'react'
 import Esqueleto from '../../components/Esqueleto'
 import Medalla from '../../components/Medalla'
+import ShareBlock from '../../components/ShareBlock'
+import Titulos from '../../components/Titulos'
 import { EPS, money, signed } from '../../lib/money'
+import type { DatosLiga } from '../../lib/imagenTablas'
 import type { Posicion, TablaPosiciones as Tabla } from '../../lib/api'
 
 type Orden = 'balance' | 'roi' | 'promedio' | 'partidas'
 
 const ORDENES: { id: Orden; label: string; ayuda: string }[] = [
   { id: 'balance', label: 'Saldo', ayuda: 'Lo que lleva ganado o perdido en total.' },
-  { id: 'roi', label: 'Rendimiento', ayuda: 'Cuánto rinde por cada peso que mete. No premia al que juega más.' },
+  {
+    id: 'roi',
+    label: 'Rendimiento',
+    ayuda: 'Cuánto rinde por cada peso que mete. No premia al que juega más, sino al que juega mejor.',
+  },
   { id: 'promedio', label: 'Por noche', ayuda: 'Lo que deja una partida típica suya.' },
   { id: 'partidas', label: 'Asistencia', ayuda: 'Quién se aparece más.' },
 ]
@@ -34,7 +41,6 @@ function Avatar({ p, size = 36 }: { p: Posicion; size?: number }) {
   )
 }
 
-/** Racha: fuego si viene ganando, hielo si viene perdiendo. */
 function Racha({ n }: { n: number }) {
   if (Math.abs(n) < 2) return null
   const ganando = n > 0
@@ -51,7 +57,57 @@ function Racha({ n }: { n: number }) {
   )
 }
 
-export default function TablaPosiciones({ tabla }: { tabla: Tabla | null }) {
+const ALTURA_ESCALON = ['h-[86px]', 'h-[62px]', 'h-[46px]']
+const TONO_ESCALON = ['bg-gold-soft', 'bg-[#b9b3a4]', 'bg-[#a9764a]']
+
+/** El podio: el 1º en medio y más alto, como en el de verdad. */
+function Podio({ top }: { top: Posicion[] }) {
+  const orden = [1, 0, 2].filter((i) => top[i])
+  return (
+    <div className="mb-3.5 overflow-hidden rounded-xl bg-gradient-to-br from-[#2c3a26] to-[#1b241a] px-3 pt-4 pb-0 ring-1 ring-gold/25">
+      <div className="flex items-end justify-center gap-2">
+        {orden.map((i) => {
+          const p = top[i]
+          return (
+            <div key={p.usuarioId} className="flex min-w-0 flex-1 flex-col items-center">
+              <span className="mb-1.5 h-11 w-11 shrink-0 overflow-hidden rounded-full bg-white/10 ring-2 ring-gold/40">
+                {p.foto ? (
+                  <img src={p.foto} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  <span className="flex h-full w-full items-center justify-center font-display text-lg font-bold text-gold-soft">
+                    {p.nombre.charAt(0).toUpperCase()}
+                  </span>
+                )}
+              </span>
+              <span className="w-full truncate text-center font-display text-[15px] font-semibold text-white">
+                {p.nombre}
+              </span>
+              <span
+                className="font-display text-lg font-bold"
+                style={{ color: p.balance > EPS ? '#d9b063' : p.balance < -EPS ? '#e4695e' : '#9d9483' }}
+              >
+                {signed(p.balance)}
+              </span>
+              <div
+                className={`mt-1.5 flex w-full items-start justify-center rounded-t-lg pt-2 ${ALTURA_ESCALON[i]} ${TONO_ESCALON[i]}`}
+              >
+                <span className="font-display text-xl font-bold text-[#20281f]">{i + 1}º</span>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+export default function TablaPosiciones({
+  tabla,
+  nombreLiga,
+}: {
+  tabla: Tabla | null
+  nombreLiga: string
+}) {
   const [orden, setOrden] = useState<Orden>('balance')
 
   if (!tabla) return <Esqueleto filas={2} />
@@ -70,45 +126,81 @@ export default function TablaPosiciones({ tabla }: { tabla: Tabla | null }) {
     )
   }
 
+  // El podio y los "en positivo" siempre van por saldo: presumir es por dinero.
+  const porSaldo = [...tabla.posiciones].sort((a, b) => b.balance - a.balance)
+  const enPositivo = porSaldo.filter((p) => p.balance > EPS)
+
   const ordenadas = [...tabla.posiciones].sort((a, b) => {
     if (orden === 'roi') return b.roi - a.roi
     if (orden === 'promedio') return b.promedio - a.promedio
     if (orden === 'partidas') return b.partidas - a.partidas
     return b.balance - a.balance
   })
-  const lider = ordenadas[0]
   const ayuda = ORDENES.find((o) => o.id === orden)!.ayuda
+
+  const datosImagen: DatosLiga = {
+    tipo: 'liga',
+    titulo: nombreLiga,
+    subtitulo: `${tabla.partidasContadas} ${tabla.partidasContadas === 1 ? 'partida' : 'partidas'} · tabla acumulada`,
+    filas: porSaldo.map((p, i) => ({
+      puesto: i + 1,
+      nombre: p.nombre,
+      partidas: p.partidas,
+      balance: p.balance,
+      roi: p.roi,
+      titulos: p.titulos.map((t) => t.etiqueta),
+    })),
+    partidas: tabla.partidasContadas,
+    dineroMovido: tabla.dineroMovido,
+  }
+
+  const texto = () => {
+    const lineas = [`♠ ${nombreLiga} — tabla de la liga`, '']
+    porSaldo.forEach((p, i) => {
+      const medalla = ['🥇', '🥈', '🥉'][i] ?? `${i + 1}º`
+      lineas.push(`${medalla} ${p.nombre}: ${signed(p.balance)} (${pct(p.roi)}, ${p.partidas}p)`)
+    })
+    lineas.push('', `${tabla.partidasContadas} partidas · ${money(tabla.dineroMovido)} movidos`)
+    return lineas.join('\n')
+  }
 
   return (
     <>
-      {/* el que va arriba según el orden elegido */}
-      <div className="mb-3.5 flex items-center gap-3 rounded-xl bg-gradient-to-br from-[#2c3a26] to-[#1b241a] px-4 py-3.5 ring-1 ring-gold/25">
-        <span className="h-12 w-12 shrink-0 overflow-hidden rounded-full bg-white/10">
-          {lider.foto ? (
-            <img src={lider.foto} alt="" className="h-full w-full object-cover" />
-          ) : (
-            <span className="flex h-full w-full items-center justify-center font-display text-xl font-bold text-gold-soft">
-              {lider.nombre.charAt(0).toUpperCase()}
-            </span>
-          )}
-        </span>
-        <div className="min-w-0 flex-1">
-          <div className="text-[10px] tracking-[1px] text-mint-soft uppercase">Va arriba</div>
-          <div className="truncate font-display text-xl font-bold text-gold-soft">{lider.nombre}</div>
-        </div>
-        <div className="shrink-0 text-right">
-          <div className="font-display text-2xl font-bold text-gold-soft">
-            {orden === 'roi'
-              ? pct(lider.roi)
-              : orden === 'partidas'
-                ? lider.partidas
-                : signed(orden === 'promedio' ? lider.promedio : lider.balance)}
-          </div>
-          <div className="text-[11px] text-mint-soft">
-            {lider.partidas} {lider.partidas === 1 ? 'partida' : 'partidas'}
-          </div>
-        </div>
-      </div>
+      <Podio top={porSaldo.slice(0, 3)} />
+
+      {/* los que van arriba */}
+      {enPositivo.length > 0 && (
+        <section className="panel">
+          <p className="panel-title">
+            <span>Los que van arriba</span>
+          </p>
+          <ul className="m-0 list-none p-0">
+            {enPositivo.map((p, i) => (
+              <li
+                key={p.usuarioId}
+                className="flex items-center gap-2.5 border-b border-dashed border-paper-line py-2.5 last:border-b-0"
+              >
+                <span className="w-5 shrink-0 text-center">
+                  {i < 3 ? (
+                    <Medalla lugar={i + 1} size={17} />
+                  ) : (
+                    <span className="font-display text-sm font-bold text-ink-soft">{i + 1}</span>
+                  )}
+                </span>
+                <Avatar p={p} size={32} />
+                <span className="min-w-0 flex-1">
+                  <b className="block truncate text-[15px] text-ink">{p.nombre}</b>
+                  <Titulos titulos={p.titulos} max={2} />
+                </span>
+                <span className="shrink-0 font-display font-bold text-win">{signed(p.balance)}</span>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-2.5 mb-0 text-[12px] leading-snug text-ink-soft">
+            {enPositivo.length} de {tabla.posiciones.length} van con saldo a favor.
+          </p>
+        </section>
+      )}
 
       {/* resumen de la liga */}
       <section className="panel">
@@ -290,6 +382,14 @@ export default function TablaPosiciones({ tabla }: { tabla: Tabla | null }) {
             </tbody>
           </table>
         </div>
+      </section>
+
+      {/* compartir */}
+      <section className="panel">
+        <p className="panel-title">
+          <span>Presumir la tabla</span>
+        </p>
+        <ShareBlock datos={datosImagen} texto={texto} alt="Tabla acumulada de la liga" />
       </section>
 
       <p className="flex items-start gap-2 px-1 text-xs leading-snug text-mint-soft">

@@ -68,6 +68,29 @@ export interface Posicion {
 
   /** `false` si ya no está en la liga pero jugó partidas que siguen contando. */
   esMiembro: boolean
+
+  /** Lo que se ganó presumir. */
+  titulos: Titulo[]
+}
+
+/**
+ * Un título que alguien se ganó. El `id` es lo que la app usa para elegir el icono;
+ * la `etiqueta` y el `porque` van tal cual a la pantalla y a la imagen compartible.
+ */
+export interface Titulo {
+  id:
+    | 'rey'
+    | 'tiburon'
+    | 'racha'
+    | 'seco'
+    | 'cajero'
+    | 'comefichas'
+    | 'infalible'
+    | 'fiel'
+    | 'palazo'
+    | 'batacazo'
+  etiqueta: string
+  porque: string
 }
 
 export interface RecordLiga {
@@ -297,10 +320,51 @@ export async function calcularPosiciones(env: Env, ligaId: string): Promise<Tabl
       recompras: noches.reduce((a, n) => a + n.recompras, 0),
       montoRecompras: noches.reduce((a, n) => a + n.montoRecompras, 0),
       esMiembro: dentro.has(datos.usuario_id),
+      titulos: [],
     }
   })
 
   posiciones.sort((a, b) => b.balance - a.balance)
+
+  /* ---------- títulos ---------- */
+
+  const dar = (p: Posicion | undefined, t: Titulo) => {
+    if (p) p.titulos.push(t)
+  }
+  /** El que más alto puntúa en algo, si el número llega a decir algo. */
+  const punta = (valor: (p: Posicion) => number, filtro: (p: Posicion) => boolean = () => true) => {
+    const aptos = posiciones.filter(filtro)
+    if (aptos.length === 0) return undefined
+    const top = aptos.reduce((a, b) => (valor(b) > valor(a) ? b : a))
+    return valor(top) > 0 ? top : undefined
+  }
+  // Los rendimientos piden dos noches: con una sola, la suerte de principiante
+  // coronaría a cualquiera.
+  const conHistorial = (p: Posicion) => p.partidas >= 2
+  const pesos = (n: number) => '$' + Math.round(n).toLocaleString('es-MX')
+
+  if (posiciones[0]?.balance > 0)
+    dar(posiciones[0], { id: 'rey', etiqueta: 'El Rey', porque: `${pesos(posiciones[0].balance)} arriba` })
+
+  dar(punta((p) => p.roi, conHistorial), { id: 'tiburon', etiqueta: 'Tiburón', porque: 'el que mejor rinde' })
+  dar(punta((p) => p.mejor), { id: 'palazo', etiqueta: 'El Palazo', porque: 'la mejor noche de la liga' })
+  dar(punta((p) => -p.peor), { id: 'batacazo', etiqueta: 'El Batacazo', porque: 'la peor noche de la liga' })
+  dar(punta((p) => p.recompras), { id: 'comefichas', etiqueta: 'Come-fichas', porque: 'el que más recompra' })
+
+  const ultimo = posiciones[posiciones.length - 1]
+  if (ultimo && ultimo.balance < 0 && posiciones.length > 1)
+    dar(ultimo, { id: 'cajero', etiqueta: 'El Cajero', porque: 'financia la liga' })
+
+  for (const p of posiciones) {
+    if (p.rachaActual >= 2)
+      dar(p, { id: 'racha', etiqueta: 'En racha', porque: `${p.rachaActual} noches ganando` })
+    if (p.rachaActual <= -2)
+      dar(p, { id: 'seco', etiqueta: 'En seco', porque: `${-p.rachaActual} noches perdiendo` })
+    if (p.partidas >= 2 && p.ganadas === p.partidas)
+      dar(p, { id: 'infalible', etiqueta: 'Infalible', porque: 'no ha perdido una noche' })
+    if (p.partidas >= 3 && p.asistencia >= 99.5)
+      dar(p, { id: 'fiel', etiqueta: 'El Fiel', porque: 'no se ha perdido una' })
+  }
 
   /** El mejor de la liga en algo, siempre que el número diga algo. */
   const mejorEn = (
@@ -320,10 +384,6 @@ export async function calcularPosiciones(env: Env, ligaId: string): Promise<Tabl
       detalle: detalle?.(ganador),
     }
   }
-
-  // Solo se comparan rendimientos con al menos dos noches: con una sola, quien tuvo
-  // suerte de principiante saldría "el mejor de la liga".
-  const conHistorial = (p: Posicion) => p.partidas >= 2
 
   const records = [
     mejorEn('Mejor noche', (p) => p.mejor),

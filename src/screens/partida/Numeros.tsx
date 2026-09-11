@@ -1,7 +1,10 @@
 import { AlertTriangle, Check } from 'lucide-react'
 import Medalla from '../../components/Medalla'
+import ShareBlock from '../../components/ShareBlock'
 import { EPS, money, num, signed } from '../../lib/money'
 import type { ConfigTorneo, Participacion } from '../../lib/api'
+import type { DatosNumeros } from '../../lib/imagenTablas'
+import { MEDALS } from '../../lib/lienzo'
 import { finalDe, invertidoDe, recomprasDe, type PropsPestana } from './comun'
 import { pagadoPor, bolsaDe } from './PartidaTorneo'
 
@@ -86,6 +89,37 @@ export default function Numeros({ datos, colores, torneo }: Props) {
   const mejor = filas[0]
   const peor = filas[filas.length - 1]
   const masRecompras = [...filas].sort((a, b) => b.recompras - a.recompras)[0]
+  const mejorRoi = [...filas].sort((a, b) => b.roi - a.roi)[0]
+
+  /* Lo mismo que se ve arriba, pero listo para presumirlo en el chat. */
+  const datosImagen: DatosNumeros = {
+    tipo: 'numeros',
+    titulo: datos.liga.nombre,
+    subtitulo: datos.partida.nombre || datos.partida.fecha,
+    filas: filas.map((f) => ({
+      nombre: f.nombre,
+      puso: f.puso,
+      saco: f.saco,
+      resultado: f.resultado,
+    })),
+    mesa,
+    contado,
+    jugadores: ps.length,
+    recompras: totalRecompras,
+    ganadores,
+  }
+
+  const texto = () => {
+    const lineas = [`♠ ${datos.liga.nombre} · ${datos.partida.nombre || datos.partida.fecha}`, '']
+    filas.forEach((f, i) => {
+      const medalla = MEDALS[i]
+      lineas.push(
+        `${f.resultado > EPS && medalla ? medalla : '•'} ${f.nombre}: ${signed(f.resultado)}`,
+      )
+    })
+    lineas.push('', `En la mesa: ${money(mesa)} · ganaron ${ganadores} de ${ps.length}`)
+    return lineas.join('\n')
+  }
 
   return (
     <>
@@ -116,7 +150,10 @@ export default function Numeros({ datos, colores, torneo }: Props) {
             <div className="stat-v">
               {totalRecompras}
               {totalRecompras > 0 && (
-                <span className="text-[13px] font-normal text-ink-soft"> · {money(montoRecompras)}</span>
+                <span className="text-[13px] font-normal text-ink-soft">
+                  {' '}
+                  · {money(montoRecompras)}
+                </span>
               )}
             </div>
           </div>
@@ -173,11 +210,11 @@ export default function Numeros({ datos, colores, torneo }: Props) {
               valor={`${masRecompras.recompras} · ${money(masRecompras.montoRecompras)}`}
             />
           )}
-          {mejor.resultado > EPS && (
+          {mejorRoi && mejorRoi.roi > 0 && (
             <Destacado
               etiqueta="Mejor rendimiento"
-              nombre={[...filas].sort((a, b) => b.roi - a.roi)[0].nombre}
-              valor={pct([...filas].sort((a, b) => b.roi - a.roi)[0].roi)}
+              nombre={mejorRoi.nombre}
+              valor={pct(mejorRoi.roi)}
               tono="text-win"
             />
           )}
@@ -225,6 +262,13 @@ export default function Numeros({ datos, colores, torneo }: Props) {
             </tbody>
           </table>
         </div>
+      </section>
+
+      <section className="panel">
+        <p className="panel-title">
+          <span>Presumir la noche</span>
+        </p>
+        <ShareBlock datos={datosImagen} texto={texto} alt="Números de la partida" />
       </section>
     </>
   )

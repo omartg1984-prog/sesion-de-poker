@@ -207,7 +207,7 @@ export default function LigaScreen() {
         ))}
       </div>
 
-      {pestana === 'posiciones' && <TablaPosiciones tabla={tabla} />}
+      {pestana === 'posiciones' && <TablaPosiciones tabla={tabla} nombreLiga={liga.nombre} />}
 
       {/* partidas */}
       {pestana === 'partidas' && (
