@@ -26,7 +26,7 @@
       "binding": "DB",
       "database_name": "sesion-de-poker",
       // Lo rellena `wrangler d1 create`; sin esto el Worker no encuentra la base.
-      "database_id": "PENDIENTE",
+      "database_id": "3af64f6f-d93b-408e-9533-a5bf393e7b99",
       "migrations_dir": "./migraciones"
     }
   ],
