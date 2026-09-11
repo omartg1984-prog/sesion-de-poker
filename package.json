@@ -12,7 +12,8 @@
     "test:watch": "vitest",
     "iconos": "node scripts/generar-iconos.mjs",
     "apk:preparar": "node scripts/generar-iconos.mjs && npx @capacitor/assets generate --android",
-    "apk:sync": "npm run build && npx cap sync android"
+    "apk:sync": "npm run build && npx cap sync android",
+    "check": "tsc -b && tsc -p tsconfig.worker.json"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.2",
@@ -24,6 +25,7 @@
   },
   "devDependencies": {
     "@capacitor/cli": "^8.5.2",
+    "@cloudflare/workers-types": "^5.20260911.1",
     "@tailwindcss/vite": "^4.3.3",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.7",

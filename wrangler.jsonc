@@ -4,12 +4,32 @@
   // El nombre tiene que coincidir con el proyecto en Cloudflare.
   "name": "sesion-de-poker",
   "compatibility_date": "2026-09-01",
+  "compatibility_flags": ["nodejs_compat"],
 
-  // No hay código de servidor: esto solo publica los archivos que deja `npm run build`.
-  // "single-page-application" hace que cualquier ruta desconocida sirva index.html,
-  // para que la app cargue igual si alguien entra a una URL con algo pegado atrás.
+  // El Worker atiende /api/*; todo lo demás se lo pasa a los archivos estáticos
+  // a través de la atadura ASSETS (ver worker/index.ts).
+  "main": "./worker/index.ts",
+
   "assets": {
     "directory": "./dist",
+    "binding": "ASSETS",
+    // Con run_worker_first el Worker ve todas las peticiones y decide: si no es /api/,
+    // se la reenvía a ASSETS. Sin esto, /api/ caería en el index.html del SPA.
+    "run_worker_first": true,
+    // Cualquier ruta desconocida sirve index.html, para que la app cargue igual si
+    // alguien entra a una URL con algo pegado atrás.
     "not_found_handling": "single-page-application"
-  }
+  },
+
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "sesion-de-poker",
+      // Lo rellena `wrangler d1 create`; sin esto el Worker no encuentra la base.
+      "database_id": "PENDIENTE",
+      "migrations_dir": "./migraciones"
+    }
+  ],
+
+  "observability": { "enabled": true }
 }
