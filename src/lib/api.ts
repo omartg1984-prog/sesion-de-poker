@@ -133,22 +133,52 @@ export interface Posicion {
   nombre: string
   usuario: string
   foto: string | null
+
   partidas: number
   invertido: number
   recuperado: number
   balance: number
+
+  /** Balance ÷ invertido, en %. Mide el rendimiento sin premiar al que juega más. */
+  roi: number
+  /** Balance ÷ partidas: cuánto deja una noche típica. */
+  promedio: number
+  /** Qué tanto de las partidas de la liga jugó, en %. */
+  asistencia: number
+
   mejor: number
   peor: number
   /** Partidas en las que terminó con saldo a favor. */
   ganadas: number
+  podios: number
+  ultimos: number
+
+  /** Positiva = noches ganando seguidas; negativa = perdiendo. */
+  rachaActual: number
+  mejorRacha: number
+
+  recompras: number
+  montoRecompras: number
+
   /** `false` si ya no está en la liga pero jugó partidas que siguen contando. */
   esMiembro: boolean
+}
+
+export interface RecordLiga {
+  etiqueta: string
+  nombre: string
+  valor: number
+  detalle?: string
 }
 
 export interface TablaPosiciones {
   posiciones: Posicion[]
   partidasContadas: number
   partidasAbiertas: number
+  dineroMovido: number
+  promedioMesa: number
+  mayorMesa: { monto: number; detalle: string } | null
+  records: RecordLiga[]
 }
 
 export interface DetallePartida {

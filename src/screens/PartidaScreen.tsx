@@ -6,6 +6,7 @@ import Sheet from '../components/Sheet'
 import { api, leerJson, type ConfigTorneo, type DetallePartida, type Miembro, type Participacion } from '../lib/api'
 import { useRecargarAlVolver } from '../lib/recargar'
 import { conAviso, useApp } from '../store/app'
+import Numeros from './partida/Numeros'
 import PartidaCash, { PESTANAS_CASH, type PestanaCash } from './partida/PartidaCash'
 import PartidaTorneo, {
   PESTANAS_TORNEO,
@@ -13,7 +14,7 @@ import PartidaTorneo, {
   type PestanaTorneo,
 } from './partida/PartidaTorneo'
 
-type Pestana = PestanaCash | PestanaTorneo
+type Pestana = PestanaCash | PestanaTorneo | 'numeros'
 
 /**
  * Junta los cambios seguidos y manda uno solo por campo: teclear un monto no dispara
@@ -80,7 +81,10 @@ export default function PartidaScreen() {
   const esTorneo = datos?.partida.tipo === 'torneo'
   const cerrada = datos?.partida.estado === 'cerrada'
   const puedeEditar = !!datos?.soyAdmin && !cerrada
-  const pestanas = esTorneo ? PESTANAS_TORNEO : PESTANAS_CASH
+  const pestanas = [
+    ...(esTorneo ? PESTANAS_TORNEO : PESTANAS_CASH),
+    { id: 'numeros' as const, label: 'Números' },
+  ]
 
   /** Cambia una participación en pantalla al instante y la manda al servidor con retraso. */
   const tocar = (id: string, enPantalla: Partial<Participacion>, aGuardar: Record<string, unknown>) => {
@@ -152,7 +156,7 @@ export default function PartidaScreen() {
   const comunes = { datos, colores, puedeEditar, tocar, recargar: cargar }
   // La configuración del torneo se tiene que poder abrir ANTES de cargar a nadie:
   // ahí se define el costo de entrada con el que entran todos.
-  const sinJugadores = datos.participaciones.length === 0 && pestana !== 'torneo'
+  const sinJugadores = datos.participaciones.length === 0 && pestana !== 'torneo' && pestana !== 'numeros'
 
   return (
     <div className="mx-auto max-w-[640px] px-3.5 pb-10">
@@ -212,6 +216,8 @@ export default function PartidaScreen() {
             </button>
           )}
         </section>
+      ) : pestana === 'numeros' ? (
+        <Numeros {...comunes} torneo={torneo} />
       ) : esTorneo ? (
         <PartidaTorneo
           {...comunes}
