@@ -1,6 +1,8 @@
 import { moneyShort, signed } from './money'
 import {
   CREAM,
+  cargarImagenes,
+  dibujarAvatar,
   MARCA,
   MARCA_ALTA,
   LOSS,
@@ -24,6 +26,7 @@ import {
 export interface FilaLiga {
   puesto: number
   nombre: string
+  foto: string | null
   partidas: number
   balance: number
   roi: number
@@ -42,6 +45,7 @@ export interface DatosLiga {
 
 export interface FilaNumeros {
   nombre: string
+  foto: string | null
   puso: number
   saco: number
   resultado: number
@@ -66,11 +70,18 @@ const TONO_PUESTO = ['#df1f2e', '#c9c5bd', '#a9764a']
 const TINTA_PUESTO = ['#ffffff', '#17171b', '#ffffff']
 
 /** Podio de tres escalones. El primero va en medio y más alto, como en el pódium real. */
-function dibujarPodio(ctx: CanvasRenderingContext2D, filas: FilaLiga[], W: number, base: number) {
+function dibujarPodio(
+  ctx: CanvasRenderingContext2D,
+  filas: FilaLiga[],
+  caras: (HTMLImageElement | null)[],
+  W: number,
+  base: number,
+) {
   const alturas = [96, 68, 50]
   const ordenVisual = [1, 0, 2] // plata a la izquierda, oro en medio, bronce a la derecha
   const ancho = 176
   const hueco = 16
+  const RADIO = 30
   let x = (W - (ancho * 3 + hueco * 2)) / 2
 
   for (const idx of ordenVisual) {
@@ -78,6 +89,7 @@ function dibujarPodio(ctx: CanvasRenderingContext2D, filas: FilaLiga[], W: numbe
     if (fila) {
       const alto = alturas[idx]
       const cima = base - alto
+      const medio = x + ancho / 2
 
       ctx.fillStyle = TONO_PUESTO[idx]
       roundRect(ctx, x, cima, ancho, alto, 10)
@@ -86,33 +98,48 @@ function dibujarPodio(ctx: CanvasRenderingContext2D, filas: FilaLiga[], W: numbe
       ctx.textAlign = 'center'
       ctx.fillStyle = TINTA_PUESTO[idx]
       ctx.font = "700 32px 'Khand',Arial,sans-serif"
-      ctx.fillText(`${idx + 1}º`, x + ancho / 2, cima + 38)
+      ctx.fillText(`${idx + 1}º`, medio, cima + 38)
 
-      // nombre, saldo y título por encima del escalón
-      ctx.fillStyle = '#ffffff'
-      ctx.font = "600 25px 'Khand',Arial,sans-serif"
-      ctx.fillText(ellipsis(fila.nombre, 13), x + ancho / 2, cima - 40)
-
+      // de abajo hacia arriba: saldo, nombre, título y la cara hasta arriba
       ctx.fillStyle = fila.balance > 0.005 ? WIN : fila.balance < -0.005 ? LOSS : NEUTRO
       ctx.font = "700 26px 'Khand',Arial,sans-serif"
-      ctx.fillText(signed(fila.balance), x + ancho / 2, cima - 14)
+      ctx.fillText(signed(fila.balance), medio, cima - 14)
+
+      ctx.fillStyle = '#ffffff'
+      ctx.font = "600 25px 'Khand',Arial,sans-serif"
+      ctx.fillText(ellipsis(fila.nombre, 13), medio, cima - 40)
 
       if (fila.titulos[0]) {
         ctx.fillStyle = MARCA
         ctx.font = "600 15px 'Inter',Arial,sans-serif"
-        ctx.fillText(ellipsis(fila.titulos[0], 16), x + ancho / 2, cima - 64)
+        ctx.fillText(ellipsis(fila.titulos[0], 16), medio, cima - 64)
       }
+
+      /* El aro del primero va dorado; los otros dos en rojo de marca. */
+      dibujarAvatar(
+        ctx,
+        caras[idx] ?? null,
+        fila.nombre,
+        medio,
+        cima - 96 - RADIO,
+        RADIO,
+        idx === 0 ? '#d9b063' : MARCA,
+      )
     }
     x += ancho + hueco
   }
 }
 
-export function dibujarLiga(d: DatosLiga): HTMLCanvasElement {
+export async function dibujarLiga(d: DatosLiga): Promise<HTMLCanvasElement> {
   const restantes = d.filas.slice(3)
+  /* Las fotos son data URL, así que esto no sale a la red: sólo hay que esperar a que
+     el navegador las decodifique antes de poder dibujarlas. */
+  const caras = await cargarImagenes(d.filas.map((f) => f.foto))
   const W = 1000
   const pad = 44
   const headerH = 182
-  const podioH = 190
+  // Alto para que encima de cada escalón quepan la cara, el título, el nombre y el saldo.
+  const podioH = 292
   const theadH = 52
   const rowH = 62
   const footerH = 104
@@ -122,7 +149,7 @@ export function dibujarLiga(d: DatosLiga): HTMLCanvasElement {
   const { cv, ctx } = makeCanvas(W, H)
   pintarMesa(ctx, W, H, d.titulo, d.subtitulo, '♠ TABLA DE LA LIGA')
 
-  dibujarPodio(ctx, d.filas, W, headerH + podioH - 30)
+  dibujarPodio(ctx, d.filas, caras.slice(0, 3), W, headerH + podioH - 30)
 
   let ry = headerH + podioH
   if (restantes.length) {
@@ -154,9 +181,11 @@ export function dibujarLiga(d: DatosLiga): HTMLCanvasElement {
       ctx.fillStyle = 'rgba(255,255,255,.5)'
       ctx.font = "500 20px 'Inter',Arial,sans-serif"
       ctx.fillText(`${f.puesto}º`, colName - 4, midY)
+      dibujarAvatar(ctx, caras[i + 3] ?? null, f.nombre, colName + 60, ry + rowH / 2, 19)
+      ctx.textAlign = 'left'
       ctx.fillStyle = '#ffffff'
       ctx.font = "600 24px 'Khand',Arial,sans-serif"
-      ctx.fillText(ellipsis(f.nombre, 18), colName + 42, midY)
+      ctx.fillText(ellipsis(f.nombre, 16), colName + 88, midY)
 
       ctx.textAlign = 'right'
       ctx.font = "500 20px 'Inter',Arial,sans-serif"
@@ -189,7 +218,8 @@ export function dibujarLiga(d: DatosLiga): HTMLCanvasElement {
 
 /* ---------- números de una noche ---------- */
 
-export function dibujarNumeros(d: DatosNumeros): HTMLCanvasElement {
+export async function dibujarNumeros(d: DatosNumeros): Promise<HTMLCanvasElement> {
+  const caras = await cargarImagenes(d.filas.map((f) => f.foto))
   const W = 1000
   const pad = 44
   const headerH = 176
@@ -248,17 +278,19 @@ export function dibujarNumeros(d: DatosNumeros): HTMLCanvasElement {
     }
     const midY = ry + rowH / 2 + 6
 
+    dibujarAvatar(ctx, caras[i] ?? null, f.nombre, colName + 16, ry + rowH / 2, 18)
+
     ctx.textAlign = 'left'
-    let nameX = colName
+    let nameX = colName + 44
     if (f.resultado > 0.005 && MEDALS[i]) {
       ctx.font = "20px 'Inter',Arial,sans-serif"
       ctx.fillStyle = '#ffffff'
-      ctx.fillText(MEDALS[i], colName - 4, midY)
-      nameX = colName + 32
+      ctx.fillText(MEDALS[i], nameX, midY)
+      nameX += 30
     }
     ctx.fillStyle = '#ffffff'
     ctx.font = "600 24px 'Khand',Arial,sans-serif"
-    ctx.fillText(ellipsis(f.nombre, 22), nameX, midY)
+    ctx.fillText(ellipsis(f.nombre, 18), nameX, midY)
 
     ctx.textAlign = 'right'
     ctx.font = "500 20px 'Inter',Arial,sans-serif"

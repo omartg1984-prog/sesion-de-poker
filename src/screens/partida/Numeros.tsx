@@ -98,6 +98,7 @@ export default function Numeros({ datos, colores, torneo }: Props) {
     subtitulo: datos.partida.nombre || datos.partida.fecha,
     filas: filas.map((f) => ({
       nombre: f.nombre,
+      foto: f.p.foto,
       puso: f.puso,
       saco: f.saco,
       resultado: f.resultado,

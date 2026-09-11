@@ -244,8 +244,8 @@ export async function construirLienzo(d: DatosImagen): Promise<HTMLCanvasElement
   } catch {
     /* si el navegador no expone document.fonts, se dibuja con los fallbacks */
   }
-  if (d.tipo === 'liga') return dibujarLiga(d)
-  if (d.tipo === 'numeros') return dibujarNumeros(d)
+  if (d.tipo === 'liga') return await dibujarLiga(d)
+  if (d.tipo === 'numeros') return await dibujarNumeros(d)
   return d.tipo === 'torneo' ? dibujarTorneo(d) : dibujarCash(d)
 }
 

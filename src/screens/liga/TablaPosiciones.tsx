@@ -154,6 +154,7 @@ export default function TablaPosiciones({
     filas: porSaldo.map((p, i) => ({
       puesto: i + 1,
       nombre: p.nombre,
+      foto: p.foto,
       partidas: p.partidas,
       balance: p.balance,
       roi: p.roi,

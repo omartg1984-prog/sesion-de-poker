@@ -92,3 +92,74 @@ export function lineaTenue(ctx: CanvasRenderingContext2D, x1: number, x2: number
   ctx.lineTo(x2, y)
   ctx.stroke()
 }
+
+/*
+ * Las fotos de perfil en el lienzo.
+ *
+ * Se guardan como data URL, así que cargan al instante y sin pedir permiso a ningún
+ * servidor: si vinieran de otro dominio, el navegador marcaría el lienzo como
+ * contaminado y `toBlob` se negaría a entregar la imagen para compartir.
+ */
+
+/** Devuelve null en vez de fallar: una foto rota no debe tumbar la imagen entera. */
+export function cargarImagen(src: string | null): Promise<HTMLImageElement | null> {
+  if (!src) return Promise.resolve(null)
+  return new Promise((resolver) => {
+    const img = new Image()
+    img.onload = () => resolver(img)
+    img.onerror = () => resolver(null)
+    img.src = src
+  })
+}
+
+/** Carga varias a la vez y las devuelve en el mismo orden. */
+export const cargarImagenes = (fuentes: (string | null)[]) => Promise.all(fuentes.map(cargarImagen))
+
+/**
+ * La foto recortada en círculo, con su aro. Si no hay foto dibuja la inicial, igual
+ * que el avatar de la app.
+ */
+export function dibujarAvatar(
+  ctx: CanvasRenderingContext2D,
+  img: HTMLImageElement | null,
+  nombre: string,
+  cx: number,
+  cy: number,
+  radio: number,
+  aro = MARCA,
+) {
+  ctx.save()
+  ctx.beginPath()
+  ctx.arc(cx, cy, radio, 0, Math.PI * 2)
+  ctx.closePath()
+  ctx.clip()
+  if (img) {
+    // Se recorta al centro para que una foto rectangular no salga estirada.
+    const lado = Math.min(img.width, img.height)
+    ctx.drawImage(
+      img,
+      (img.width - lado) / 2,
+      (img.height - lado) / 2,
+      lado,
+      lado,
+      cx - radio,
+      cy - radio,
+      radio * 2,
+      radio * 2,
+    )
+  } else {
+    ctx.fillStyle = 'rgba(255,255,255,.12)'
+    ctx.fillRect(cx - radio, cy - radio, radio * 2, radio * 2)
+    ctx.fillStyle = '#ffffff'
+    ctx.textAlign = 'center'
+    ctx.font = `${Math.round(radio * 1.1)}px 'Khand',Arial,sans-serif`
+    ctx.fillText((nombre.trim()[0] || '?').toUpperCase(), cx, cy + radio * 0.4)
+  }
+  ctx.restore()
+
+  ctx.strokeStyle = aro
+  ctx.lineWidth = 3
+  ctx.beginPath()
+  ctx.arc(cx, cy, radio, 0, Math.PI * 2)
+  ctx.stroke()
+}
