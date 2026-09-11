@@ -78,27 +78,13 @@ function png(tam, pixel) {
 /* ---- la ficha ---- */
 
 /**
- * ¿El punto (x, y) cae dentro de una pica? Coordenadas normalizadas a [-1, 1] con la
- * y hacia abajo. Una pica son dos lóbulos abajo, un triángulo arriba y el tallo.
- */
-function enPica(x, y) {
-  const triangulo = y >= -0.66 && y <= 0.14 && Math.abs(x) <= (y + 0.66) * 0.70
-  const loboIzq = Math.hypot(x + 0.30, y - 0.10) <= 0.36
-  const loboDer = Math.hypot(x - 0.30, y - 0.10) <= 0.36
-  // el tallo se abre hacia abajo
-  const tallo = y >= 0.16 && y <= 0.66 && Math.abs(x) <= 0.045 + (y - 0.16) * 0.46
-  return triangulo || loboIzq || loboDer || tallo
-}
-
-/**
  * Anatomía de la ficha. `d` es la distancia al centro normalizada (0 en el centro,
  * 1 en el borde). Fuera de la ficha devuelve null.
  *
  * Es la misma ficha que dibuja la app: cuerpo, muescas en el canto, anillo punteado
- * y disco central. En el ícono el centro lleva una pica en vez del valor, porque no
- * representa una denominación sino a la app entera.
+ * y disco central. Sin símbolo en el centro — la ficha es el diseño.
  */
-function anilloFicha(d, angulo, x, y) {
+function anilloFicha(d, angulo) {
   if (d > 1) return null
   if (d > 0.93) return ORO
   if (d > 0.78) {
@@ -113,10 +99,10 @@ function anilloFicha(d, angulo, x, y) {
     const seg = ((angulo / Math.PI) * 9 + 18) % 1
     return seg < 0.42 ? ORO : CREMA
   }
-  // disco central con la pica
-  const px = x / 0.60
-  const py = y / 0.60
-  return enPica(px, py) ? FIELTRO_HONDO : CREMA
+  // borde del inserto central, como el de una ficha real
+  if (d > 0.58) return CREMA
+  if (d > 0.55) return ORO
+  return CREMA
 }
 
 /**
@@ -131,7 +117,7 @@ function ficha(tam, proporcion = 1, fondo = 'fieltro') {
     const dx = x - c
     const dy = y - c
     const dist = Math.hypot(dx, dy)
-    const color = anilloFicha(dist / radio, Math.atan2(dy, dx), dx / radio, dy / radio)
+    const color = anilloFicha(dist / radio, Math.atan2(dy, dx))
     if (color) return color
     if (fondo === 'transparente') return [0, 0, 0, 0]
     return mezcla(FIELTRO, FIELTRO_HONDO, Math.min(1, dist / c))
