@@ -23,6 +23,8 @@
   --color-marca-alta: #ff5560;
   /* Rojo de tinta: para texto encima de un fondo tenue de marca (`bg-marca/20`). */
   --color-marca-tinta: #9c1420;
+  /* Lo mismo en verde: el verde normal encima de `bg-win/14` se queda en 3.94. */
+  --color-win-tinta: #186337;
   --color-paper: #f4f1ec;
   --color-paper-soft: #faf8f4;
   --color-paper-line: #e6e1d8;
@@ -148,6 +150,13 @@
   }
   .icon-btn-danger {
     @apply hover:bg-[#f7dcdc] hover:text-loss;
+  }
+
+  /* Botón de borrar cuando va suelto sobre el fondo oscuro, no dentro de una tarjeta.
+     Ahí el vino de `text-loss` —que está medido contra el crema— se hunde a 2.6 de
+     contraste y casi no se lee; el rojo claro es el que funciona sobre negro. */
+  .btn-borrar {
+    @apply bg-loss-alto/12 text-loss-alto hover:bg-loss-alto/20;
   }
 
   .balance {

@@ -1,6 +1,6 @@
 import { ClipboardCopy, Download, Share2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { copyText } from '../lib/backup'
+import { copyText } from '../lib/portapapeles'
 import {
   compartirImagen,
   construirLienzo,

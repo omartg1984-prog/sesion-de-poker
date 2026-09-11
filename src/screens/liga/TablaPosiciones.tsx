@@ -256,7 +256,7 @@ export default function TablaPosiciones({
             </button>
           ))}
         </div>
-        <p className="mt-0 mb-2 px-1 text-[11px] leading-snug text-ink-soft/80">{ayuda}</p>
+        <p className="mt-0 mb-2 px-1 text-[11px] leading-snug text-ink-soft">{ayuda}</p>
 
         <ul className="m-0 list-none p-0">
           {ordenadas.map((p, i) => (

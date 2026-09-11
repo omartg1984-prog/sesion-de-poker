@@ -21,10 +21,10 @@ import type { IdTitulo, Titulo } from '../lib/api'
  */
 const ESTILO: Record<IdTitulo, { Icono: LucideIcon; clase: string }> = {
   rey: { Icono: Crown, clase: 'bg-marca text-white' },
-  tiburon: { Icono: Fish, clase: 'bg-win/14 text-win' },
-  palazo: { Icono: TrendingUp, clase: 'bg-win/14 text-win' },
-  infalible: { Icono: Target, clase: 'bg-win/14 text-win' },
-  racha: { Icono: Flame, clase: 'bg-win/14 text-win' },
+  tiburon: { Icono: Fish, clase: 'bg-win/14 text-win-tinta' },
+  palazo: { Icono: TrendingUp, clase: 'bg-win/14 text-win-tinta' },
+  infalible: { Icono: Target, clase: 'bg-win/14 text-win-tinta' },
+  racha: { Icono: Flame, clase: 'bg-win/14 text-win-tinta' },
   fiel: { Icono: CalendarCheck, clase: 'bg-marca/20 text-marca-tinta' },
   comefichas: { Icono: Utensils, clase: 'bg-marca/20 text-marca-tinta' },
   seco: { Icono: Snowflake, clase: 'bg-loss/10 text-loss' },

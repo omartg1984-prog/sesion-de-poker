@@ -17,7 +17,7 @@ import {
 import { useEffect, useState } from 'react'
 import EditorFichas from '../components/EditorFichas'
 import Sheet from '../components/Sheet'
-import { copyText } from '../lib/backup'
+import { copyText } from '../lib/portapapeles'
 import { api, type Liga, type Miembro, type PartidaResumen, type TablaPosiciones as Tabla, type TipoPartida } from '../lib/api'
 import TablaPosiciones from './liga/TablaPosiciones'
 import { useRecargarAlVolver } from '../lib/recargar'
@@ -279,7 +279,7 @@ export default function LigaScreen() {
       {liga.creada_por === yo.id && (
         <button
           type="button"
-          className="btn mt-6 bg-loss/10 text-loss hover:bg-loss/16"
+          className="btn btn-borrar mt-6"
           onClick={() => {
             setConfirmaNombre('')
             setBorrando(true)

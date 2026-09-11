@@ -175,11 +175,11 @@ export default function PartidaScreen() {
             <h1 className="m-0 truncate font-display text-[17px] leading-tight font-bold tracking-[.5px] text-white uppercase">
               {datos.partida.nombre || datos.partida.fecha}
             </h1>
-            <span className="text-[11px] text-white/70">
+            <span className="text-[11px] text-white">
               {esTorneo ? 'Torneo' : 'Cash'} · {datos.liga.nombre}
             </span>
           </div>
-          {cerrada && <Lock size={15} className="shrink-0 text-white/70" />}
+          {cerrada && <Lock size={15} className="shrink-0 text-white/85" />}
         </div>
 
         <div className="no-scrollbar mt-2 flex gap-1 overflow-x-auto rounded-xl bg-black/25 p-1">
@@ -247,7 +247,7 @@ export default function PartidaScreen() {
       {datos.soyAdmin && (
         <button
           type="button"
-          className="btn mt-6 bg-loss/10 text-loss hover:bg-loss/16"
+          className="btn btn-borrar mt-6"
           onClick={() => setBorrando(true)}
         >
           <Trash2 size={17} strokeWidth={2.4} />

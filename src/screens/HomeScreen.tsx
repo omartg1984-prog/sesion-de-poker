@@ -73,7 +73,7 @@ export default function HomeScreen() {
           <div className="truncate font-display text-[17px] leading-tight font-bold tracking-[.5px] text-white uppercase">
             Tus ligas
           </div>
-          <div className="truncate text-xs text-white/70">{usuario.nombre}</div>
+          <div className="truncate text-xs text-white">{usuario.nombre}</div>
         </div>
         <button
           type="button"
