@@ -6,6 +6,7 @@ import Sheet from '../components/Sheet'
 import { api, leerJson, type ConfigTorneo, type DetallePartida, type Miembro, type Participacion } from '../lib/api'
 import { useRecargarAlVolver } from '../lib/recargar'
 import { conAviso, useApp } from '../store/app'
+import { ENTRADA_POR_DEFECTO } from './partida/comun'
 import Numeros from './partida/Numeros'
 import PartidaCash, { PESTANAS_CASH, type PestanaCash } from './partida/PartidaCash'
 import PartidaTorneo, {
@@ -283,7 +284,7 @@ export default function PartidaScreen() {
         <p className="mt-0 mb-3 text-[13px] leading-snug text-ink-soft">
           {esTorneo
             ? `Marca a los que llegaron. Todos entran con ${money0(torneo.buyIn)}, el costo de entrada del torneo.`
-            : 'Marca a los que llegaron y pon con cuánto entra cada uno.'}
+            : `Marca a los que llegaron. Entran con ${money0(ENTRADA_POR_DEFECTO)} salvo que le cambies el monto a alguien.`}
         </p>
         <ul className="m-0 mb-4 list-none p-0">
           {miembros.map((m) => {
@@ -299,7 +300,7 @@ export default function PartidaScreen() {
                     onChange={(e) =>
                       setSeleccion((s) => {
                         const n = { ...s }
-                        if (e.target.checked) n[m.id] = esTorneo ? torneo.buyIn : 0
+                        if (e.target.checked) n[m.id] = esTorneo ? torneo.buyIn : ENTRADA_POR_DEFECTO
                         else delete n[m.id]
                         return n
                       })

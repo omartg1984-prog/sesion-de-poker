@@ -23,6 +23,14 @@ export interface Recompra {
   dinero: number
 }
 
+/**
+ * Con cuánto entra alguien a una partida cash si nadie dice otra cosa.
+ *
+ * Casi todos entran con esto, así que arrancar en cero obligaba a teclear el mismo
+ * número una vez por jugador. Se puede cambiar por persona antes de guardar.
+ */
+export const ENTRADA_POR_DEFECTO = 500
+
 export const recomprasDe = (p: Participacion) => leerJson<Recompra[]>(p.recompras, [])
 
 export const invertidoDe = (p: Participacion) =>
