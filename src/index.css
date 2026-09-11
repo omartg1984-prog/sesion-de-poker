@@ -1,0 +1,151 @@
+@import 'tailwindcss';
+
+@theme {
+  --color-felt: #0d5c37;
+  --color-felt-deep: #083f26;
+  --color-felt-line: #0a4a2b;
+  --color-gold: #e8c56a;
+  --color-gold-soft: #f7d774;
+  --color-paper: #f6f2e8;
+  --color-paper-soft: #fbf9f2;
+  --color-paper-line: #e2dbc9;
+  --color-ink: #20281f;
+  --color-ink-soft: #5c6357;
+  --color-win: #177a44;
+  --color-loss: #c0392b;
+  --color-mint: #cfe6d8;
+  --color-mint-soft: #bfe0cc;
+
+  --font-display: 'Oswald', 'Arial Narrow', system-ui, sans-serif;
+  --font-body: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+
+  --radius-card: 16px;
+}
+
+@layer base {
+  html,
+  body {
+    margin: 0;
+    padding: 0;
+  }
+
+  body {
+    font-family: var(--font-body);
+    color: var(--color-ink);
+    background: radial-gradient(120% 90% at 50% 0%, var(--color-felt) 0%, var(--color-felt-deep) 70%) fixed;
+    min-height: 100vh;
+    min-height: 100dvh;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  /* Foco siempre visible al navegar con teclado. */
+  :focus-visible {
+    outline: 3px solid var(--color-gold-soft);
+    outline-offset: 2px;
+  }
+
+  /* Los number no llevan flechitas: en el celular estorban. */
+  input[type='number'] {
+    -moz-appearance: textfield;
+  }
+  input[type='number']::-webkit-outer-spin-button,
+  input[type='number']::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer components {
+  .panel {
+    @apply mb-3.5 rounded-[var(--radius-card)] bg-paper p-4 shadow-[0_10px_24px_rgba(0,0,0,.26)];
+  }
+
+  .panel-title {
+    @apply m-0 mb-3 flex items-center gap-2 font-display text-sm font-semibold tracking-[1px] text-ink-soft uppercase;
+  }
+  .panel-title::after {
+    content: '';
+    @apply h-px flex-1 bg-paper-line;
+  }
+
+  .field-box {
+    @apply flex items-center gap-0.5 rounded-lg border border-paper-line bg-white px-1.5;
+  }
+  .field-box input {
+    @apply w-full border-none bg-transparent py-2.5 text-center text-[15px] font-bold outline-none;
+  }
+  .field-label {
+    @apply text-[10px] font-semibold tracking-[.4px] text-ink-soft uppercase;
+  }
+
+  .btn {
+    @apply inline-flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl border-none px-4 py-3 font-body text-[15px] font-bold transition-colors;
+  }
+  .btn-gold {
+    @apply bg-gold text-[#3a2f0e] shadow-[0_6px_16px_rgba(0,0,0,.25)] hover:bg-gold-soft;
+  }
+  .btn-share {
+    @apply bg-[#25D366] text-[#083b1e] hover:bg-[#3ade79];
+  }
+  .btn-ghost {
+    @apply bg-[#efe8d6] text-ink-soft hover:bg-[#e6dcbf];
+  }
+  .btn-dashed {
+    @apply w-full cursor-pointer rounded-xl border-[1.5px] border-dashed border-paper-line bg-transparent px-3 py-2.5 text-[13px] font-semibold text-ink-soft hover:border-gold hover:bg-[#fbf7ea] hover:text-ink;
+  }
+  .icon-btn {
+    @apply flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-[9px] border-none bg-[#efe8d6] text-base leading-none text-ink-soft;
+  }
+  .icon-btn-danger {
+    @apply hover:bg-[#f6d7d3] hover:text-loss;
+  }
+
+  .balance {
+    @apply mb-3 rounded-[9px] px-3 py-2.5 text-center text-[13px] font-semibold;
+  }
+  .balance-ok {
+    @apply bg-[#e2f2e6] text-win;
+  }
+  .balance-off {
+    @apply bg-[#fdeceb] text-loss;
+  }
+
+  .stat {
+    @apply rounded-[10px] border border-paper-line bg-paper-soft px-3 py-2.5;
+  }
+  .stat-k {
+    @apply text-[11px] font-semibold tracking-[.5px] text-ink-soft uppercase;
+  }
+  .stat-v {
+    @apply mt-0.5 font-display text-xl font-bold;
+  }
+
+  .name-input {
+    @apply min-w-0 flex-1 border-none border-b-2 border-paper-line bg-transparent px-0.5 py-1 font-display text-xl font-semibold text-ink outline-none focus:border-b-gold;
+    border-bottom-style: solid;
+    border-bottom-width: 2px;
+  }
+
+  /* La barra de pestañas se desliza a lo ancho sin mostrar la barra de scroll. */
+  .no-scrollbar {
+    scrollbar-width: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .subtle-card {
+    @apply mb-2.5 rounded-xl border border-paper-line bg-paper-soft px-3 py-2.5;
+  }
+}
