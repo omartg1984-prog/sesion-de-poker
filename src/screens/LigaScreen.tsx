@@ -17,6 +17,7 @@ import {
 import { useEffect, useState } from 'react'
 import EditorFichas from '../components/EditorFichas'
 import Sheet from '../components/Sheet'
+import Avatar, { AvatarEditable } from '../components/Avatar'
 import { copyText } from '../lib/portapapeles'
 import { api, type Liga, type Miembro, type PartidaResumen, type TablaPosiciones as Tabla, type TipoPartida } from '../lib/api'
 import TablaPosiciones from './liga/TablaPosiciones'
@@ -99,6 +100,15 @@ export default function LigaScreen() {
     }
   }
 
+  /* La foto se guarda sola al elegirla: no hay nada más que confirmar. */
+  const cambiarFoto = async (foto: string | null) => {
+    if (!liga) return
+    setLiga({ ...liga, foto })
+    const r = await conAviso(() => api.guardarLiga(ligaId, { foto }))
+    if (r) avisar(foto ? 'Foto actualizada' : 'Foto quitada')
+    else setLiga(liga)
+  }
+
   const guardarFichas = async () => {
     if (ocupado) return
     setOcupado(true)
@@ -161,6 +171,18 @@ export default function LigaScreen() {
         >
           <ArrowLeft size={18} strokeWidth={2.4} />
         </button>
+        {soyAdmin ? (
+          <AvatarEditable
+            foto={liga.foto}
+            nombre={liga.nombre}
+            size={38}
+            etiqueta="Foto de la liga"
+            onCambiar={(f) => void cambiarFoto(f)}
+            onError={avisar}
+          />
+        ) : (
+          <Avatar foto={liga.foto} nombre={liga.nombre} size={38} oscuro />
+        )}
         <h1 className="m-0 min-w-0 flex-1 truncate font-display text-[17px] font-bold tracking-[.5px] text-white uppercase">
           {liga.nombre}
         </h1>

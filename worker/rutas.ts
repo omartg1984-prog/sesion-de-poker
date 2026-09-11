@@ -21,6 +21,21 @@ const COOKIE = 'sesion'
 /** Una foto de perfil no tiene por qué pesar más que esto ya redimensionada. */
 const MAX_FOTO = 300_000
 
+/**
+ * Valida una foto que llega del navegador: la de un usuario o la de una liga.
+ *
+ * Las dos se guardan igual —un data URL con el JPEG ya encogido— así que también se
+ * revisan igual. Devuelve el error en vez de lanzarlo para que cada ruta conteste con
+ * su propio código y el flujo se lea de corrido.
+ */
+function revisarFoto(valor: unknown): { foto: string | null } | { error: string; status: number } {
+  if (valor === null || valor === '') return { foto: null }
+  const f = String(valor)
+  if (!f.startsWith('data:image/')) return { error: 'La foto no es una imagen válida', status: 400 }
+  if (f.length > MAX_FOTO) return { error: 'La foto pesa demasiado', status: 413 }
+  return { foto: f }
+}
+
 const ahora = () => new Date().toISOString()
 const enDias = (d: number) => new Date(Date.now() + d * 864e5).toISOString()
 
@@ -192,13 +207,9 @@ export async function rutas(
 
       let nuevaFoto = yo.foto
       if (foto !== undefined) {
-        if (foto === null || foto === '') nuevaFoto = null
-        else {
-          const f = String(foto)
-          if (!f.startsWith('data:image/')) return json({ error: 'La foto no es una imagen válida' }, 400)
-          if (f.length > MAX_FOTO) return json({ error: 'La foto pesa demasiado' }, 413)
-          nuevaFoto = f
-        }
+        const r = revisarFoto(foto)
+        if ('error' in r) return json({ error: r.error }, r.status)
+        nuevaFoto = r.foto
       }
 
       await env.DB.prepare('UPDATE usuarios SET nombre = ?, foto = ? WHERE id = ?')
@@ -216,7 +227,7 @@ export async function rutas(
     // GET /api/ligas — las ligas a las que pertenezco
     if (partes.length === 1 && metodo === 'GET') {
       const { results } = await env.DB.prepare(
-        `SELECT l.id, l.nombre, l.codigo, l.creada_en, m.es_admin,
+        `SELECT l.id, l.nombre, l.codigo, l.foto, l.creada_en, m.es_admin,
                 (SELECT COUNT(*) FROM miembros x WHERE x.liga_id = l.id) AS miembros,
                 (SELECT COUNT(*) FROM partidas p WHERE p.liga_id = l.id) AS partidas
          FROM miembros m JOIN ligas l ON l.id = m.liga_id
@@ -230,11 +241,13 @@ export async function rutas(
 
     // POST /api/ligas — crear
     if (partes.length === 1 && metodo === 'POST') {
-      const { nombre, colores } = await cuerpo<Record<string, unknown>>()
+      const { nombre, colores, foto } = await cuerpo<Record<string, unknown>>()
       const nom = String(nombre ?? '').trim()
       if (!nom) return json({ error: 'Ponle nombre a la liga' }, 400)
       if (!Array.isArray(colores) || colores.length === 0)
         return json({ error: 'Define al menos un color de ficha' }, 400)
+      const revisada = revisarFoto(foto ?? null)
+      if ('error' in revisada) return json({ error: revisada.error }, revisada.status)
 
       const id = nuevoId()
       // Un choque de código es improbable, pero si pasa se reintenta en vez de fallar.
@@ -249,8 +262,8 @@ export async function rutas(
 
       await env.DB.batch([
         env.DB.prepare(
-          'INSERT INTO ligas (id, nombre, codigo, colores, creada_por, creada_en) VALUES (?, ?, ?, ?, ?, ?)',
-        ).bind(id, nom, codigo, JSON.stringify(colores), yo.id, ahora()),
+          'INSERT INTO ligas (id, nombre, codigo, colores, foto, creada_por, creada_en) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        ).bind(id, nom, codigo, JSON.stringify(colores), revisada.foto, yo.id, ahora()),
         env.DB.prepare(
           'INSERT INTO miembros (liga_id, usuario_id, es_admin, entro_en) VALUES (?, ?, 1, ?)',
         ).bind(id, yo.id, ahora()),
@@ -303,18 +316,25 @@ export async function rutas(
       // PATCH /api/ligas/:id — nombre e inventario de fichas
       if (partes.length === 2 && metodo === 'PATCH') {
         if (!esAdminLiga) return json({ error: 'Solo un admin de la liga puede cambiar esto' }, 403)
-        const { nombre, colores } = await cuerpo<Record<string, unknown>>()
-        const actual = await env.DB.prepare('SELECT nombre, colores FROM ligas WHERE id = ?')
+        const { nombre, colores, foto } = await cuerpo<Record<string, unknown>>()
+        const actual = await env.DB.prepare('SELECT nombre, colores, foto FROM ligas WHERE id = ?')
           .bind(ligaId)
-          .first<{ nombre: string; colores: string }>()
+          .first<{ nombre: string; colores: string; foto: string | null }>()
         if (!actual) return json({ error: 'Liga no encontrada' }, 404)
 
         const nom = nombre === undefined ? actual.nombre : String(nombre).trim()
         if (!nom) return json({ error: 'La liga necesita un nombre' }, 400)
         const cols = colores === undefined ? actual.colores : JSON.stringify(colores)
+        /* `foto: null` la quita; no mandarla la deja como estaba. */
+        let img = actual.foto
+        if (foto !== undefined) {
+          const r = revisarFoto(foto)
+          if ('error' in r) return json({ error: r.error }, r.status)
+          img = r.foto
+        }
 
-        await env.DB.prepare('UPDATE ligas SET nombre = ?, colores = ? WHERE id = ?')
-          .bind(nom, cols, ligaId)
+        await env.DB.prepare('UPDATE ligas SET nombre = ?, colores = ?, foto = ? WHERE id = ?')
+          .bind(nom, cols, img, ligaId)
           .run()
         return json({ ok: true })
       }

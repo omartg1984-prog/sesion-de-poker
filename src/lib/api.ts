@@ -69,6 +69,7 @@ export interface LigaResumen {
   id: string
   nombre: string
   codigo: string
+  foto: string | null
   creada_en: string
   es_admin: number
   miembros: number
@@ -87,6 +88,7 @@ export interface Liga {
   id: string
   nombre: string
   codigo: string
+  foto: string | null
   colores: ChipColor[]
   creada_por: string
   creada_en: string
@@ -233,13 +235,20 @@ export const api = {
 
   /* ligas */
   ligas: () => pedir<{ ligas: LigaResumen[] }>('ligas'),
-  crearLiga: (nombre: string, colores: ChipColor[]) =>
-    post<{ liga: { id: string; nombre: string; codigo: string } }>('ligas', { nombre, colores }),
+  crearLiga: (nombre: string, colores: ChipColor[], foto: string | null) =>
+    post<{ liga: { id: string; nombre: string; codigo: string } }>('ligas', {
+      nombre,
+      colores,
+      foto,
+    }),
   unirme: (codigo: string) =>
     post<{ liga: { id: string; nombre: string }; yaEstaba: boolean }>('ligas/unirme', { codigo }),
   liga: (id: string) =>
     pedir<{ liga: Liga; miembros: Miembro[]; soyAdmin: boolean }>(`ligas/${id}`),
-  guardarLiga: (id: string, cambios: { nombre?: string; colores?: ChipColor[] }) =>
+  guardarLiga: (
+    id: string,
+    cambios: { nombre?: string; colores?: ChipColor[]; foto?: string | null },
+  ) =>
     patch<{ ok: true }>(`ligas/${id}`, cambios),
   cambiarAdminLiga: (ligaId: string, usuarioId: string, esAdmin: boolean) =>
     post<{ ok: true }>(`ligas/${ligaId}/admin`, { usuarioId, esAdmin }),

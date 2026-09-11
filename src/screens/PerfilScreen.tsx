@@ -1,36 +1,8 @@
 import { ArrowLeft, Camera, Trash2 } from 'lucide-react'
 import { useRef, useState } from 'react'
 import { api } from '../lib/api'
+import { encogerFoto } from '../lib/foto'
 import { conAviso, useApp } from '../store/app'
-
-/** Lado máximo de la foto de perfil. Más que esto no aporta nada en un avatar. */
-const LADO = 256
-
-/**
- * Redimensiona y recorta al centro en el navegador. Así la foto viaja pequeña y el
- * servidor nunca recibe los 5 MB que saca la cámara del teléfono.
- */
-function encogerFoto(archivo: File): Promise<string> {
-  return new Promise((resolver, rechazar) => {
-    const lector = new FileReader()
-    lector.onerror = () => rechazar(new Error('No se pudo leer la imagen'))
-    lector.onload = () => {
-      const img = new Image()
-      img.onerror = () => rechazar(new Error('El archivo no es una imagen'))
-      img.onload = () => {
-        const lienzo = document.createElement('canvas')
-        lienzo.width = LADO
-        lienzo.height = LADO
-        const ctx = lienzo.getContext('2d')!
-        const lado = Math.min(img.width, img.height)
-        ctx.drawImage(img, (img.width - lado) / 2, (img.height - lado) / 2, lado, lado, 0, 0, LADO, LADO)
-        resolver(lienzo.toDataURL('image/jpeg', 0.85))
-      }
-      img.src = String(lector.result)
-    }
-    lector.readAsDataURL(archivo)
-  })
-}
 
 export default function PerfilScreen() {
   const usuario = useApp((s) => s.usuario)!

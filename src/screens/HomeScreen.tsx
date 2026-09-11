@@ -1,5 +1,6 @@
 import Esqueleto from '../components/Esqueleto'
 import { ChevronRight, KeyRound, LogOut, Plus, Shield, Ticket, UserCog } from 'lucide-react'
+import Avatar, { AvatarEditable } from '../components/Avatar'
 import Logo from '../components/Logo'
 import { useEffect, useState } from 'react'
 import EditorFichas from '../components/EditorFichas'
@@ -23,6 +24,7 @@ export default function HomeScreen() {
   const [menu, setMenu] = useState(false)
 
   const [nombreLiga, setNombreLiga] = useState('')
+  const [fotoLiga, setFotoLiga] = useState<string | null>(null)
   const [colores, setColores] = useState<ChipColor[]>(() => DEFAULT_COLORS.map((c) => ({ ...c })))
   const [codigo, setCodigo] = useState('')
   const [ocupado, setOcupado] = useState(false)
@@ -41,11 +43,12 @@ export default function HomeScreen() {
   const crear = async () => {
     if (!nombreLiga.trim() || ocupado) return
     setOcupado(true)
-    const r = await conAviso(() => api.crearLiga(nombreLiga.trim(), colores))
+    const r = await conAviso(() => api.crearLiga(nombreLiga.trim(), colores, fotoLiga))
     setOcupado(false)
     if (r) {
       setCreando(false)
       setNombreLiga('')
+      setFotoLiga(null)
       setColores(DEFAULT_COLORS.map((c) => ({ ...c })))
       avisar(`Liga creada. Código: ${r.liga.codigo}`)
       irALiga(r.liga.id)
@@ -109,6 +112,7 @@ export default function HomeScreen() {
             onClick={() => irALiga(l.id)}
             className="panel flex w-full cursor-pointer items-center gap-3 border-none text-left transition-transform active:scale-[.99]"
           >
+            <Avatar foto={l.foto} nombre={l.nombre} size={46} />
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
                 <span className="truncate font-display text-xl font-semibold text-ink">{l.nombre}</span>
@@ -142,16 +146,26 @@ export default function HomeScreen() {
 
       {/* ---- crear liga ---- */}
       <Sheet abierta={creando} onCerrar={() => setCreando(false)} titulo="Nueva liga">
-        <label className="mb-4 block">
-          <span className="field-label">Nombre de la liga</span>
-          <input
-            type="text"
-            value={nombreLiga}
-            onChange={(e) => setNombreLiga(e.target.value)}
-            placeholder="ej. Los Viernes"
-            className="mt-1 w-full rounded-xl border border-paper-line bg-white px-3 py-3 text-base font-semibold text-ink outline-none focus:border-marca"
+        <div className="mb-4 flex items-center gap-3">
+          <AvatarEditable
+            foto={fotoLiga}
+            nombre={nombreLiga || '?'}
+            size={76}
+            etiqueta="Foto de la liga"
+            onCambiar={setFotoLiga}
+            onError={avisar}
           />
-        </label>
+          <label className="min-w-0 flex-1">
+            <span className="field-label">Nombre de la liga</span>
+            <input
+              type="text"
+              value={nombreLiga}
+              onChange={(e) => setNombreLiga(e.target.value)}
+              placeholder="ej. Los Viernes"
+              className="mt-1 w-full rounded-xl border border-paper-line bg-white px-3 py-3 text-base font-semibold text-ink outline-none focus:border-marca"
+            />
+          </label>
+        </div>
 
         <p className="panel-title mt-5">
           <span>Fichas de la casa</span>
