@@ -82,6 +82,14 @@
     outline-offset: 2px;
   }
 
+  /* El gris que pone el navegador por su cuenta se queda en 3.4 de contraste y en
+     el celular, a plena luz, no se lee. Este pasa AA tanto sobre blanco como sobre
+     el crema de las tarjetas, y sigue viéndose más tenue que el texto escrito. */
+  ::placeholder {
+    color: #6f6a62;
+    opacity: 1;
+  }
+
   /* Los number no llevan flechitas: en el celular estorban. */
   input[type='number'] {
     -moz-appearance: textfield;

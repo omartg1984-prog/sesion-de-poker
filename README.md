@@ -1,92 +1,78 @@
-# Sesión de Póker
+# OnlyCards
 
 **▶ https://sesion-de-poker.omartg-1984.workers.dev**
 
-App web instalable (PWA) para llevar la cuenta de las partidas de póker en casa: cuánto pone
-cada quien, cómo se reparten las fichas físicas según el inventario que tienes, y quién ganó.
-Funciona sin internet, guarda todo sola en el dispositivo y no manda nada a ningún servidor.
+App para llevar la cuenta de las partidas de póker en casa: quién entró y con cuánto, cómo se
+reparten las fichas físicas según el inventario que tienes, quién ganó, y el acumulado de la
+liga a lo largo de la temporada.
+
+Cada quien se hace una cuenta con usuario y un PIN de seis dígitos —no se pide correo— y entra
+a una liga con un código. Los datos viven en Cloudflare (Workers + D1), no en el teléfono, así
+que todos ven lo mismo y nadie pierde nada al cambiar de aparato.
+
+Hay un APK de Android que abre este mismo sitio; ver más abajo.
 
 Cada `git push` a `main` la republica sola en Cloudflare (~1 min).
 
 ## Cómo correrla
 
-Necesitas Node.js 20 o más nuevo.
+Necesitas Node.js 20 o más nuevo. Son **dos procesos**: Vite sirve la interfaz y `wrangler dev`
+atiende el API, y Vite le reenvía `/api` para que el navegador vea todo en el mismo origen (si
+no, la cookie de sesión no funciona).
 
 ```bash
 npm install
-npm run dev
+npx wrangler dev        # en una terminal: el API en el 8787
+npm run dev             # en otra: la interfaz en el 5173
 ```
 
-Abre `http://localhost:5173`.
+Abre `http://localhost:5173`. Sin el primero, la app carga pero no deja entrar.
 
 | Comando | Qué hace |
 | --- | --- |
-| `npm run dev` | Servidor de desarrollo |
-| `npm run build` | Compila la PWA a `dist/` |
-| `npm run build:archivo` | Arma un solo `.html` con todo adentro en `dist-archivo/` |
-| `npm run preview` | Sirve `dist/` para probar la PWA ya compilada |
+| `npm run dev` | Interfaz en desarrollo |
+| `npm run build` | Compila a `dist/` |
 | `npm test` | Corre los tests (Vitest) |
+| `npm run check` | Revisa tipos de la app y del worker |
+| `npm run apk:preparar` | Íconos y splash desde `assets/logo.jpg` |
+| `npm run apk:sync` | Compila y sincroniza el proyecto de Android |
 
 ## Cómo llevarla al celular
 
-### Opción A — archivo único por WhatsApp (no necesita la compu prendida)
+Abre la dirección de arriba en Chrome y usa *Agregar a pantalla de inicio*; queda con su ícono
+como cualquier app. En iPhone es el botón de compartir → *Añadir a pantalla de inicio*.
 
-```bash
-npm run build:archivo
-```
-
-Queda `dist-archivo/index.html`: un solo archivo con la app completa adentro. Mándalo por
-WhatsApp o correo, **descárgalo** en el celular y ábrelo desde *Descargas* con Chrome. Funciona
-sin internet y guarda los datos en ese navegador. Es también la forma de compartirla con tus
-amigos.
-
-> Ábrelo desde Descargas, **no** desde el visor de WhatsApp: ahí la URL es `content://`, el
-> navegador no conserva nada al salir y la app te lo avisa en pantalla. Si te toca usarlo así,
-> guarda un respaldo antes de cerrar.
-
-### Opción B — por wifi, desde la compu
-
-```bash
-npm run build
-npm run preview -- --host
-```
-
-La terminal da una dirección tipo `http://192.168.100.4:4173`. Ábrela en el celular (mismo wifi)
-y listo. Los datos se guardan en el navegador del celular. Requiere que la compu siga prendida
-y en la misma red; por ser `http://` sin certificado, Chrome no ofrece instalarla ni funciona
-sin conexión.
-
-### Opción C — instalada de verdad (ícono, offline, sin depender de nadie)
-
-Sube el contenido de `dist/` a cualquier hosting estático con **HTTPS** (Netlify, Vercel,
-Cloudflare Pages, GitHub Pages). Desde esa URL:
-
-- **Android / Chrome**: menú ⋮ → *Agregar a pantalla de inicio* (o *Instalar app*).
-- **iPhone / Safari**: botón compartir → *Añadir a pantalla de inicio*.
-
-El service worker necesita HTTPS (o `localhost`), por eso esta opción es la única que deja la
-app instalada y funcionando sin internet.
+Para Android también hay APK, que es lo que conviene repartir entre amigos: ver más abajo.
 
 ## Cómo se usa
 
-Arriba eliges **Cash** o **Torneo**; cada modo tiene sus pestañas. Lo capturado se conserva al
-cambiar de modo.
+Creas una **liga** y le pones el inventario de fichas de la casa: qué colores hay, cuánto vale
+cada uno y cuántas tienes. Compartes el código de la liga y los demás entran con él.
 
-**Cash** — `Entrada · Reparto · Recompra · Final · Resultado`
-- *Entrada*: nombre, dinero y fichas con las que entra cada quien.
-- *Reparto*: cuántas fichas de cada color darle a cada jugador (ver abajo).
-- *Recompra*: recompras durante la partida.
-- *Final*: conteo final de fichas, con el P/L en vivo.
+Dentro de la liga vas creando **partidas** con fecha, de tipo *Cash* o *Torneo*. Un admin marca
+quiénes llegaron —entran con $500 salvo que le cambies el monto a alguien— y la app calcula
+sola cuántas fichas de cada color darle a cada quien.
+
+**Cash** — `Jugadores · Reparto · Final · Resultado · Números`
+- *Jugadores*: quién entró, con cuánto, y sus recompras.
+- *Reparto*: cuántas fichas de cada color le tocan a cada uno (ver abajo).
+- *Final*: conteo final de fichas, con el resultado en vivo.
 - *Resultado*: total en la mesa, cuadre, ranking e imagen para WhatsApp.
+- *Números*: las estadísticas de esa noche y los destacados.
 
 `invertido = entrada + Σ recompras` · `valor final = Σ fichas × valor` · `P/L = final − invertido`
 
-**Torneo** — `Torneo · Jugadores · Reparto · Resultado`
+**Torneo** — `Torneo · Jugadores · Reparto · Resultado · Números`
 - *Torneo*: costo de entrada, recompra, add-on y los premios por lugar en % (con presets).
 - *Jugadores*: recompras y add-ons por jugador, con la bolsa acumulada en vivo.
 - *Resultado*: desglose de la bolsa, quién quedó en cada lugar, premio y neto por jugador.
 
 `premio del lugar = bolsa × %` · `neto = premio − pagado` (los netos suman cero si los % suman 100)
+
+Al **cerrar** una partida entra al acumulado de la liga: la pestaña *Posiciones* arma el podio,
+el saldo y el rendimiento de cada quien, los récords de la temporada y los títulos (el Rey, el
+Tiburón, el Cajero…). Tanto la tabla de la liga como los números de cada noche se comparten al
+chat como imagen.
 
 ## El reparto de fichas
 
@@ -111,10 +97,18 @@ aparta primero sus fichas y reparte lo que sobra entre los automáticos, que **s
 vivo**. El botón *Auto* lo regresa al reparto automático, y *Recalcular todo en automático*
 limpia todos. Abajo ves el inventario usado por color y un aviso en rojo si te pasas.
 
-## Datos y respaldo
+## Cuentas y datos
 
-Todo se guarda solo en `localStorage` en cada cambio. En **Guardar / Cargar datos** puedes
-exportar un respaldo `.json`, importarlo en otro dispositivo, o empezar una sesión nueva.
+Todo vive en D1 (el SQLite de Cloudflare). El PIN no se guarda: se guarda su hash PBKDF2-SHA256
+con sal propia y 100 000 vueltas, que es el tope que permite Cloudflare. Tras cinco intentos
+fallidos la cuenta se bloquea quince minutos. La sesión es una cookie `HttpOnly` que dura 60
+días y de la que sólo se guarda el hash del token.
+
+**No se pide correo**, así que nadie puede recuperar su PIN solo: se lo reinicia quien
+administra la app, desde *Administrar usuarios*. Ese papel lo toma el primero que se registra.
+
+Dentro de cada liga puede haber varios admins —quien ya es admin puede nombrar a otro— y la
+liga nunca se queda sin ninguno. Borrar la liga entera sólo lo puede hacer quien la creó.
 
 ## El APK de Android
 
@@ -160,27 +154,26 @@ registran del lado nativo: **agregar un plugin obliga a repartir un APK nuevo**.
 ## Estructura
 
 ```
+worker/
+  rutas.ts          todos los endpoints del API
+  seguridad.ts      hash del PIN, tokens de sesión, códigos de liga
+  posiciones.ts     tabla acumulada de la liga, récords y títulos
+migraciones/        el esquema de D1
 src/
-  store/
-    types.ts          tipos del modelo de datos
-    defaults.ts       colores, torneo y sesión por defecto
-    session.ts        estado global (Zustand) + persistencia + reconciliación
   lib/
-    distribution.ts   algoritmo de reparto de fichas
-    money.ts          formato de $ y cálculos de cash/torneo
-    shareImage.ts     imagen PNG en canvas + compartir/descargar
-    backup.ts         export/import JSON y portapapeles
-    __tests__/        tests de distribution y money
-  components/         Chip, ChipsGrid, NumInput, MoneyInput, Stepper, Toast,
-                      PlayerHeading, ColorsPanel, BackupPanel, ShareBlock
-  screens/            una pantalla por pestaña (cash y torneo)
-  App.tsx             encabezado, selector de modo, pestañas y armado
-  index.css           tema de Tailwind (fieltro + dorado) y clases compartidas
-public/               íconos de la PWA
+    distribution.ts algoritmo de reparto de fichas
+    money.ts        formato de $ y cálculos de cash/torneo
+    api.ts          llamadas al API y tipos compartidos
+    lienzo.ts       paleta y brochas de las imágenes que salen al chat
+    shareImage.ts   imagen de resultados de cash y torneo
+    imagenTablas.ts imagen de la tabla de la liga y de los números de una noche
+    nativo.ts       compartir y guardar archivos dentro del APK
+    __tests__/      tests de distribution y money
+  components/       Chip, ChipsGrid, Logo, Medalla, Titulos, ShareBlock, Sheet…
+  screens/          una pantalla por sección; partida/ y liga/ por pestaña
+  store/app.ts      sesión, navegación y avisos (Zustand)
+  index.css         paleta y clases compartidas (Tailwind v4)
 ```
 
-Stack: Vite + React + TypeScript, Tailwind CSS v4, Zustand, `vite-plugin-pwa`, Vitest.
+Stack: Vite + React + TypeScript, Tailwind CSS v4, Zustand, Vitest, Capacitor.
 Backend en Cloudflare Workers + D1, con cuentas por usuario y PIN.
-
-> **Nota:** el bloque «Estructura» de arriba quedó del diseño viejo, de cuando
-> todo vivía en el navegador. Está pendiente rehacerlo.
