@@ -3,13 +3,15 @@
  *
  * El PIN es numérico y corto por decisión de producto (nadie quiere teclear una
  * contraseña larga en la mesa), así que la defensa no puede apoyarse en su longitud:
- *  - se guarda como hash PBKDF2 con 150 000 vueltas y sal propia, nunca en claro;
+ *  - se guarda como hash PBKDF2 con 100 000 vueltas y sal propia, nunca en claro;
  *  - la cuenta se bloquea temporalmente tras varios intentos fallidos, que es lo que
  *    de verdad frena el adivinar a fuerza bruta;
  *  - las comparaciones son de tiempo constante.
  */
 
-const VUELTAS = 150_000
+// 100 000 es el máximo que acepta la implementación de WebCrypto de Cloudflare;
+// pedir más no es "más seguro", simplemente falla.
+const VUELTAS = 100_000
 const LARGO_SAL = 16
 const LARGO_CLAVE = 32
 
