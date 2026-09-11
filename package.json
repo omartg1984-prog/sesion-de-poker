@@ -13,7 +13,7 @@
     "iconos": "node scripts/generar-iconos.mjs",
     "apk:preparar": "node scripts/generar-iconos.mjs && npx @capacitor/assets generate --android",
     "apk:sync": "npm run build && npx cap sync android",
-    "apk:release": "npm run apk:sync && cd android && gradlew assembleRelease",
+    "apk:release": "npm run apk:sync && node scripts/apk-release.mjs",
     "check": "tsc -b && tsc -p tsconfig.worker.json"
   },
   "dependencies": {
