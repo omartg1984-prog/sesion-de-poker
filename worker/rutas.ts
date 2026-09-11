@@ -1,4 +1,5 @@
 import { json } from './index'
+import { calcularPosiciones } from './posiciones'
 import {
   DIAS_SESION,
   FALLOS_PERMITIDOS,
@@ -340,6 +341,11 @@ export async function rutas(
           .bind(esAdmin ? 1 : 0, ligaId, objetivo)
           .run()
         return json({ ok: true })
+      }
+
+      // GET /api/ligas/:id/posiciones — tabla acumulada de la liga
+      if (partes[2] === 'posiciones' && metodo === 'GET') {
+        return json(await calcularPosiciones(env, ligaId))
       }
 
       /* ===== partidas de la liga ===== */

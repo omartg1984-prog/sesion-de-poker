@@ -127,6 +127,27 @@ export interface Participacion {
   foto: string | null
 }
 
+export interface Posicion {
+  usuarioId: string
+  nombre: string
+  usuario: string
+  foto: string | null
+  partidas: number
+  invertido: number
+  recuperado: number
+  balance: number
+  mejor: number
+  peor: number
+  /** Partidas en las que terminó con saldo a favor. */
+  ganadas: number
+}
+
+export interface TablaPosiciones {
+  posiciones: Posicion[]
+  partidasContadas: number
+  partidasAbiertas: number
+}
+
 export interface DetallePartida {
   partida: PartidaResumen & { torneo: string | null }
   liga: { id: string; nombre: string; colores: ChipColor[] }
@@ -168,6 +189,8 @@ export const api = {
     patch<{ ok: true }>(`ligas/${id}`, cambios),
   cambiarAdminLiga: (ligaId: string, usuarioId: string, esAdmin: boolean) =>
     post<{ ok: true }>(`ligas/${ligaId}/admin`, { usuarioId, esAdmin }),
+
+  posiciones: (ligaId: string) => pedir<TablaPosiciones>(`ligas/${ligaId}/posiciones`),
 
   /* partidas */
   partidas: (ligaId: string) => pedir<{ partidas: PartidaResumen[] }>(`ligas/${ligaId}/partidas`),

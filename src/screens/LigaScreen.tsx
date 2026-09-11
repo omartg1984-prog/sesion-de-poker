@@ -13,7 +13,8 @@ import { useEffect, useState } from 'react'
 import EditorFichas from '../components/EditorFichas'
 import Sheet from '../components/Sheet'
 import { copyText } from '../lib/backup'
-import { api, type Liga, type Miembro, type PartidaResumen, type TipoPartida } from '../lib/api'
+import { api, type Liga, type Miembro, type PartidaResumen, type TablaPosiciones as Tabla, type TipoPartida } from '../lib/api'
+import TablaPosiciones from './liga/TablaPosiciones'
 import { conAviso, useApp } from '../store/app'
 import type { ChipColor } from '../store/types'
 
@@ -39,6 +40,8 @@ export default function LigaScreen() {
   const [miembros, setMiembros] = useState<Miembro[]>([])
   const [soyAdmin, setSoyAdmin] = useState(false)
   const [partidas, setPartidas] = useState<PartidaResumen[]>([])
+  const [tabla, setTabla] = useState<Tabla | null>(null)
+  const [pestana, setPestana] = useState<'partidas' | 'posiciones'>('partidas')
 
   const [creando, setCreando] = useState(false)
   const [fichas, setFichas] = useState(false)
@@ -51,9 +54,10 @@ export default function LigaScreen() {
   const [colores, setColores] = useState<ChipColor[]>([])
 
   const cargar = async () => {
-    const [l, p] = await Promise.all([
+    const [l, p, t] = await Promise.all([
       conAviso(() => api.liga(ligaId)),
       conAviso(() => api.partidas(ligaId)),
+      conAviso(() => api.posiciones(ligaId)),
     ])
     if (l) {
       setLiga(l.liga)
@@ -62,6 +66,7 @@ export default function LigaScreen() {
       setColores(l.liga.colores)
     }
     if (p) setPartidas(p.partidas)
+    if (t) setTabla(t)
   }
 
   useEffect(() => {
@@ -140,7 +145,31 @@ export default function LigaScreen() {
         <ClipboardCopy size={18} className="shrink-0 text-gold" />
       </button>
 
+      <div className="mb-3.5 flex gap-1 rounded-xl bg-black/30 p-1">
+        {(
+          [
+            ['partidas', 'Partidas'],
+            ['posiciones', 'Posiciones'],
+          ] as const
+        ).map(([id, texto]) => (
+          <button
+            key={id}
+            type="button"
+            aria-current={pestana === id ? 'page' : undefined}
+            onClick={() => setPestana(id)}
+            className={`flex-1 cursor-pointer rounded-[9px] border-none py-2 text-[13px] font-bold transition-colors ${
+              pestana === id ? 'bg-gold text-[#2e1a11]' : 'bg-transparent text-mint-soft'
+            }`}
+          >
+            {texto}
+          </button>
+        ))}
+      </div>
+
+      {pestana === 'posiciones' && <TablaPosiciones tabla={tabla} />}
+
       {/* partidas */}
+      {pestana === 'partidas' && (
       <section className="panel">
         <p className="panel-title">
           <span>Partidas</span>
@@ -192,6 +221,7 @@ export default function LigaScreen() {
           </button>
         )}
       </section>
+      )}
 
       {/* accesos a jugadores y fichas */}
       <div className="flex gap-2.5">
