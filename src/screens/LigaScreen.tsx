@@ -1,3 +1,4 @@
+import Esqueleto from '../components/Esqueleto'
 import {
   AlertTriangle,
   ArrowLeft,
@@ -142,7 +143,11 @@ export default function LigaScreen() {
   }
 
   if (!liga) {
-    return <p className="mt-20 text-center text-sm text-mint-soft">Cargando…</p>
+    return (
+      <div className="mx-auto max-w-[640px] px-3.5 pt-[max(3rem,env(safe-area-inset-top))]">
+        <Esqueleto filas={3} />
+      </div>
+    )
   }
 
   return (

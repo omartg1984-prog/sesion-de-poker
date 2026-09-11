@@ -1,5 +1,6 @@
 import { AlertTriangle, Check, Plus, X } from 'lucide-react'
 import Medalla from '../../components/Medalla'
+import SelectorJugador from '../../components/SelectorJugador'
 import MoneyInput from '../../components/MoneyInput'
 import NumInput from '../../components/NumInput'
 import ShareBlock from '../../components/ShareBlock'
@@ -330,20 +331,13 @@ export default function PartidaTorneo({
                 {lugar}º · {num(po.pct)}% ·{' '}
                 <span className="text-win">{money(premioDe(i, ps, torneo))}</span>
               </b>
-              <select
-                disabled={!puedeEditar}
-                value={ganador?.usuario_id ?? ''}
-                aria-label={`Jugador en el lugar ${lugar}`}
-                onChange={(e) => asignarLugar(lugar, e.target.value || null)}
-                className="w-full rounded-[9px] border border-paper-line bg-white p-2.5 text-[15px] font-semibold text-ink disabled:opacity-60"
-              >
-                <option value="">— Sin asignar —</option>
-                {ps.map((p) => (
-                  <option key={p.usuario_id} value={p.usuario_id}>
-                    {p.nombre}
-                  </option>
-                ))}
-              </select>
+              <SelectorJugador
+                titulo={`¿Quién quedó en ${lugar}º?`}
+                deshabilitado={!puedeEditar}
+                valor={ganador?.usuario_id ?? null}
+                onChange={(id) => asignarLugar(lugar, id)}
+                opciones={ps.map((p) => ({ id: p.usuario_id, nombre: p.nombre, foto: p.foto }))}
+              />
             </div>
           )
         })}

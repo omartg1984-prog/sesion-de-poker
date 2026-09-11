@@ -1,5 +1,5 @@
 import { AlertTriangle, Check, Plus, X } from 'lucide-react'
-import ChipsGrid from '../../components/ChipsGrid'
+import ContadorFichas from '../../components/ContadorFichas'
 import Medalla from '../../components/Medalla'
 import MoneyInput from '../../components/MoneyInput'
 import ShareBlock from '../../components/ShareBlock'
@@ -153,31 +153,64 @@ export default function PartidaCash({
 
   /* ---- conteo final ---- */
   if (pestana === 'final') {
+    const contados = conTotales.filter((p) => p.final > 0).length
     return (
       <>
+        <section className="panel">
+          <p className="panel-title">
+            <span>Conteo final</span>
+          </p>
+          <p className="m-0 text-[13px] leading-snug text-ink-soft">
+            Cuenta las fichas de cada quien. Puedes teclear la cantidad o ir sumando con −/+.
+            Llevas <b className="text-ink">{contados} de {conTotales.length}</b>.
+          </p>
+        </section>
+
         {conTotales.map((p) => {
           const fichas = leerJson<Chips>(p.fichas_final, {})
+          const yaContado = p.final > 0
           return (
-            <section key={p.id} className="panel">
-              <b className="mb-2.5 block truncate font-display text-lg font-semibold text-ink">
-                {p.nombre}
-              </b>
-              <ChipsGrid
-                colors={colores}
-                chips={fichas}
+            <section
+              key={p.id}
+              className={`panel ${yaContado ? '' : 'opacity-95 ring-1 ring-gold/25'}`}
+            >
+              <div className="mb-1 flex items-center gap-2">
+                <b className="min-w-0 flex-1 truncate font-display text-lg font-semibold text-ink">
+                  {p.nombre}
+                </b>
+                {yaContado ? (
+                  <span className="flex shrink-0 items-center gap-1 rounded-full bg-win/12 px-2 py-0.5 text-[11px] font-bold text-win">
+                    <Check size={11} strokeWidth={3} />
+                    Contado
+                  </span>
+                ) : (
+                  <span className="shrink-0 rounded-full bg-gold/20 px-2 py-0.5 text-[11px] font-bold text-[#7a5d20]">
+                    Falta
+                  </span>
+                )}
+              </div>
+
+              <ContadorFichas
+                colores={colores}
+                fichas={fichas}
+                deshabilitado={!puedeEditar}
                 onChange={(key, v) => {
-                  if (!puedeEditar) return
                   const nuevas = { ...fichas, [key]: v }
                   tocar(p.id, { fichas_final: JSON.stringify(nuevas) }, { fichasFinal: nuevas })
                 }}
               />
-              <div className="mt-3 flex items-center gap-2.5 rounded-xl bg-felt-line px-3.5 py-2.5 text-[#eafff2]">
-                <span className="text-[10px] tracking-[.6px] uppercase opacity-70">Puso</span>
-                <b className="font-display">{money(p.invertido)}</b>
-                <span className="ml-3 text-[10px] tracking-[.6px] uppercase opacity-70">Fichas</span>
-                <b className="font-display">{money(p.final)}</b>
+
+              <div className="mt-3 flex items-center gap-3 rounded-xl bg-felt-line px-3.5 py-3 text-[#eafff2]">
+                <span className="min-w-0">
+                  <span className="block text-[10px] tracking-[.6px] uppercase opacity-70">Puso</span>
+                  <b className="font-display text-base">{money(p.invertido)}</b>
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-[10px] tracking-[.6px] uppercase opacity-70">Fichas</span>
+                  <b className="font-display text-base">{money(p.final)}</b>
+                </span>
                 <span
-                  className="ml-auto font-display text-lg font-bold"
+                  className="ml-auto font-display text-2xl font-bold tabular-nums"
                   style={{ color: tonoOscuro(p.pl) }}
                 >
                   {signed(p.pl)}

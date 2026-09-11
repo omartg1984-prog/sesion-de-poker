@@ -1,3 +1,4 @@
+import Esqueleto from '../../components/Esqueleto'
 import { Info, Trophy } from 'lucide-react'
 import Medalla from '../../components/Medalla'
 import { EPS, money, signed } from '../../lib/money'
@@ -8,9 +9,7 @@ const claseSaldo = (v: number) =>
 
 /** Acumulado de la liga: quién va arriba sumando todas las partidas cerradas. */
 export default function TablaPosiciones({ tabla }: { tabla: Tabla | null }) {
-  if (!tabla) {
-    return <p className="panel m-0 text-center text-sm text-ink-soft">Cargando…</p>
-  }
+  if (!tabla) return <Esqueleto filas={2} />
 
   if (tabla.posiciones.length === 0) {
     return (

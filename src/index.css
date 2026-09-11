@@ -125,8 +125,11 @@
   .btn-gold {
     @apply bg-gold text-[#3a2f0e] shadow-[0_6px_16px_rgba(0,0,0,.25)] hover:bg-gold-soft;
   }
+  /* Compartir es la acción principal de esa pantalla, así que lleva el dorado de la
+     app. Antes era el verde de WhatsApp: reconocible, pero es lo único fosforescente
+     en una interfaz de salón oscuro y cantaba muchísimo. */
   .btn-share {
-    @apply bg-[#25D366] text-[#083b1e] hover:bg-[#3ade79];
+    @apply bg-gold text-[#2e1a11] shadow-[0_6px_16px_rgba(0,0,0,.25)] hover:bg-gold-soft;
   }
   .btn-ghost {
     @apply bg-[#efe8d6] text-ink-soft hover:bg-[#e6dcbf];

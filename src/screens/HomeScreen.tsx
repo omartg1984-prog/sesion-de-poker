@@ -1,3 +1,4 @@
+import Esqueleto from '../components/Esqueleto'
 import { ChevronRight, KeyRound, LogOut, Plus, Shield, Spade, Ticket, UserCog } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import EditorFichas from '../components/EditorFichas'
@@ -90,7 +91,7 @@ export default function HomeScreen() {
       </header>
 
       {ligas === null ? (
-        <div className="panel text-center text-sm text-ink-soft">Cargando…</div>
+        <Esqueleto filas={2} />
       ) : ligas.length === 0 ? (
         <section className="panel text-center">
           <Ticket size={30} className="mx-auto mb-2 text-ink-soft/45" strokeWidth={1.8} />

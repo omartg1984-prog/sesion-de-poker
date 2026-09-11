@@ -65,7 +65,10 @@ export default function AdminScreen() {
         </p>
 
         {usuarios === null ? (
-          <p className="m-0 text-center text-sm text-ink-soft">Cargando…</p>
+          <div className="animate-pulse">
+            <div className="mb-3 h-9 rounded-lg bg-ink/8" />
+            <div className="mb-3 h-9 rounded-lg bg-ink/8" />
+          </div>
         ) : (
           <ul className="m-0 list-none p-0">
             {usuarios.map((u) => (
