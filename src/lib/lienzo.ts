@@ -74,10 +74,10 @@ export function pintarMesa(
 
   ctx.textAlign = 'center'
   ctx.fillStyle = MARCA
-  ctx.font = "22px 'Anton',Arial,sans-serif"
+  ctx.font = "600 22px 'Khand',Arial,sans-serif"
   ctx.fillText(gorro, w / 2, 58)
   ctx.fillStyle = MARCA_ALTA
-  ctx.font = "48px 'Anton',Arial,sans-serif"
+  ctx.font = "700 48px 'Khand',Arial,sans-serif"
   ctx.fillText(titulo.toUpperCase(), w / 2, 110)
   ctx.fillStyle = CREAM
   ctx.font = "400 24px 'Inter',Arial,sans-serif"

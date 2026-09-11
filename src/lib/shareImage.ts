@@ -112,7 +112,7 @@ function dibujarCash(d: DatosCash): HTMLCanvasElement {
       nameX = colName + 34
     }
     ctx.fillStyle = '#ffffff'
-    ctx.font = "26px 'Anton',Arial,sans-serif"
+    ctx.font = "600 26px 'Khand',Arial,sans-serif"
     ctx.fillText(ellipsis(r.nombre, 16), nameX, midY)
 
     ctx.textAlign = 'right'
@@ -123,7 +123,7 @@ function dibujarCash(d: DatosCash): HTMLCanvasElement {
     ctx.fillText(moneyShort(r.final), cFin, midY)
 
     ctx.fillStyle = r.pl > 0.005 ? WIN : r.pl < -0.005 ? LOSS : NEUTRO
-    ctx.font = "26px 'Anton',Arial,sans-serif"
+    ctx.font = "700 26px 'Khand',Arial,sans-serif"
     ctx.fillText(signed(r.pl), cRes, midY)
     ry += rowH
   })
@@ -168,7 +168,7 @@ function dibujarTorneo(d: DatosTorneo): HTMLCanvasElement {
   ctx.font = "600 18px 'Inter',Arial,sans-serif"
   ctx.fillText('BOLSA A REPARTIR', W / 2, headerH + 34)
   ctx.fillStyle = MARCA_ALTA
-  ctx.font = "46px 'Anton',Arial,sans-serif"
+  ctx.font = "700 46px 'Khand',Arial,sans-serif"
   ctx.fillText(moneyShort(d.bolsa), W / 2, headerH + 82)
 
   const colName = pad + 22
@@ -200,7 +200,7 @@ function dibujarTorneo(d: DatosTorneo): HTMLCanvasElement {
     ctx.font = "26px 'Inter',Arial,sans-serif"
     ctx.fillStyle = '#ffffff'
     ctx.fillText(MEDALS[i] || '🎖', colName, midY)
-    ctx.font = "28px 'Anton',Arial,sans-serif"
+    ctx.font = "700 28px 'Khand',Arial,sans-serif"
     ctx.fillText(po.lugar + 'º', colName + 44, midY)
 
     ctx.textAlign = 'right'
@@ -208,11 +208,11 @@ function dibujarTorneo(d: DatosTorneo): HTMLCanvasElement {
     ctx.fillStyle = CREAM
     ctx.fillText(po.pct + '%', cPct, midY)
     ctx.fillStyle = WIN
-    ctx.font = "26px 'Anton',Arial,sans-serif"
+    ctx.font = "700 26px 'Khand',Arial,sans-serif"
     ctx.fillText(moneyShort(po.premio), cPrize, midY)
 
     ctx.fillStyle = '#ffffff'
-    ctx.font = "24px 'Anton',Arial,sans-serif"
+    ctx.font = "600 24px 'Khand',Arial,sans-serif"
     ctx.fillText(ellipsis(po.ganador || '—', 14), cWin, midY)
     ry += rowH
   })

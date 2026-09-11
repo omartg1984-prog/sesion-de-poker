@@ -35,7 +35,7 @@
   --color-tiza: #c9c5bd;
   --color-tiza-suave: #b0aca4;
 
-  --font-display: 'Anton', 'Arial Narrow', system-ui, sans-serif;
+  --font-display: 'Khand', 'Arial Narrow', system-ui, sans-serif;
   --font-body: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
 
   --radius-card: 16px;
@@ -190,13 +190,4 @@
   .subtle-card {
     @apply mb-2.5 rounded-xl border border-paper-line bg-paper-soft px-3 py-2.5;
   }
-}
-
-/*
- * Fuera de @layer a propósito: las reglas sin capa le ganan a las utilidades de
- * Tailwind. Anton trae un solo grosor, así que `font-bold` junto a `font-display`
- * hacía que el navegador se inventara la negrita y las letras salían embarradas.
- */
-.font-display {
-  font-weight: 400;
 }

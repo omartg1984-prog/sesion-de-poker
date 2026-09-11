@@ -85,16 +85,16 @@ function dibujarPodio(ctx: CanvasRenderingContext2D, filas: FilaLiga[], W: numbe
 
       ctx.textAlign = 'center'
       ctx.fillStyle = TINTA_PUESTO[idx]
-      ctx.font = "32px 'Anton',Arial,sans-serif"
+      ctx.font = "700 32px 'Khand',Arial,sans-serif"
       ctx.fillText(`${idx + 1}º`, x + ancho / 2, cima + 38)
 
       // nombre, saldo y título por encima del escalón
       ctx.fillStyle = '#ffffff'
-      ctx.font = "25px 'Anton',Arial,sans-serif"
+      ctx.font = "600 25px 'Khand',Arial,sans-serif"
       ctx.fillText(ellipsis(fila.nombre, 13), x + ancho / 2, cima - 40)
 
       ctx.fillStyle = fila.balance > 0.005 ? WIN : fila.balance < -0.005 ? LOSS : NEUTRO
-      ctx.font = "26px 'Anton',Arial,sans-serif"
+      ctx.font = "700 26px 'Khand',Arial,sans-serif"
       ctx.fillText(signed(fila.balance), x + ancho / 2, cima - 14)
 
       if (fila.titulos[0]) {
@@ -155,7 +155,7 @@ export function dibujarLiga(d: DatosLiga): HTMLCanvasElement {
       ctx.font = "500 20px 'Inter',Arial,sans-serif"
       ctx.fillText(`${f.puesto}º`, colName - 4, midY)
       ctx.fillStyle = '#ffffff'
-      ctx.font = "24px 'Anton',Arial,sans-serif"
+      ctx.font = "600 24px 'Khand',Arial,sans-serif"
       ctx.fillText(ellipsis(f.nombre, 18), colName + 42, midY)
 
       ctx.textAlign = 'right'
@@ -164,7 +164,7 @@ export function dibujarLiga(d: DatosLiga): HTMLCanvasElement {
       ctx.fillText(String(f.partidas), cPartidas, midY)
       ctx.fillStyle = f.roi > 0 ? WIN : f.roi < 0 ? LOSS : NEUTRO
       ctx.fillText(`${f.roi > 0 ? '+' : ''}${f.roi.toFixed(0)}%`, cRoi, midY)
-      ctx.font = "24px 'Anton',Arial,sans-serif"
+      ctx.font = "700 24px 'Khand',Arial,sans-serif"
       ctx.fillText(signed(f.balance), cSaldo, midY)
       ry += rowH
     })
@@ -219,7 +219,7 @@ export function dibujarNumeros(d: DatosNumeros): HTMLCanvasElement {
     ctx.font = "600 14px 'Inter',Arial,sans-serif"
     ctx.fillText(k, x + ancho / 2, headerH + 28)
     ctx.fillStyle = MARCA_ALTA
-    ctx.font = "32px 'Anton',Arial,sans-serif"
+    ctx.font = "700 32px 'Khand',Arial,sans-serif"
     ctx.fillText(v, x + ancho / 2, headerH + 72)
   })
 
@@ -257,7 +257,7 @@ export function dibujarNumeros(d: DatosNumeros): HTMLCanvasElement {
       nameX = colName + 32
     }
     ctx.fillStyle = '#ffffff'
-    ctx.font = "24px 'Anton',Arial,sans-serif"
+    ctx.font = "600 24px 'Khand',Arial,sans-serif"
     ctx.fillText(ellipsis(f.nombre, 22), nameX, midY)
 
     ctx.textAlign = 'right'
@@ -266,7 +266,7 @@ export function dibujarNumeros(d: DatosNumeros): HTMLCanvasElement {
     ctx.fillText(moneyShort(f.puso), cPuso, midY)
     ctx.fillText(moneyShort(f.saco), cSaco, midY)
     ctx.fillStyle = f.resultado > 0.005 ? WIN : f.resultado < -0.005 ? LOSS : NEUTRO
-    ctx.font = "24px 'Anton',Arial,sans-serif"
+    ctx.font = "700 24px 'Khand',Arial,sans-serif"
     ctx.fillText(signed(f.resultado), cRes, midY)
     ry += rowH
   })
