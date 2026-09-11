@@ -10,3 +10,9 @@ dev-dist
 # Capacitor / Android (se regenera con `npx cap add android`)
 android/
 assets/
+
+# La llave para firmar el APK y su contraseña. Nunca a git: quien la tenga puede
+# publicar actualizaciones que los teléfonos aceptarán como si fueran tuyas.
+*.keystore
+*.jks
+keystore.properties

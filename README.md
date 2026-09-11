@@ -131,7 +131,36 @@ npm run apk:sync       # build + npx cap sync android
 cd android && ./gradlew assembleDebug
 ```
 
-El APK sale en `android/app/build/outputs/apk/debug/app-debug.apk`.
+El APK sale en `android/app/build/outputs/apk/debug/app-debug.apk`. Ese es de depuración
+y sirve para probar; el que se reparte es el firmado, abajo.
+
+### El APK firmado
+
+```bash
+npm run apk:release
+```
+
+Sale en `android/app/build/outputs/apk/release/app-release.apk`.
+
+La llave para firmarlo vive en `onlycards.keystore` y su contraseña en
+`keystore.properties`, los dos en la raíz del proyecto y **fuera de git**. Están fuera de
+`android/` a propósito: esa carpeta se regenera con `npx cap add android` y se llevaría la
+llave por delante.
+
+> **Esa llave es irreemplazable.** Android sólo acepta actualizar una app si el APK nuevo
+> viene firmado con la misma llave que la instalación original. Si se pierde, la única
+> salida es que todos desinstalen y vuelvan a instalar. Guarda copia de los dos archivos
+> en algún lugar que no sea sólo esta computadora.
+
+Si `keystore.properties` no está, el proyecto compila igual pero el release sale sin firmar
+y no se puede instalar.
+
+El APK de depuración y el firmado llevan firmas distintas, así que uno no se instala encima
+del otro: Android responde `INSTALL_FAILED_UPDATE_INCOMPATIBLE`. Hay que desinstalar primero.
+
+Al regenerar `android/` se pierden tres cosas que hay que volver a poner: la línea del JDK en
+`gradle.properties`, el bloque de firma en `app/build.gradle` y el nombre `OnlyCards` en
+`app/src/main/res/values/strings.xml`.
 
 **Java: tiene que ser el 21, ni más ni menos.** Capacitor 8 compila contra 21, así que
 un JDK 17 falla con `invalid source release: 21`; y Gradle 8.14 no entiende el JDK 25
