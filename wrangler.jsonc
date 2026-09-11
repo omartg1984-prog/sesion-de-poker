@@ -1,0 +1,15 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+
+  // El nombre tiene que coincidir con el proyecto en Cloudflare.
+  "name": "sesion-de-poker",
+  "compatibility_date": "2026-09-01",
+
+  // No hay código de servidor: esto solo publica los archivos que deja `npm run build`.
+  // "single-page-application" hace que cualquier ruta desconocida sirva index.html,
+  // para que la app cargue igual si alguien entra a una URL con algo pegado atrás.
+  "assets": {
+    "directory": "./dist",
+    "not_found_handling": "single-page-application"
+  }
+}
