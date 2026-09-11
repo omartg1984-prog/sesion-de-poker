@@ -17,6 +17,7 @@ const FIELTRO = [13, 92, 55]
 const FIELTRO_HONDO = [8, 63, 38]
 const ORO = [232, 197, 106]
 const ORO_CLARO = [247, 215, 116]
+const CREMA = [246, 242, 232]
 
 const mezcla = (a, b, t) => a.map((v, i) => Math.round(v + (b[i] - v) * t))
 
@@ -77,22 +78,45 @@ function png(tam, pixel) {
 /* ---- la ficha ---- */
 
 /**
- * Anillos concéntricos de la ficha. `d` es la distancia al centro normalizada
- * (0 en el centro, 1 en el borde de la ficha). Fuera de la ficha devuelve null.
+ * ¿El punto (x, y) cae dentro de una pica? Coordenadas normalizadas a [-1, 1] con la
+ * y hacia abajo. Una pica son dos lóbulos abajo, un triángulo arriba y el tallo.
  */
-function anilloFicha(d, angulo) {
+function enPica(x, y) {
+  const triangulo = y >= -0.66 && y <= 0.14 && Math.abs(x) <= (y + 0.66) * 0.70
+  const loboIzq = Math.hypot(x + 0.30, y - 0.10) <= 0.36
+  const loboDer = Math.hypot(x - 0.30, y - 0.10) <= 0.36
+  // el tallo se abre hacia abajo
+  const tallo = y >= 0.16 && y <= 0.66 && Math.abs(x) <= 0.045 + (y - 0.16) * 0.46
+  return triangulo || loboIzq || loboDer || tallo
+}
+
+/**
+ * Anatomía de la ficha. `d` es la distancia al centro normalizada (0 en el centro,
+ * 1 en el borde). Fuera de la ficha devuelve null.
+ *
+ * Es la misma ficha que dibuja la app: cuerpo, muescas en el canto, anillo punteado
+ * y disco central. En el ícono el centro lleva una pica en vez del valor, porque no
+ * representa una denominación sino a la app entera.
+ */
+function anilloFicha(d, angulo, x, y) {
   if (d > 1) return null
-  if (d > 0.93) return ORO // canto exterior
-  if (d > 0.86) {
-    // 8 muescas de fieltro repartidas en el canto
-    const seg = ((angulo / Math.PI) * 4 + 8) % 1
-    return seg < 0.45 ? FIELTRO_HONDO : ORO
+  if (d > 0.93) return ORO
+  if (d > 0.78) {
+    // 6 muescas de fieltro repartidas en el canto
+    const seg = ((angulo / Math.PI) * 3 + 6) % 1
+    return seg < 0.46 ? FIELTRO_HONDO : ORO
   }
-  if (d > 0.79) return ORO
-  if (d > 0.53) return mezcla(FIELTRO, FIELTRO_HONDO, 0.4)
-  if (d > 0.46) return ORO_CLARO
-  if (d > 0.21) return mezcla(FIELTRO, FIELTRO_HONDO, 0.4)
-  return ORO_CLARO
+  if (d > 0.70) return ORO
+  if (d > 0.66) return CREMA
+  // anillo punteado: fino y espaciado, si no parece engrane
+  if (d > 0.62) {
+    const seg = ((angulo / Math.PI) * 9 + 18) % 1
+    return seg < 0.42 ? ORO : CREMA
+  }
+  // disco central con la pica
+  const px = x / 0.60
+  const py = y / 0.60
+  return enPica(px, py) ? FIELTRO_HONDO : CREMA
 }
 
 /**
@@ -107,7 +131,7 @@ function ficha(tam, proporcion = 1, fondo = 'fieltro') {
     const dx = x - c
     const dy = y - c
     const dist = Math.hypot(dx, dy)
-    const color = anilloFicha(dist / radio, Math.atan2(dy, dx))
+    const color = anilloFicha(dist / radio, Math.atan2(dy, dx), dx / radio, dy / radio)
     if (color) return color
     if (fondo === 'transparente') return [0, 0, 0, 0]
     return mezcla(FIELTRO, FIELTRO_HONDO, Math.min(1, dist / c))
