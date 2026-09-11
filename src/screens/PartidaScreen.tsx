@@ -1,8 +1,9 @@
-import { ArrowLeft, Coins, Lock, UserPlus, Users } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, Coins, Lock, Trash2, UserPlus, Users } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import NumInput from '../components/NumInput'
 import Sheet from '../components/Sheet'
 import { api, leerJson, type ConfigTorneo, type DetallePartida, type Miembro, type Participacion } from '../lib/api'
+import { useRecargarAlVolver } from '../lib/recargar'
 import { conAviso, useApp } from '../store/app'
 import PartidaCash, { PESTANAS_CASH, type PestanaCash } from './partida/PartidaCash'
 import PartidaTorneo, {
@@ -50,6 +51,7 @@ export default function PartidaScreen() {
   const [seleccion, setSeleccion] = useState<Record<string, number>>({})
   const [ocupado, setOcupado] = useState(false)
   const [torneo, setTorneo] = useState<ConfigTorneo>(TORNEO_POR_DEFECTO)
+  const [borrando, setBorrando] = useState(false)
 
   const diferido = useGuardadoDiferido()
 
@@ -69,6 +71,9 @@ export default function PartidaScreen() {
     void cargar()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [partidaId])
+
+  // Otro admin pudo haber tocado la partida desde su teléfono mientras no mirabas.
+  useRecargarAlVolver(() => void cargar())
 
   const colores = useMemo(() => datos?.liga.colores ?? [], [datos])
   const esTorneo = datos?.partida.tipo === 'torneo'
@@ -127,6 +132,14 @@ export default function PartidaScreen() {
     if (r) {
       avisar('Partida cerrada')
       void cargar()
+    }
+  }
+
+  const borrarPartida = async () => {
+    const r = await conAviso(() => api.borrarPartida(partidaId))
+    if (r) {
+      avisar('Partida borrada')
+      volver()
     }
   }
 
@@ -217,6 +230,41 @@ export default function PartidaScreen() {
           Cerrar partida
         </button>
       )}
+
+      {datos.soyAdmin && (
+        <button
+          type="button"
+          className="btn mt-6 bg-loss/10 text-loss hover:bg-loss/16"
+          onClick={() => setBorrando(true)}
+        >
+          <Trash2 size={17} strokeWidth={2.4} />
+          Borrar esta partida
+        </button>
+      )}
+
+      <Sheet abierta={borrando} onCerrar={() => setBorrando(false)} titulo="Borrar la partida">
+        <div className="balance balance-off">
+          <AlertTriangle size={16} strokeWidth={2.4} />
+          <span>
+            Se borra para todos, con lo capturado de los {datos.participaciones.length} jugadores.
+            No se puede deshacer.
+          </span>
+        </div>
+        <p className="mt-0 mb-4 text-[13px] leading-snug text-ink-soft">
+          También sale de la tabla de posiciones de la liga.
+        </p>
+        <button
+          type="button"
+          className="btn mb-2 bg-loss text-white hover:bg-loss/90"
+          onClick={() => void borrarPartida()}
+        >
+          <Trash2 size={17} strokeWidth={2.4} />
+          Sí, borrarla
+        </button>
+        <button type="button" className="btn btn-ghost mb-2" onClick={() => setBorrando(false)}>
+          Mejor no
+        </button>
+      </Sheet>
 
       {/* ---- elegir quiénes jugaron ---- */}
       <Sheet abierta={eligiendo} onCerrar={() => setEligiendo(false)} titulo="¿Quiénes jugaron?">

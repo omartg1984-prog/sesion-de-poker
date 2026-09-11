@@ -1,12 +1,16 @@
 import {
+  AlertTriangle,
   ArrowLeft,
   Banknote,
   CalendarPlus,
   ChevronRight,
   ClipboardCopy,
   Coins,
+  LogOut,
   Shield,
+  Trash2,
   Trophy,
+  UserMinus,
   Users,
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
@@ -15,6 +19,7 @@ import Sheet from '../components/Sheet'
 import { copyText } from '../lib/backup'
 import { api, type Liga, type Miembro, type PartidaResumen, type TablaPosiciones as Tabla, type TipoPartida } from '../lib/api'
 import TablaPosiciones from './liga/TablaPosiciones'
+import { useRecargarAlVolver } from '../lib/recargar'
 import { conAviso, useApp } from '../store/app'
 import type { ChipColor } from '../store/types'
 
@@ -42,6 +47,8 @@ export default function LigaScreen() {
   const [partidas, setPartidas] = useState<PartidaResumen[]>([])
   const [tabla, setTabla] = useState<Tabla | null>(null)
   const [pestana, setPestana] = useState<'partidas' | 'posiciones'>('partidas')
+  const [borrando, setBorrando] = useState(false)
+  const [confirmaNombre, setConfirmaNombre] = useState('')
 
   const [creando, setCreando] = useState(false)
   const [fichas, setFichas] = useState(false)
@@ -74,6 +81,9 @@ export default function LigaScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ligaId])
 
+  // Otro admin pudo haber creado partidas desde su teléfono mientras no mirabas.
+  useRecargarAlVolver(() => void cargar())
+
   const crearPartida = async () => {
     if (ocupado) return
     setOcupado(true)
@@ -103,6 +113,32 @@ export default function LigaScreen() {
   const alternarAdmin = async (m: Miembro) => {
     const r = await conAviso(() => api.cambiarAdminLiga(ligaId, m.id, m.es_admin !== 1))
     if (r) void cargar()
+  }
+
+  const sacar = async (m: Miembro) => {
+    const soyYo = m.id === yo.id
+    const mensaje = soyYo
+      ? '¿Salirte de esta liga? Tus partidas jugadas se quedan en el historial.'
+      : `¿Sacar a ${m.nombre} de la liga? Sus partidas jugadas se quedan en el historial.`
+    if (!window.confirm(mensaje)) return
+    const r = await conAviso(() => api.sacarMiembro(ligaId, m.id))
+    if (r) {
+      if (soyYo) {
+        avisar('Saliste de la liga')
+        irAHome()
+      } else {
+        avisar(`${m.nombre} ya no está en la liga`)
+        void cargar()
+      }
+    }
+  }
+
+  const borrarLiga = async () => {
+    const r = await conAviso(() => api.borrarLiga(ligaId))
+    if (r) {
+      avisar('Liga borrada')
+      irAHome()
+    }
   }
 
   if (!liga) {
@@ -235,6 +271,64 @@ export default function LigaScreen() {
         </button>
       </div>
 
+      {liga.creada_por === yo.id && (
+        <button
+          type="button"
+          className="btn mt-6 bg-loss/10 text-loss hover:bg-loss/16"
+          onClick={() => {
+            setConfirmaNombre('')
+            setBorrando(true)
+          }}
+        >
+          <Trash2 size={17} strokeWidth={2.4} />
+          Borrar esta liga
+        </button>
+      )}
+
+      <Sheet abierta={borrando} onCerrar={() => setBorrando(false)} titulo="Borrar la liga">
+        <div className="balance balance-off">
+          <AlertTriangle size={16} strokeWidth={2.4} />
+          <span>
+            Esto borra {partidas.length} {partidas.length === 1 ? 'partida' : 'partidas'} y el
+            historial de {miembros.length} {miembros.length === 1 ? 'jugador' : 'jugadores'}, no
+            solo el tuyo. No se puede deshacer.
+          </span>
+        </div>
+
+        <p className="mt-0 mb-2 text-[13px] leading-snug text-ink-soft">
+          Si solo te quieres salir, usa el botón de salir en la lista de jugadores; la liga sigue
+          para los demás.
+        </p>
+
+        <label className="mb-4 block">
+          <span className="field-label">
+            Escribe <b className="text-ink">{liga.nombre}</b> para confirmar
+          </span>
+          <input
+            type="text"
+            value={confirmaNombre}
+            onChange={(e) => setConfirmaNombre(e.target.value)}
+            autoCapitalize="none"
+            autoCorrect="off"
+            aria-label="Nombre de la liga para confirmar"
+            className="mt-1 w-full rounded-xl border border-paper-line bg-white px-3 py-3 text-base font-semibold text-ink outline-none focus:border-loss"
+          />
+        </label>
+
+        <button
+          type="button"
+          className="btn mb-2 bg-loss text-white hover:bg-loss/90 disabled:opacity-40"
+          disabled={confirmaNombre.trim() !== liga.nombre}
+          onClick={() => void borrarLiga()}
+        >
+          <Trash2 size={17} strokeWidth={2.4} />
+          Borrar la liga y todo su historial
+        </button>
+        <button type="button" className="btn btn-ghost mb-2" onClick={() => setBorrando(false)}>
+          Mejor no
+        </button>
+      </Sheet>
+
       {/* ---- nueva partida ---- */}
       <Sheet abierta={creando} onCerrar={() => setCreando(false)} titulo="Nueva partida">
         <span className="field-label">Tipo</span>
@@ -324,6 +418,16 @@ export default function LigaScreen() {
               >
                 <Shield size={15} strokeWidth={2.6} />
               </button>
+              {(soyAdmin || m.id === yo.id) && (
+                <button
+                  type="button"
+                  onClick={() => void sacar(m)}
+                  aria-label={m.id === yo.id ? 'Salirme de la liga' : `Sacar a ${m.nombre} de la liga`}
+                  className="flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-lg border-none bg-ink/8 text-ink-soft/55 transition-colors hover:bg-loss/12 hover:text-loss active:scale-95"
+                >
+                  {m.id === yo.id ? <LogOut size={15} strokeWidth={2.5} /> : <UserMinus size={15} strokeWidth={2.5} />}
+                </button>
+              )}
             </li>
           ))}
         </ul>

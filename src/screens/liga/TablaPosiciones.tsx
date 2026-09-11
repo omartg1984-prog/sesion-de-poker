@@ -82,6 +82,7 @@ export default function TablaPosiciones({ tabla }: { tabla: Tabla | null }) {
                 <b className="block truncate text-[15px] text-ink">{p.nombre}</b>
                 <span className="block text-xs text-ink-soft">
                   {p.partidas} {p.partidas === 1 ? 'partida' : 'partidas'} · ganó {p.ganadas}
+                  {!p.esMiembro && ' · ya no está'}
                 </span>
               </span>
 

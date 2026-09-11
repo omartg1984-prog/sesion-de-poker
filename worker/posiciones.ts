@@ -44,6 +44,8 @@ export interface Posicion {
   peor: number
   /** Partidas en las que terminó con saldo a favor. */
   ganadas: number
+  /** `false` si ya se salió (o lo sacaron) pero jugó partidas que siguen contando. */
+  esMiembro: boolean
 }
 
 const num = (v: unknown) => {
@@ -120,6 +122,7 @@ export async function calcularPosiciones(
         mejor: 0,
         peor: 0,
         ganadas: 0,
+        esMiembro: true,
       }
       acumulado.set(par.usuario_id, p)
     }
@@ -172,6 +175,16 @@ export async function calcularPosiciones(
       }
     }
   }
+
+  // Quien se salió de la liga sigue en la tabla —esas partidas se jugaron— pero se
+  // marca, para que no parezca que sigue dentro.
+  const { results: socios } = await env.DB.prepare(
+    'SELECT usuario_id FROM miembros WHERE liga_id = ?',
+  )
+    .bind(ligaId)
+    .all<{ usuario_id: string }>()
+  const dentro = new Set(socios.map((m) => m.usuario_id))
+  for (const p of acumulado.values()) p.esMiembro = dentro.has(p.usuarioId)
 
   const posiciones = [...acumulado.values()].sort((a, b) => b.balance - a.balance)
   return { posiciones, partidasContadas: partidas.length, partidasAbiertas: abiertas?.n ?? 0 }

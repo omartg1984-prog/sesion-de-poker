@@ -53,6 +53,7 @@ const patch = <T>(ruta: string, cuerpo: unknown) =>
   pedir<T>(ruta, { method: 'PATCH', body: JSON.stringify(cuerpo) })
 const put = <T>(ruta: string, cuerpo: unknown) =>
   pedir<T>(ruta, { method: 'PUT', body: JSON.stringify(cuerpo) })
+const borrar = <T>(ruta: string) => pedir<T>(ruta, { method: 'DELETE' })
 
 /* ---------- formas que devuelve el servidor ---------- */
 
@@ -140,6 +141,8 @@ export interface Posicion {
   peor: number
   /** Partidas en las que terminó con saldo a favor. */
   ganadas: number
+  /** `false` si ya no está en la liga pero jugó partidas que siguen contando. */
+  esMiembro: boolean
 }
 
 export interface TablaPosiciones {
@@ -189,6 +192,9 @@ export const api = {
     patch<{ ok: true }>(`ligas/${id}`, cambios),
   cambiarAdminLiga: (ligaId: string, usuarioId: string, esAdmin: boolean) =>
     post<{ ok: true }>(`ligas/${ligaId}/admin`, { usuarioId, esAdmin }),
+  borrarLiga: (id: string) => borrar<{ ok: true }>(`ligas/${id}`),
+  sacarMiembro: (ligaId: string, usuarioId: string) =>
+    borrar<{ ok: true }>(`ligas/${ligaId}/miembros/${usuarioId}`),
 
   posiciones: (ligaId: string) => pedir<TablaPosiciones>(`ligas/${ligaId}/posiciones`),
 
@@ -199,6 +205,7 @@ export const api = {
     datos: { fecha: string; nombre?: string; tipo: TipoPartida; torneo?: ConfigTorneo },
   ) => post<{ partida: PartidaResumen }>(`ligas/${ligaId}/partidas`, datos),
   partida: (id: string) => pedir<DetallePartida>(`partidas/${id}`),
+  borrarPartida: (id: string) => borrar<{ ok: true }>(`partidas/${id}`),
   guardarPartida: (
     id: string,
     cambios: { estado?: 'abierta' | 'cerrada'; nombre?: string; fecha?: string; torneo?: ConfigTorneo },

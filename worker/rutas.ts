@@ -343,6 +343,53 @@ export async function rutas(
         return json({ ok: true })
       }
 
+      // DELETE /api/ligas/:id — borra la liga con todo su historial
+      if (partes.length === 2 && metodo === 'DELETE') {
+        const liga = await env.DB.prepare('SELECT creada_por FROM ligas WHERE id = ?')
+          .bind(ligaId)
+          .first<{ creada_por: string }>()
+        if (!liga) return json({ error: 'Liga no encontrada' }, 404)
+        // Borrar una liga destruye las partidas de TODOS sus miembros, no solo las
+        // propias: por eso no basta ser admin de liga, tiene que ser quien la creó.
+        if (liga.creada_por !== yo.id && yo.es_admin_app !== 1)
+          return json({ error: 'Solo quien creó la liga puede borrarla' }, 403)
+
+        await env.DB.prepare('DELETE FROM ligas WHERE id = ?').bind(ligaId).run()
+        return json({ ok: true })
+      }
+
+      // DELETE /api/ligas/:id/miembros/:usuarioId — sacar a alguien, o salirse uno mismo
+      if (partes[2] === 'miembros' && partes[3] && metodo === 'DELETE') {
+        const objetivo = partes[3]
+        const soyYo = objetivo === yo.id
+        if (!soyYo && !esAdminLiga)
+          return json({ error: 'Solo un admin de la liga puede sacar a alguien' }, 403)
+
+        const suya = await membresia(env, ligaId, objetivo)
+        if (!suya) return json({ error: 'Esa persona no está en la liga' }, 404)
+
+        // La liga no se puede quedar sin nadie que la administre.
+        if (suya.es_admin === 1) {
+          const { total } = (await env.DB.prepare(
+            'SELECT COUNT(*) AS total FROM miembros WHERE liga_id = ? AND es_admin = 1',
+          )
+            .bind(ligaId)
+            .first<{ total: number }>())!
+          if (total <= 1)
+            return json(
+              { error: soyYo ? 'Eres el único admin: nombra a otro antes de salirte' : 'La liga necesita al menos un admin' },
+              409,
+            )
+        }
+
+        // Se borra la membresía, no las participaciones: esas partidas se jugaron y
+        // su historial sigue siendo cierto.
+        await env.DB.prepare('DELETE FROM miembros WHERE liga_id = ? AND usuario_id = ?')
+          .bind(ligaId, objetivo)
+          .run()
+        return json({ ok: true })
+      }
+
       // GET /api/ligas/:id/posiciones — tabla acumulada de la liga
       if (partes[2] === 'posiciones' && metodo === 'GET') {
         return json(await calcularPosiciones(env, ligaId))
@@ -419,6 +466,12 @@ export async function rutas(
         participaciones,
         soyAdmin: esAdminLiga,
       })
+    }
+
+    if (partes.length === 2 && metodo === 'DELETE') {
+      if (!esAdminLiga) return json({ error: 'Solo un admin de la liga puede borrar la partida' }, 403)
+      await env.DB.prepare('DELETE FROM partidas WHERE id = ?').bind(partidaId).run()
+      return json({ ok: true })
     }
 
     if (partes.length === 2 && metodo === 'PATCH') {
