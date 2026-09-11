@@ -116,6 +116,40 @@ limpia todos. Abajo ves el inventario usado por color y un aviso en rojo si te p
 Todo se guarda solo en `localStorage` en cada cambio. En **Guardar / Cargar datos** puedes
 exportar un respaldo `.json`, importarlo en otro dispositivo, o empezar una sesión nueva.
 
+## El APK de Android
+
+El APK **no lleva la app adentro**: abre el sitio ya publicado en Cloudflare
+(`capacitor.config.ts` → `server.url`).
+
+Tiene que ser así. La app pide todo con rutas relativas (`fetch('/api/...')`) y la
+sesión viaja en una cookie del mismo sitio. Si los archivos vivieran dentro del APK,
+el WebView correría en el origen `https://localhost` y `/api/entrar` daría contra los
+propios archivos empaquetados, donde no hay servidor: no se podría ni entrar.
+
+La consecuencia buena es que **una actualización no obliga a reinstalar**. Se sube el
+cambio a Cloudflare y a todos les llega la próxima vez que abren la app. El APK sólo
+se vuelve a repartir si cambia algo del cascarón: el ícono, el nombre, los permisos o
+la configuración de Capacitor.
+
+```bash
+npm run apk:preparar   # íconos y splash desde assets/logo.jpg
+npm run apk:sync       # build + npx cap sync android
+cd android && ./gradlew assembleDebug
+```
+
+El APK sale en `android/app/build/outputs/apk/debug/app-debug.apk`.
+
+**Java:** Capacitor 8 compila contra 21. Si el `java` del sistema es más viejo, Gradle
+falla con `invalid source release: 21`. La salida es apuntarlo al JDK que trae Android
+Studio, agregando esto a `android/gradle.properties`:
+
+```properties
+org.gradle.java.home=C:/Program Files/Android/Android Studio/jbr
+```
+
+Ojo: `android/` está en `.gitignore` porque se regenera con `npx cap add android`, así
+que esa línea hay que volver a ponerla si se regenera el proyecto.
+
 ## Estructura
 
 ```
@@ -139,4 +173,7 @@ public/               íconos de la PWA
 ```
 
 Stack: Vite + React + TypeScript, Tailwind CSS v4, Zustand, `vite-plugin-pwa`, Vitest.
-Sin backend, sin cuentas, sin analytics.
+Backend en Cloudflare Workers + D1, con cuentas por usuario y PIN.
+
+> **Nota:** el bloque «Estructura» de arriba quedó del diseño viejo, de cuando
+> todo vivía en el navegador. Está pendiente rehacerlo.
