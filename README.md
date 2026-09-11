@@ -139,16 +139,23 @@ cd android && ./gradlew assembleDebug
 
 El APK sale en `android/app/build/outputs/apk/debug/app-debug.apk`.
 
-**Java:** Capacitor 8 compila contra 21. Si el `java` del sistema es más viejo, Gradle
-falla con `invalid source release: 21`. La salida es apuntarlo al JDK que trae Android
-Studio, agregando esto a `android/gradle.properties`:
+**Java: tiene que ser el 21, ni más ni menos.** Capacitor 8 compila contra 21, así que
+un JDK 17 falla con `invalid source release: 21`; y Gradle 8.14 no entiende el JDK 25
+que trae Android Studio, así que ese falla con `Unsupported class file major version 69`.
+Se resuelve apuntando Gradle al 21 en `android/gradle.properties`:
 
 ```properties
-org.gradle.java.home=C:/Program Files/Android/Android Studio/jbr
+org.gradle.java.home=C:/Program Files/Eclipse Adoptium/jdk-21.0.12.101-hotspot
 ```
 
 Ojo: `android/` está en `.gitignore` porque se regenera con `npx cap add android`, así
 que esa línea hay que volver a ponerla si se regenera el proyecto.
+
+**Compartir y guardar dentro del APK** pasan por `@capacitor/share` y
+`@capacitor/filesystem` (ver `src/lib/nativo.ts`). El WebView de Android no trae
+`navigator.share`, y una descarga que arranca la página se pierde sin avisar. El puente
+nativo sí funciona aunque la app venga de un servidor remoto, pero los plugins se
+registran del lado nativo: **agregar un plugin obliga a repartir un APK nuevo**.
 
 ## Estructura
 
