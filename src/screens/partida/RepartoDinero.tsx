@@ -1,8 +1,10 @@
 import { Check, HandCoins, Wand2 } from 'lucide-react'
 import NumInput from '../../components/NumInput'
+import ShareBlock from '../../components/ShareBlock'
 import { EPS, money, num } from '../../lib/money'
 import { repartirRedondeado } from '../../lib/reparto'
 import type { Participacion } from '../../lib/api'
+import type { DatosTabla } from '../../lib/imagenTablas'
 
 /*
  * El reparto del dinero al final de la noche.
@@ -20,6 +22,8 @@ interface Props {
   totalMesa: number
   redondeo: number
   puedeEditar: boolean
+  titulo: string
+  subtitulo: string
   onRedondeo: (paso: number) => void
   onPago: (id: string, pagado: number | null) => void
 }
@@ -29,6 +33,8 @@ export default function RepartoDinero({
   totalMesa,
   redondeo,
   puedeEditar,
+  titulo,
+  subtitulo,
   onRedondeo,
   onPago,
 }: Props) {
@@ -42,6 +48,40 @@ export default function RepartoDinero({
   const entregado = filas.reduce((a, f) => a + num(f.p.pagado), 0)
   const enLaMesa = totalMesa - entregado
 
+  /* La misma tabla que se ve, para mandarla al chat y que nadie pregunte después
+     cuánto le tocaba. */
+  const datosImagen: DatosTabla = {
+    tipo: 'tabla',
+    titulo,
+    subtitulo,
+    gorro: '♠ EL REPARTO DEL DINERO',
+    columnas: ['Jugador', 'Le toca', 'Se le dio'],
+    fotos: filas.map((f) => f.p.foto),
+    filas: filas.map((f) => [
+      f.nombre,
+      money(f.leToca),
+      f.p.pagado === null ? '—' : money(f.p.pagado),
+    ]),
+    pie:
+      Math.abs(enLaMesa) < EPS
+        ? 'Se repartió todo'
+        : enLaMesa > 0
+          ? `Quedan ${money(enLaMesa)} en la mesa`
+          : `Se entregaron ${money(-enLaMesa)} de más`,
+  }
+
+  const texto = () => {
+    const lineas = [`♠ ${titulo} · ${subtitulo}`, '']
+    filas.forEach((f) =>
+      lineas.push(
+        `• ${f.nombre}: le tocan ${money(f.leToca)}` +
+          (f.p.pagado === null ? '' : ` · se le dieron ${money(f.p.pagado)}`),
+      ),
+    )
+    lineas.push('', datosImagen.pie)
+    return lineas.join('\n')
+  }
+
   const aplicarSugerido = () => {
     filas.forEach((f, i) => onPago(f.p.id, sugerido.pagos[i]))
   }
@@ -52,8 +92,8 @@ export default function RepartoDinero({
         <span>El reparto del dinero</span>
       </p>
       <p className="mt-0 mb-3 text-[13px] leading-snug text-ink-soft">
-        Lo que le toca a cada quien sale de sus fichas, pero casi nunca hay morralla para
-        pagarlo exacto. Apunta lo que le diste de verdad y abajo ves qué queda en la mesa.
+        Lo que le toca a cada quien sale de sus fichas, pero casi nunca hay morralla para pagarlo
+        exacto. Apunta lo que le diste de verdad y abajo ves qué queda en la mesa.
       </p>
 
       {puedeEditar && (
@@ -101,9 +141,7 @@ export default function RepartoDinero({
                   <td className="px-1 py-2 text-right text-ink-soft">
                     {money(f.leToca)}
                     {Math.abs(dif) > EPS && (
-                      <span
-                        className={`block text-[11px] ${dif > 0 ? 'text-win' : 'text-loss'}`}
-                      >
+                      <span className={`block text-[11px] ${dif > 0 ? 'text-win' : 'text-loss'}`}>
                         {dif > 0 ? '+' : '−'}
                         {money(Math.abs(dif))}
                       </span>
@@ -153,10 +191,17 @@ export default function RepartoDinero({
           </div>
         )
       ) : (
-        <p className="mt-3 mb-0 text-center text-[12px] text-ink-soft">
+        <p className="mt-3 mb-2 text-center text-[12px] text-ink-soft">
           Todavía no se reparte el dinero.
-          {sugerido.sobra > EPS && ` Con billetes de $${redondeo} sobrarían ${money(sugerido.sobra)}.`}
+          {sugerido.sobra > EPS &&
+            ` Con billetes de $${redondeo} sobrarían ${money(sugerido.sobra)}.`}
         </p>
+      )}
+
+      {yaSeRepartio && (
+        <div className="mt-3">
+          <ShareBlock datos={datosImagen} texto={texto} alt="Reparto del dinero" />
+        </div>
       )}
     </section>
   )

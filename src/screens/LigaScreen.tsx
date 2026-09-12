@@ -442,7 +442,9 @@ export default function LigaScreen() {
           />
         </label>
 
-        {tipo === 'torneo' && <PasosTorneo torneo={torneoNuevo} onCambiar={setTorneoNuevo} />}
+        {tipo === 'torneo' && (
+          <PasosTorneo torneo={torneoNuevo} colores={colores} onCambiar={setTorneoNuevo} />
+        )}
 
         <button
           type="button"

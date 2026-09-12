@@ -1,15 +1,14 @@
-import { AlertTriangle, Check, Plus, X } from 'lucide-react'
+import { AlertTriangle } from 'lucide-react'
 import Medalla from '../../components/Medalla'
 import SelectorJugador from '../../components/SelectorJugador'
-import MoneyInput from '../../components/MoneyInput'
-import NumInput from '../../components/NumInput'
 import ShareBlock from '../../components/ShareBlock'
 import Stepper from '../../components/Stepper'
 import { EPS, money, num, signed } from '../../lib/money'
 import type { DatosTorneo } from '../../lib/shareImage'
 import type { ConfigTorneo, Participacion } from '../../lib/api'
-import { PAYOUT_PRESETS } from '../../store/defaults'
+import { coloresDelTorneo } from '../../lib/torneo'
 import Estructura from './Estructura'
+import PasosTorneo from '../liga/PasosTorneo'
 import Reloj from './Reloj'
 import { leerJson } from '../../lib/api'
 import { RELOJ_PARADO, type Estructura as Tabla, type RelojTorneo } from '../../lib/torneo'
@@ -79,7 +78,9 @@ export default function PartidaTorneo({
   const Banner = ({ titulo }: { titulo: string }) => (
     <div className="mb-3.5 rounded-xl bg-gradient-to-br from-[#2a1016] to-[#100e12] px-4 py-3.5 text-center ring-1 ring-marca/25">
       <div className="text-[10px] tracking-[1px] text-tiza-suave uppercase">{titulo}</div>
-      <div className="mt-0.5 font-display text-[34px] font-bold text-marca-alta">{money(bolsa)}</div>
+      <div className="mt-0.5 font-display text-[34px] font-bold text-marca-alta">
+        {money(bolsa)}
+      </div>
     </div>
   )
 
@@ -109,112 +110,18 @@ export default function PartidaTorneo({
 
         <section className="panel">
           <p className="panel-title">
-            <span>Costos</span>
+            <span>Costos y fichas</span>
           </p>
-          <p className="mt-0 mb-3 text-[13px] leading-snug text-ink-soft">
-            La entrada es igual para todos. Recompras y add-ons suman a la bolsa.
-          </p>
-          <MoneyInput
-            label="Entrada"
-            value={torneo.buyIn}
-            onChange={(v) => puedeEditar && cambiarTorneo({ ...torneo, buyIn: v })}
-          />
-          <MoneyInput
-            label="Recompra"
-            value={torneo.rebuyPrice}
-            onChange={(v) => puedeEditar && cambiarTorneo({ ...torneo, rebuyPrice: v })}
-          />
-          <MoneyInput
-            label="Add-on"
-            value={torneo.addOnPrice}
-            onChange={(v) => puedeEditar && cambiarTorneo({ ...torneo, addOnPrice: v })}
-          />
-        </section>
-
-        <section className="panel">
-          <p className="panel-title">
-            <span>Premios por lugar</span>
-          </p>
-
-          {puedeEditar && (
-            <div className="mb-3 flex flex-wrap gap-2">
-              {PAYOUT_PRESETS.map((pr) => (
-                <button
-                  key={pr.label}
-                  type="button"
-                  onClick={() => cambiarTorneo({ ...torneo, payouts: pr.pcts.map((pct) => ({ pct })) })}
-                  className="cursor-pointer rounded-full border border-paper-line bg-white px-2.5 py-1.5 text-xs font-semibold text-ink-soft hover:border-marca hover:text-ink"
-                >
-                  {pr.label}
-                </button>
-              ))}
-            </div>
+          {/* El mismo formulario que al crear la partida: lo que se define ahí se
+              corrige aquí, sin dos versiones del mismo campo. */}
+          {puedeEditar ? (
+            <PasosTorneo torneo={torneo} colores={colores} onCambiar={cambiarTorneo} />
+          ) : (
+            <p className="m-0 text-[13px] text-ink-soft">
+              Entrada {money(torneo.buyIn)} · recompra {money(torneo.rebuyPrice)} · add-on{' '}
+              {money(torneo.addOnPrice)}
+            </p>
           )}
-
-          {torneo.payouts.map((po, i) => (
-            <div
-              key={i}
-              className="mb-2 flex items-center gap-2 rounded-[10px] border border-paper-line bg-paper-soft px-2.5 py-2"
-            >
-              <span className="min-w-[46px] font-display text-base font-bold text-ink">{i + 1}º</span>
-              <div className="field-box w-[86px] shrink-0">
-                <NumInput
-                  value={po.pct}
-                  mode="decimal"
-                  showZero
-                  aria-label={`Porcentaje del lugar ${i + 1}`}
-                  onChange={(v) =>
-                    puedeEditar &&
-                    cambiarTorneo({
-                      ...torneo,
-                      payouts: torneo.payouts.map((x, xi) => (xi === i ? { pct: v } : x)),
-                    })
-                  }
-                />
-                <span className="font-bold text-ink-soft">%</span>
-              </div>
-              <span className="ml-auto font-display text-[17px] font-bold text-win">
-                {money(premioDe(i, ps, torneo))}
-              </span>
-              {puedeEditar && torneo.payouts.length > 1 && (
-                <button
-                  type="button"
-                  aria-label={`Quitar el lugar ${i + 1}`}
-                  onClick={() =>
-                    cambiarTorneo({ ...torneo, payouts: torneo.payouts.filter((_, xi) => xi !== i) })
-                  }
-                  className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-lg border-none bg-ink/8 text-ink-soft hover:bg-loss/12 hover:text-loss"
-                >
-                  <X size={14} strokeWidth={2.5} />
-                </button>
-              )}
-            </div>
-          ))}
-
-          {puedeEditar && (
-            <button
-              type="button"
-              className="btn-dashed mb-3 flex items-center justify-center gap-1.5"
-              onClick={() => cambiarTorneo({ ...torneo, payouts: [...torneo.payouts, { pct: 0 }] })}
-            >
-              <Plus size={15} strokeWidth={2.6} />
-              Agregar lugar
-            </button>
-          )}
-
-          <div className={`balance ${cuadra ? 'balance-ok' : 'balance-off'} mb-0`}>
-            {cuadra ? (
-              <>
-                <Check size={16} strokeWidth={2.6} />
-                Suma: 100%
-              </>
-            ) : (
-              <>
-                <AlertTriangle size={16} strokeWidth={2.4} />
-                Suma: {suma}% — debe sumar 100%
-              </>
-            )}
-          </div>
         </section>
       </>
     )
@@ -222,8 +129,20 @@ export default function PartidaTorneo({
 
   /* ---- jugadores: recompras y add-ons ---- */
   if (pestana === 'jugadores') {
-    /* Todos arrancan con el mismo stack: el costo de la entrada. */
-    const reparto = calcularReparto(ps, colores, () => num(torneo.buyIn))
+    /*
+     * En torneo las fichas no son dinero: se reparten los puntos del stack con los
+     * valores de esa noche, y las recompras y add-ons suman los suyos. Sin `stack`
+     * configurado se cae al comportamiento viejo, que es lo que tienen los torneos
+     * creados antes de que esto existiera.
+     */
+    const coloresTorneo = coloresDelTorneo(colores, torneo.valores)
+    const stack = num(torneo.stack) || num(torneo.buyIn)
+    const reparto = calcularReparto(
+      ps,
+      coloresTorneo,
+      (p) =>
+        stack + num(p.rebuys) * num(torneo.rebuyChips) + num(p.addons) * num(torneo.addOnChips),
+    )
     return (
       <>
         <Banner titulo="Bolsa acumulada" />
@@ -260,7 +179,7 @@ export default function PartidaTorneo({
               return fila ? (
                 <FichasDelJugador
                   fila={fila}
-                  colores={colores}
+                  colores={coloresTorneo}
                   puedeEditar={puedeEditar}
                   tocar={tocar}
                 />
@@ -269,7 +188,7 @@ export default function PartidaTorneo({
           </section>
         ))}
 
-        <InventarioUsado reparto={reparto} colores={colores} />
+        <InventarioUsado reparto={reparto} colores={coloresTorneo} />
       </>
     )
   }
@@ -309,10 +228,17 @@ export default function PartidaTorneo({
   }
 
   const texto = () => {
-    const lineas = [`🏆 ${datos.liga.nombre} · ${datos.partida.nombre || datos.partida.fecha}`, '', `Bolsa: ${money(bolsa)}`, '']
+    const lineas = [
+      `🏆 ${datos.liga.nombre} · ${datos.partida.nombre || datos.partida.fecha}`,
+      '',
+      `Bolsa: ${money(bolsa)}`,
+      '',
+    ]
     torneo.payouts.forEach((po, i) => {
       const g = ps.find((p) => p.lugar === i + 1)
-      lineas.push(`${i + 1}º (${num(po.pct)}%): ${money(premioDe(i, ps, torneo))}${g ? ` — ${g.nombre}` : ''}`)
+      lineas.push(
+        `${i + 1}º (${num(po.pct)}%): ${money(premioDe(i, ps, torneo))}${g ? ` — ${g.nombre}` : ''}`,
+      )
     })
     return lineas.join('\n')
   }
@@ -361,7 +287,10 @@ export default function PartidaTorneo({
           const lugar = i + 1
           const ganador = ps.find((p) => p.lugar === lugar)
           return (
-            <div key={i} className="mb-2.5 rounded-xl border border-paper-line bg-paper-soft px-3 py-2.5">
+            <div
+              key={i}
+              className="mb-2.5 rounded-xl border border-paper-line bg-paper-soft px-3 py-2.5"
+            >
               <b className="mb-2 flex items-center gap-1.5 text-sm text-ink">
                 <Medalla lugar={lugar} size={15} />
                 {lugar}º · {num(po.pct)}% ·{' '}

@@ -17,7 +17,8 @@ import {
 } from './lienzo'
 
 /*
- * Las dos tablas compartibles: el acumulado de la liga y los números de una noche.
+ * Las tablas compartibles: el acumulado de la liga, los números de una noche, y un
+ * molde genérico para cualquier otra (el reparto de fichas, el del dinero).
  *
  * Reusan el fieltro, el marco dorado y la paleta de la imagen de resultados, para que
  * todo lo que sale de la app al chat se vea de la misma familia.
@@ -212,6 +213,95 @@ export async function dibujarLiga(d: DatosLiga): Promise<HTMLCanvasElement> {
   ctx.fillStyle = 'rgba(255,255,255,.5)'
   ctx.font = "400 18px 'Inter',Arial,sans-serif"
   ctx.fillText('♠ OnlyCards', W - pad, ry + 46)
+
+  return cv
+}
+
+/* ---------- una tabla cualquiera ---------- */
+
+/*
+ * El molde genérico: recibe encabezados y celdas ya formateadas y las dibuja con el
+ * mismo marco rojo que el resto. Existe para que cualquier tabla de la app se pueda
+ * mandar al chat sin escribir un dibujo nuevo cada vez.
+ */
+export interface DatosTabla {
+  tipo: 'tabla'
+  titulo: string
+  subtitulo: string
+  /** La línea chica de hasta arriba, en rojo. */
+  gorro: string
+  columnas: string[]
+  /** Celdas ya con su formato: la imagen no calcula nada. */
+  filas: string[][]
+  /** Foto de cada fila, para la primera columna. */
+  fotos?: (string | null)[]
+  pie: string
+}
+
+export async function dibujarTabla(d: DatosTabla): Promise<HTMLCanvasElement> {
+  const caras = await cargarImagenes(d.fotos ?? d.filas.map(() => null))
+  const W = 1000
+  const pad = 44
+  const headerH = 176
+  const theadH = 52
+  const rowH = 58
+  const footerH = 92
+  const H = headerH + theadH + rowH * Math.max(d.filas.length, 1) + footerH + pad
+
+  const { cv, ctx } = makeCanvas(W, H)
+  pintarMesa(ctx, W, H, d.titulo, d.subtitulo, d.gorro)
+
+  /* La primera columna lleva el nombre y va a la izquierda; las demás son números y
+     van a la derecha, que es como se leen las cifras. */
+  const colName = pad + 26
+  const anchoNombre = 300
+  const restantes = d.columnas.length - 1
+  const sobra = W - pad - (colName + anchoNombre)
+  const paso = restantes > 0 ? sobra / restantes : 0
+  const xDe = (i: number) => (i === 0 ? colName : colName + anchoNombre + paso * i)
+
+  ctx.font = "600 16px 'Inter',Arial,sans-serif"
+  ctx.fillStyle = 'rgba(255,255,255,.65)'
+  d.columnas.forEach((c, i) => {
+    ctx.textAlign = i === 0 ? 'left' : 'right'
+    ctx.fillText(c.toUpperCase(), xDe(i), headerH + theadH / 2 + 5)
+  })
+  lineaTenue(ctx, pad, W - pad, headerH + theadH)
+
+  let ry = headerH + theadH
+  d.filas.forEach((fila, i) => {
+    if (i % 2 === 1) {
+      ctx.fillStyle = 'rgba(255,255,255,.05)'
+      roundRect(ctx, pad - 6, ry + 3, W - 2 * pad + 12, rowH - 6, 10)
+      ctx.fill()
+    }
+    const midY = ry + rowH / 2 + 6
+
+    const cara = caras[i] ?? null
+    let nombreX = colName
+    if (d.fotos) {
+      dibujarAvatar(ctx, cara, fila[0] ?? '', colName + 16, ry + rowH / 2, 17)
+      nombreX = colName + 42
+    }
+
+    fila.forEach((celda, c) => {
+      ctx.textAlign = c === 0 ? 'left' : 'right'
+      ctx.fillStyle = '#ffffff'
+      ctx.font = c === 0 ? "600 23px 'Khand',Arial,sans-serif" : "500 21px 'Inter',Arial,sans-serif"
+      ctx.fillText(c === 0 ? ellipsis(celda, 16) : celda, c === 0 ? nombreX : xDe(c), midY)
+    })
+    ry += rowH
+  })
+
+  lineaTenue(ctx, pad, W - pad, ry + 8)
+  ctx.textAlign = 'left'
+  ctx.fillStyle = MARCA
+  ctx.font = "600 20px 'Inter',Arial,sans-serif"
+  ctx.fillText(d.pie, colName, ry + 44)
+  ctx.textAlign = 'right'
+  ctx.fillStyle = 'rgba(255,255,255,.5)'
+  ctx.font = "400 18px 'Inter',Arial,sans-serif"
+  ctx.fillText('♠ OnlyCards', W - pad, ry + 44)
 
   return cv
 }

@@ -252,3 +252,57 @@ export function reloj(segundos: number): string {
   const dosDigitos = (n: number) => String(n).padStart(2, '0')
   return h > 0 ? `${h}:${dosDigitos(m)}:${dosDigitos(seg)}` : `${m}:${dosDigitos(seg)}`
 }
+
+/*
+ * Las fichas de un torneo no son dinero.
+ *
+ * En cash la ficha verde vale $25 y punto: el que la tiene tiene veinticinco pesos. En
+ * torneo pagas $500 de entrada y recibes un stack de puntos que no se cambian por nada
+ * hasta que el torneo acaba y se reparte la bolsa. Los mismos plásticos valen otra cosa
+ * esa noche, y tienen que valer otra cosa: con denominaciones de a peso no alcanzan las
+ * fichas para stacks de mil, y con ciegas de $5 nadie puede pagar una ciega de 25.
+ *
+ * Por eso el torneo trae sus propios valores por color, y la ficha más chica vale lo que
+ * vale la ciega chica del primer nivel: cualquier ficha por debajo de eso no se podría
+ * usar para nada.
+ */
+
+/** Valor de cada color dentro del torneo, por `key` de color. */
+export type ValoresTorneo = Record<string, number>
+
+/*
+ * La escalera de un juego de torneo de verdad: con unidad 25 sale 25 / 100 / 500 /
+ * 1000 / 5000, que es el set que vende cualquier tienda. Los saltos no son potencias
+ * exactas a propósito —hay un ×4, un ×5 y un ×2— porque así se arma cualquier cantidad
+ * con pocas fichas y nadie se queda con denominaciones raras tipo 125.
+ */
+const ESCALERA = [1, 4, 20, 40, 200, 1000]
+
+/**
+ * Reparte denominaciones entre los colores: el más barato en dinero se queda con la más
+ * baja del torneo.
+ *
+ * Se respeta el orden de precio para que nadie se confunda en la mesa: si en cash la
+ * blanca es la de menos valor, en torneo también.
+ */
+export function asignarValores(
+  colores: { key: string; value: number }[],
+  unidad: number,
+): ValoresTorneo {
+  const orden = [...colores].sort((a, b) => (Number(a.value) || 0) - (Number(b.value) || 0))
+  const valores: ValoresTorneo = {}
+  orden.forEach((c, i) => {
+    const paso = ESCALERA[i] ?? ESCALERA[ESCALERA.length - 1] * 5 ** (i - ESCALERA.length + 1)
+    valores[c.key] = Math.max(1, Math.round(unidad * paso))
+  })
+  return valores
+}
+
+/** Los colores de la liga, pero valiendo lo que valen esa noche. */
+export function coloresDelTorneo<T extends { key: string; value: number }>(
+  colores: T[],
+  valores: ValoresTorneo | undefined,
+): T[] {
+  if (!valores) return colores
+  return colores.map((c) => (valores[c.key] ? { ...c, value: valores[c.key] } : c))
+}

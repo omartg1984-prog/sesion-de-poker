@@ -1,6 +1,13 @@
 import { moneyShort, signed } from './money'
 import { compartirArchivoNativo, esNativo, guardarArchivoNativo } from './nativo'
-import { dibujarLiga, dibujarNumeros, type DatosLiga, type DatosNumeros } from './imagenTablas'
+import {
+  dibujarLiga,
+  dibujarNumeros,
+  dibujarTabla,
+  type DatosLiga,
+  type DatosNumeros,
+  type DatosTabla,
+} from './imagenTablas'
 import {
   CREAM,
   MARCA,
@@ -61,7 +68,7 @@ export interface DatosTorneo {
   lugares: LugarTorneo[]
 }
 
-export type DatosImagen = DatosCash | DatosTorneo | DatosLiga | DatosNumeros
+export type DatosImagen = DatosCash | DatosTorneo | DatosLiga | DatosNumeros | DatosTabla
 
 /* ---------- cash ---------- */
 
@@ -244,6 +251,7 @@ export async function construirLienzo(d: DatosImagen): Promise<HTMLCanvasElement
   } catch {
     /* si el navegador no expone document.fonts, se dibuja con los fallbacks */
   }
+  if (d.tipo === 'tabla') return await dibujarTabla(d)
   if (d.tipo === 'liga') return await dibujarLiga(d)
   if (d.tipo === 'numeros') return await dibujarNumeros(d)
   return d.tipo === 'torneo' ? dibujarTorneo(d) : dibujarCash(d)

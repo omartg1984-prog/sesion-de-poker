@@ -101,10 +101,20 @@ export interface Liga {
 export type TipoPartida = 'cash' | 'torneo'
 
 export interface ConfigTorneo {
+  /* Lo que cuesta en dinero. */
   buyIn: number
   rebuyPrice: number
   addOnPrice: number
   payouts: { pct: number }[]
+  /*
+   * Y lo que da en fichas, que es otra cosa. Opcionales para no romper los torneos que
+   * ya existen: sin ellos la app cae en el comportamiento viejo.
+   */
+  stack?: number
+  rebuyChips?: number
+  addOnChips?: number
+  /** Valor de cada color dentro del torneo, por key de color. */
+  valores?: Record<string, number>
 }
 
 export interface PartidaResumen {

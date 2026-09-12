@@ -277,6 +277,8 @@ export default function PartidaCash({
           totalMesa={totalMesa}
           redondeo={datos.partida.redondeo ?? 50}
           puedeEditar={puedeEditar}
+          titulo={datos.liga.nombre}
+          subtitulo={datos.partida.nombre || datos.partida.fecha}
           onRedondeo={onRedondeo}
           onPago={(id, pagado) => tocar(id, { pagado }, { pagado })}
         />
