@@ -48,7 +48,9 @@ export default function LigaScreen() {
   const [soyAdmin, setSoyAdmin] = useState(false)
   const [partidas, setPartidas] = useState<PartidaResumen[]>([])
   const [tabla, setTabla] = useState<Tabla | null>(null)
-  const [pestana, setPestana] = useState<'partidas' | 'posiciones'>('partidas')
+  /* Abre en Posiciones: la tabla es lo que la gente entra a ver, y crear partida se
+     hace una vez por noche. */
+  const [pestana, setPestana] = useState<'partidas' | 'posiciones'>('posiciones')
   const [borrando, setBorrando] = useState(false)
   const [confirmaNombre, setConfirmaNombre] = useState('')
 

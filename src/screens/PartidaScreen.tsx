@@ -85,7 +85,7 @@ export default function PartidaScreen() {
   const puedeEditar = !!datos?.soyAdmin && !cerrada
   const pestanas = [
     ...(esTorneo ? PESTANAS_TORNEO : PESTANAS_CASH),
-    { id: 'numeros' as const, label: 'Números' },
+    { id: 'numeros' as const, label: 'Estadísticas' },
   ]
 
   /** Cambia una participación en pantalla al instante y la manda al servidor con retraso. */

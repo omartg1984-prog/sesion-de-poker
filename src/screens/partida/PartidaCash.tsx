@@ -23,9 +23,9 @@ import {
 export type PestanaCash = 'jugadores' | 'reparto' | 'final' | 'resultado'
 
 export const PESTANAS_CASH: { id: PestanaCash; label: string }[] = [
-  { id: 'jugadores', label: 'Jugadores' },
+  { id: 'jugadores', label: 'Registro' },
   { id: 'reparto', label: 'Reparto' },
-  { id: 'final', label: 'Final' },
+  { id: 'final', label: 'Cash out' },
   { id: 'resultado', label: 'Resultado' },
 ]
 

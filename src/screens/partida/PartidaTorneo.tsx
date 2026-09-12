@@ -15,7 +15,7 @@ export type PestanaTorneo = 'torneo' | 'jugadores' | 'reparto' | 'resultado'
 
 export const PESTANAS_TORNEO: { id: PestanaTorneo; label: string }[] = [
   { id: 'torneo', label: 'Torneo' },
-  { id: 'jugadores', label: 'Jugadores' },
+  { id: 'jugadores', label: 'Registro' },
   { id: 'reparto', label: 'Reparto' },
   { id: 'resultado', label: 'Resultado' },
 ]
