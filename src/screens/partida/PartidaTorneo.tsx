@@ -9,14 +9,19 @@ import { EPS, money, num, signed } from '../../lib/money'
 import type { DatosTorneo } from '../../lib/shareImage'
 import type { ConfigTorneo, Participacion } from '../../lib/api'
 import { PAYOUT_PRESETS } from '../../store/defaults'
-import { PestanaReparto, calcularReparto, claseClara, type PropsPestana } from './comun'
+import {
+  FichasDelJugador,
+  InventarioUsado,
+  calcularReparto,
+  claseClara,
+  type PropsPestana,
+} from './comun'
 
-export type PestanaTorneo = 'torneo' | 'jugadores' | 'reparto' | 'resultado'
+export type PestanaTorneo = 'torneo' | 'jugadores' | 'resultado'
 
 export const PESTANAS_TORNEO: { id: PestanaTorneo; label: string }[] = [
   { id: 'torneo', label: 'Torneo' },
   { id: 'jugadores', label: 'Registro' },
-  { id: 'reparto', label: 'Reparto' },
   { id: 'resultado', label: 'Resultado' },
 ]
 
@@ -188,6 +193,8 @@ export default function PartidaTorneo({
 
   /* ---- jugadores: recompras y add-ons ---- */
   if (pestana === 'jugadores') {
+    /* Todos arrancan con el mismo stack: el costo de la entrada. */
+    const reparto = calcularReparto(ps, colores, () => num(torneo.buyIn))
     return (
       <>
         <Banner titulo="Bolsa acumulada" />
@@ -218,23 +225,23 @@ export default function PartidaTorneo({
             <p className="m-0 text-right text-xs text-ink-soft">
               Pagó: <b className="text-ink">{money(pagadoPor(p, torneo))}</b>
             </p>
+
+            {(() => {
+              const fila = reparto.rows.find((r) => r.id === p.id)
+              return fila ? (
+                <FichasDelJugador
+                  fila={fila}
+                  colores={colores}
+                  puedeEditar={puedeEditar}
+                  tocar={tocar}
+                />
+              ) : null
+            })()}
           </section>
         ))}
-      </>
-    )
-  }
 
-  /* ---- reparto: mismo stack para todos ---- */
-  if (pestana === 'reparto') {
-    const reparto = calcularReparto(ps, colores, () => num(torneo.buyIn))
-    return (
-      <PestanaReparto
-        reparto={reparto}
-        colores={colores}
-        puedeEditar={puedeEditar}
-        tocar={tocar}
-        nota="En torneo todos arrancan con el mismo stack: el costo de la entrada. Puedes editar a mano y los demás se reacomodan."
-      />
+        <InventarioUsado reparto={reparto} colores={colores} />
+      </>
     )
   }
 

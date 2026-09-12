@@ -53,7 +53,7 @@ function Racha({ n }: { n: number }) {
   return (
     <span
       className={`flex shrink-0 items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-bold ${
-        ganando ? 'bg-win/12 text-win' : 'bg-loss/10 text-loss'
+        ganando ? 'bg-win/12 text-win-tinta' : 'bg-loss/10 text-loss'
       }`}
       title={ganando ? `${n} noches ganando seguidas` : `${-n} noches perdiendo seguidas`}
     >

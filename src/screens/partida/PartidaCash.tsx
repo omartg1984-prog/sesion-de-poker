@@ -3,13 +3,16 @@ import ContadorFichas from '../../components/ContadorFichas'
 import Medalla from '../../components/Medalla'
 import MoneyInput from '../../components/MoneyInput'
 import ShareBlock from '../../components/ShareBlock'
+import Inventario from './Inventario'
 import RepartoDinero from './RepartoDinero'
+import { calcularCuadre } from './cuadre'
 import { leerJson } from '../../lib/api'
 import { EPS, money, num, signed } from '../../lib/money'
 import type { DatosCash } from '../../lib/shareImage'
 import type { Chips } from '../../store/types'
 import {
-  PestanaReparto,
+  FichasDelJugador,
+  InventarioUsado,
   calcularReparto,
   claseClara,
   finalDe,
@@ -20,11 +23,10 @@ import {
   type Recompra,
 } from './comun'
 
-export type PestanaCash = 'jugadores' | 'reparto' | 'final' | 'resultado'
+export type PestanaCash = 'jugadores' | 'final' | 'resultado'
 
 export const PESTANAS_CASH: { id: PestanaCash; label: string }[] = [
   { id: 'jugadores', label: 'Registro' },
-  { id: 'reparto', label: 'Reparto' },
   { id: 'final', label: 'Cash out' },
   { id: 'resultado', label: 'Resultado' },
 ]
@@ -48,6 +50,11 @@ export default function PartidaCash({
   const diferencia = totalFichas - totalMesa
   const ranking = [...conTotales].sort((a, b) => b.pl - a.pl)
 
+  /* Las fichas cubren todo lo que puso en la noche, entrada y recompras: así lo que sale
+     del inventario es lo mismo que tiene que volver en el cash out. */
+  const reparto = calcularReparto(datos.participaciones, colores, invertidoDe)
+  const cuadre = calcularCuadre(datos.participaciones, colores, reparto, invertidoDe)
+
   /* ---- jugadores y sus recompras ---- */
   if (pestana === 'jugadores') {
     const cambiarRecompras = (id: string, lista: Recompra[]) =>
@@ -57,6 +64,7 @@ export default function PartidaCash({
       <>
         {conTotales.map((p, i) => {
           const recompras = recomprasDe(p)
+          const fila = reparto.rows.find((r) => r.id === p.id)
           return (
             <section key={p.id} className="panel">
               <div className="mb-2.5 flex items-center gap-2.5">
@@ -132,24 +140,21 @@ export default function PartidaCash({
                   Lleva puesto: <b className="text-ink">{money(p.invertido)}</b>
                 </p>
               )}
+
+              {fila && (
+                <FichasDelJugador
+                  fila={fila}
+                  colores={colores}
+                  puedeEditar={puedeEditar}
+                  tocar={tocar}
+                />
+              )}
             </section>
           )
         })}
-      </>
-    )
-  }
 
-  /* ---- reparto ---- */
-  if (pestana === 'reparto') {
-    const reparto = calcularReparto(datos.participaciones, colores, (p) => num(p.entrada))
-    return (
-      <PestanaReparto
-        reparto={reparto}
-        colores={colores}
-        puedeEditar={puedeEditar}
-        tocar={tocar}
-        nota="Las fichas con las que arranca cada quien, según lo que puso al entrar. Puedes editar a mano y los demás se reacomodan. Las recompras se entregan aparte."
-      />
+        <InventarioUsado reparto={reparto} colores={colores} />
+      </>
     )
   }
 
@@ -160,7 +165,7 @@ export default function PartidaCash({
       <>
         <section className="panel">
           <p className="panel-title">
-            <span>Conteo final</span>
+            <span>Cash out</span>
           </p>
           <p className="m-0 text-[13px] leading-snug text-ink-soft">
             Cuenta las fichas de cada quien. Puedes teclear la cantidad o ir sumando con −/+.
@@ -181,7 +186,7 @@ export default function PartidaCash({
                   {p.nombre}
                 </b>
                 {yaContado ? (
-                  <span className="flex shrink-0 items-center gap-1 rounded-full bg-win/12 px-2 py-0.5 text-[11px] font-bold text-win">
+                  <span className="flex shrink-0 items-center gap-1 rounded-full bg-win/12 px-2 py-0.5 text-[11px] font-bold text-win-tinta">
                     <Check size={11} strokeWidth={3} />
                     Contado
                   </span>
@@ -221,6 +226,8 @@ export default function PartidaCash({
             </section>
           )
         })}
+
+        <Inventario cuadre={cuadre} />
       </>
     )
   }

@@ -1,7 +1,11 @@
 import { AlertTriangle, Check, RotateCcw } from 'lucide-react'
 import Chip from '../../components/Chip'
 import NumInput from '../../components/NumInput'
-import { computeDistribution, type Distribution } from '../../lib/distribution'
+import {
+  computeDistribution,
+  type Distribution,
+  type DistributionRow,
+} from '../../lib/distribution'
 import { EPS, money, num } from '../../lib/money'
 import { leerJson, type DetallePartida, type Participacion } from '../../lib/api'
 import type { ChipColor, Chips } from '../../store/types'
@@ -68,118 +72,118 @@ export function calcularReparto(
   )
 }
 
-/** Pestaña de reparto, idéntica en cash y en torneo salvo por el objetivo. */
-export function PestanaReparto({
-  reparto,
+/**
+ * Las fichas de un jugador, para meter dentro de su tarjeta del registro.
+ *
+ * No es una pestaña aparte: el reparto se recalcula solo cuando cambian los montos o
+ * quién juega, así que verlo junto al dinero que puso es donde tiene sentido.
+ */
+export function FichasDelJugador({
+  fila,
   colores,
   puedeEditar,
   tocar,
-  nota,
 }: {
-  reparto: Distribution
+  fila: DistributionRow
   colores: ChipColor[]
   puedeEditar: boolean
   tocar: PropsPestana['tocar']
-  nota: string
 }) {
   return (
-    <>
-      <section className="panel">
-        <p className="panel-title">
-          <span>Reparto de fichas</span>
-        </p>
-        <p className="m-0 text-[13px] leading-snug text-ink-soft">{nota}</p>
-      </section>
-
-      {reparto.rows.map((r) => (
-        <section key={r.id} className="panel">
-          <div className="mb-2.5 flex items-center gap-2">
-            <b className="min-w-0 flex-1 truncate font-display text-lg font-semibold text-ink">
-              {r.name}
-            </b>
-            {r.manual && puedeEditar && (
-              <button
-                type="button"
-                onClick={() => tocar(r.id, { fichas_manual: null }, { fichasManual: null })}
-                className="flex cursor-pointer items-center gap-1 rounded-full border-none bg-marca/20 px-2 py-1 text-[11px] font-bold text-marca-tinta active:scale-95"
-              >
-                <RotateCcw size={11} strokeWidth={3} />
-                Auto
-              </button>
-            )}
-            <span className="font-bold text-ink-soft">{money(r.buyIn)}</span>
-          </div>
-
-          <div className="grid grid-cols-[repeat(auto-fit,minmax(58px,1fr))] gap-1.5">
-            {colores.map((c) => (
-              <label key={c.key} className="flex flex-col items-center gap-1">
-                <Chip color={c} size={30} />
-                {/* Sin el valor dentro de la ficha, el nombre es lo único que
-                    distingue una columna de otra. */}
-                <span className="w-full truncate text-center text-[10px] font-semibold text-ink-soft">
-                  {c.label}
-                </span>
-                <NumInput
-                  value={r.counts[c.key] ?? 0}
-                  showZero
-                  aria-label={`Fichas ${c.label} para ${r.name}`}
-                  className="w-full rounded-lg border border-paper-line bg-white px-0.5 py-2 text-center text-[15px] font-semibold outline-none focus:border-marca"
-                  onChange={(v) => {
-                    if (!puedeEditar) return
-                    const nuevas = { ...r.counts, [c.key]: v }
-                    tocar(r.id, { fichas_manual: JSON.stringify(nuevas) }, { fichasManual: nuevas })
-                  }}
-                />
-              </label>
-            ))}
-          </div>
-
-          <p className="mt-2.5 mb-0 flex items-center gap-1.5 text-xs text-ink-soft">
-            Total: <b className="text-ink">{money(r.total)}</b>
-            {Math.abs(r.leftover) < EPS ? (
-              <Check size={13} strokeWidth={3} className="text-win" />
-            ) : (
-              <>
-                <span>
-                  · {r.leftover > 0 ? `faltan ${money(r.leftover)}` : `te pasas ${money(-r.leftover)}`}
-                </span>
-                <AlertTriangle size={13} strokeWidth={2.6} className="text-loss" />
-              </>
-            )}
-          </p>
-        </section>
-      ))}
-
-      <section className="panel">
-        <p className="panel-title">
-          <span>Inventario usado</span>
-        </p>
-        {reparto.anyOver && (
-          <div className="balance balance-off">
-            <AlertTriangle size={16} strokeWidth={2.4} />
-            <span>Estás repartiendo más fichas de las que tiene la liga en algún color.</span>
-          </div>
+    <div className="mt-3 border-t border-dashed border-paper-line pt-2.5">
+      <div className="mb-1.5 flex items-center gap-2">
+        <span className="field-label flex-1">Fichas que le tocan</span>
+        {fila.manual && puedeEditar && (
+          <button
+            type="button"
+            onClick={() => tocar(fila.id, { fichas_manual: null }, { fichasManual: null })}
+            className="flex cursor-pointer items-center gap-1 rounded-full border-none bg-marca/20 px-2 py-0.5 text-[10px] font-bold text-marca-tinta active:scale-95"
+          >
+            <RotateCcw size={10} strokeWidth={3} />
+            Auto
+          </button>
         )}
-        <ul className="m-0 list-none p-0">
-          {colores.map((c) => {
-            const u = reparto.usage[c.key]
-            return (
-              <li
-                key={c.key}
-                className="flex items-center justify-between border-b border-dashed border-paper-line py-2.5 last:border-b-0"
-              >
-                <span className="flex items-center gap-2">
-                  <Chip color={c} />
-                  <span className="font-semibold text-ink">{c.label}</span>
-                </span>
-                <span className={`font-display font-bold ${u.over ? 'text-loss' : 'text-ink-soft'}`}>
-                  {u.used} / {u.inventory}
-                </span>
-              </li>
-            )
-          })}
-        </ul>
-      </section>
-    </>
+      </div>
+
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(54px,1fr))] gap-1.5">
+        {colores.map((c) => (
+          <label key={c.key} className="flex flex-col items-center gap-1">
+            <Chip color={c} size={26} />
+            {/* Sin el valor dentro de la ficha, el nombre es lo único que
+                distingue una columna de otra. */}
+            <span className="w-full truncate text-center text-[10px] font-semibold text-ink-soft">
+              {c.label}
+            </span>
+            <NumInput
+              value={fila.counts[c.key] ?? 0}
+              showZero
+              aria-label={`Fichas ${c.label} para ${fila.name}`}
+              className="w-full rounded-lg border border-paper-line bg-white px-0.5 py-1.5 text-center text-[14px] font-semibold outline-none focus:border-marca"
+              onChange={(v) => {
+                if (!puedeEditar) return
+                const nuevas = { ...fila.counts, [c.key]: v }
+                tocar(fila.id, { fichas_manual: JSON.stringify(nuevas) }, { fichasManual: nuevas })
+              }}
+            />
+          </label>
+        ))}
+      </div>
+
+      <p className="mt-2 mb-0 flex items-center gap-1.5 text-xs text-ink-soft">
+        En fichas: <b className="text-ink">{money(fila.total)}</b>
+        {Math.abs(fila.leftover) < EPS ? (
+          <Check size={13} strokeWidth={3} className="text-win" />
+        ) : (
+          <>
+            <span>
+              · {fila.leftover > 0 ? `faltan ${money(fila.leftover)}` : `se pasa ${money(-fila.leftover)}`}
+            </span>
+            <AlertTriangle size={13} strokeWidth={2.6} className="text-loss" />
+          </>
+        )}
+      </p>
+    </div>
+  )
+}
+
+/** Cuántas fichas de cada color se están usando contra las que tiene la casa. */
+export function InventarioUsado({
+  reparto,
+  colores,
+}: {
+  reparto: Distribution
+  colores: ChipColor[]
+}) {
+  return (
+    <section className="panel">
+      <p className="panel-title">
+        <span>Fichas en uso</span>
+      </p>
+      {reparto.anyOver && (
+        <div className="balance balance-off">
+          <AlertTriangle size={16} strokeWidth={2.4} />
+          <span>Estás repartiendo más fichas de las que tiene la liga en algún color.</span>
+        </div>
+      )}
+      <ul className="m-0 list-none p-0">
+        {colores.map((c) => {
+          const u = reparto.usage[c.key]
+          return (
+            <li
+              key={c.key}
+              className="flex items-center justify-between border-b border-dashed border-paper-line py-2.5 last:border-b-0"
+            >
+              <span className="flex items-center gap-2">
+                <Chip color={c} />
+                <span className="font-semibold text-ink">{c.label}</span>
+              </span>
+              <span className={`font-display font-bold ${u.over ? 'text-loss' : 'text-ink-soft'}`}>
+                {u.used} / {u.inventory}
+              </span>
+            </li>
+          )
+        })}
+      </ul>
+    </section>
   )
 }

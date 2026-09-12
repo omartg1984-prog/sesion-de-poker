@@ -8,6 +8,8 @@ import { useRecargarAlVolver } from '../lib/recargar'
 import { conAviso, useApp } from '../store/app'
 import { ENTRADA_POR_DEFECTO } from './partida/comun'
 import Numeros from './partida/Numeros'
+import { calcularCuadre, porQueNoSePuedeCerrar } from './partida/cuadre'
+import { calcularReparto, invertidoDe } from './partida/comun'
 import PartidaCash, { PESTANAS_CASH, type PestanaCash } from './partida/PartidaCash'
 import PartidaTorneo, {
   PESTANAS_TORNEO,
@@ -162,6 +164,19 @@ export default function PartidaScreen() {
   }
 
   const comunes = { datos, colores, puedeEditar, tocar, recargar: cargar }
+
+  /* El candado del cierre. En torneo no aplica: ahí no se cuentan fichas al final, el
+     resultado sale de los premios por lugar. */
+  const trabaParaCerrar = esTorneo
+    ? null
+    : porQueNoSePuedeCerrar(
+        calcularCuadre(
+          datos.participaciones,
+          colores,
+          calcularReparto(datos.participaciones, colores, invertidoDe),
+          invertidoDe,
+        ),
+      )
   // La configuración del torneo se tiene que poder abrir ANTES de cargar a nadie:
   // ahí se define el costo de entrada con el que entran todos.
   const sinJugadores = datos.participaciones.length === 0 && pestana !== 'torneo' && pestana !== 'numeros'
@@ -246,10 +261,23 @@ export default function PartidaScreen() {
 
       {/* Es la acción que cierra la noche, así que va en rojo y no escondida al final. */}
       {!sinJugadores && puedeEditar && (pestana === 'resultado' || pestana === 'numeros') && (
-        <button type="button" className="btn btn-marca mt-2" onClick={() => setCerrando(true)}>
-          <Lock size={17} strokeWidth={2.4} />
-          Terminar partida
-        </button>
+        <>
+          <button
+            type="button"
+            className="btn btn-marca mt-2 disabled:cursor-not-allowed disabled:opacity-45"
+            disabled={trabaParaCerrar !== null}
+            onClick={() => setCerrando(true)}
+          >
+            <Lock size={17} strokeWidth={2.4} />
+            Terminar partida
+          </button>
+          {trabaParaCerrar && (
+            <p className="mt-2 mb-0 flex items-start gap-1.5 text-center text-[12px] leading-snug text-loss-alto">
+              <AlertTriangle size={13} strokeWidth={2.6} className="mt-0.5 shrink-0" />
+              <span className="flex-1 text-left">{trabaParaCerrar}</span>
+            </p>
+          )}
+        </>
       )}
 
       {datos.soyAdmin && (
