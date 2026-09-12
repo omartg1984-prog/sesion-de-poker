@@ -1,5 +1,6 @@
 import { AlertTriangle, Check, Plus, X } from 'lucide-react'
 import ContadorFichas from '../../components/ContadorFichas'
+import NumInput from '../../components/NumInput'
 import Medalla from '../../components/Medalla'
 import MoneyInput from '../../components/MoneyInput'
 import ShareBlock from '../../components/ShareBlock'
@@ -18,7 +19,6 @@ import {
   finalDe,
   invertidoDe,
   recomprasDe,
-  tonoOscuro,
   type PropsPestana,
   type Recompra,
 } from './comun'
@@ -218,25 +218,55 @@ export default function PartidaCash({
                 }}
               />
 
-              <div className="mt-3 flex items-center gap-3 rounded-xl bg-noche-linea px-3.5 py-3 text-paper">
-                <span className="min-w-0">
+              {/* Lo que cobra y lo que se le dio, uno al lado del otro: es la
+                  comparación que se hace en la mesa al momento de pagarle. */}
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <div className="rounded-xl bg-noche-linea px-3 py-2.5 text-paper">
                   <span className="block text-[10px] tracking-[.6px] uppercase opacity-70">
-                    Puso
+                    Tiene que cobrar
                   </span>
-                  <b className="font-display text-base">{money(p.invertido)}</b>
-                </span>
-                <span className="min-w-0">
-                  <span className="block text-[10px] tracking-[.6px] uppercase opacity-70">
-                    Fichas
+                  <b className="font-display text-2xl">{money(p.final)}</b>
+                </div>
+                <div className="rounded-xl border border-paper-line bg-white px-3 py-2.5">
+                  <span className="block text-[10px] tracking-[.6px] text-ink-soft uppercase">
+                    Se le dio
                   </span>
-                  <b className="font-display text-base">{money(p.final)}</b>
+                  {puedeEditar ? (
+                    <span className="flex items-baseline">
+                      <span className="font-display text-xl font-bold text-ink-soft">$</span>
+                      <NumInput
+                        value={p.pagado ?? 0}
+                        showZero={p.pagado !== null}
+                        mode="decimal"
+                        placeholder={String(Math.round(p.final))}
+                        aria-label={`Dinero entregado a ${p.nombre}`}
+                        className="w-full border-none bg-transparent p-0 font-display text-2xl font-bold outline-none"
+                        onChange={(v) => tocar(p.id, { pagado: v }, { pagado: v })}
+                      />
+                    </span>
+                  ) : (
+                    <b className="font-display text-2xl text-ink">
+                      {p.pagado === null ? '—' : money(p.pagado)}
+                    </b>
+                  )}
+                </div>
+              </div>
+
+              <div className="mt-2 flex items-center gap-3 text-[12px] text-ink-soft">
+                <span>
+                  Puso <b className="text-ink">{money(p.invertido)}</b>
                 </span>
-                <span
-                  className="ml-auto font-display text-2xl font-bold tabular-nums"
-                  style={{ color: tonoOscuro(p.pl) }}
+                {p.pagado !== null && Math.abs(p.pagado - p.final) > EPS && (
+                  <span className={p.pagado > p.final ? 'text-win' : 'text-loss'}>
+                    {p.pagado > p.final ? '+' : '−'}
+                    {money(Math.abs(p.pagado - p.final))} de cambio
+                  </span>
+                )}
+                <b
+                  className={`ml-auto font-display text-xl tabular-nums ${claseClara(p.pl)}`}
                 >
                   {signed(p.pl)}
-                </span>
+                </b>
               </div>
             </section>
           )

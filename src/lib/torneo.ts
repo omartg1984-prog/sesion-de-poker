@@ -39,8 +39,16 @@ export interface NivelCiegas {
   desdeMinuto: number
 }
 
+/** Un descanso cada tantos niveles, para cenar o estirar las piernas. */
+export interface Descanso {
+  cadaNiveles: number
+  minutos: number
+}
+
 export interface Estructura {
   niveles: NivelCiegas[]
+  /** `null` = se juega de corrido. */
+  descanso: Descanso | null
   stackInicial: number
   minutosPorNivel: number
   /** Lo que va a durar de verdad, que puede no ser lo que se pidió. */
@@ -60,6 +68,32 @@ export interface Peticion {
   fichaMasChica: number
   minutosDeseados: number
   minutosPorNivel: number
+  descanso?: Descanso | null
+}
+
+/*
+ * El torneo visto como una fila de tramos: niveles con sus ciegas y, cada tantos, un
+ * descanso. El reloj corre sobre esta fila y no sobre los niveles sueltos, porque los
+ * descansos también consumen reloj y recorren todo lo que viene después.
+ */
+export type Tramo =
+  | { tipo: 'nivel'; nivel: NivelCiegas; minutos: number; desdeMinuto: number }
+  | { tipo: 'descanso'; minutos: number; desdeMinuto: number }
+
+export function tramosDe(e: Estructura): Tramo[] {
+  const salida: Tramo[] = []
+  let minuto = 0
+  e.niveles.forEach((nivel, i) => {
+    salida.push({ tipo: 'nivel', nivel, minutos: e.minutosPorNivel, desdeMinuto: minuto })
+    minuto += e.minutosPorNivel
+    const toca = e.descanso && (i + 1) % e.descanso.cadaNiveles === 0
+    /* Después del último nivel no tiene caso descansar: el torneo ya se acabó. */
+    if (toca && i < e.niveles.length - 1) {
+      salida.push({ tipo: 'descanso', minutos: e.descanso!.minutos, desdeMinuto: minuto })
+      minuto += e.descanso!.minutos
+    }
+  })
+  return salida
 }
 
 /** El valor "de casino" más cercano que además se puede pagar con las fichas que hay. */
@@ -73,6 +107,7 @@ function redondear(valor: number, fichaMasChica: number): number {
 }
 
 export function calcularEstructura(p: Peticion): Estructura {
+  const descanso = p.descanso ?? null
   const jugadores = Math.max(2, Math.floor(p.jugadores))
   const stackInicial = Math.max(1, Math.round(p.stackInicial))
   const ficha = Math.max(1, p.fichaMasChica)
@@ -105,37 +140,72 @@ export function calcularEstructura(p: Peticion): Estructura {
 
   let aviso: string | null = null
   if (factor < FACTOR_MINIMO)
-    aviso = 'Las ciegas suben muy despacio para el tiempo pedido: el torneo se va a alargar. Sube el stack o acorta los niveles.'
+    aviso =
+      'Las ciegas suben muy despacio para el tiempo pedido: el torneo se va a alargar. Sube el stack o acorta los niveles.'
   else if (factor > FACTOR_MAXIMO)
-    aviso = 'Las ciegas suben muy rápido: se va a convertir en rifa. Dale más tiempo o niveles más largos.'
+    aviso =
+      'Las ciegas suben muy rápido: se va a convertir en rifa. Dale más tiempo o niveles más largos.'
 
   const profundidad = stackInicial / (chicaInicial * 2)
   if (!aviso && profundidad < 30)
     aviso = 'Cada quien arranca con muy pocas ciegas. Con un stack más grande se juega mejor.'
 
+  /* Los descansos también cuentan para lo que va a durar la noche. */
+  const cuantosDescansos = descanso ? Math.max(0, Math.ceil(cuantos / descanso.cadaNiveles) - 1) : 0
+
   return {
     niveles,
+    descanso,
     stackInicial,
     minutosPorNivel,
-    duracionMinutos: cuantos * minutosPorNivel,
+    duracionMinutos: cuantos * minutosPorNivel + cuantosDescansos * (descanso?.minutos ?? 0),
     profundidad,
     factor,
     aviso,
   }
 }
 
-/** En qué nivel va el torneo después de tantos segundos corriendo. */
-export function nivelEnCurso(
-  niveles: NivelCiegas[],
-  segundos: number,
-  minutosPorNivel: number,
-): { indice: number; restanteSeg: number; terminado: boolean } {
-  const porNivel = minutosPorNivel * 60
-  const indice = Math.floor(segundos / porNivel)
-  if (indice >= niveles.length) {
-    return { indice: niveles.length - 1, restanteSeg: 0, terminado: true }
+export interface EnCurso {
+  tramo: Tramo
+  restanteSeg: number
+  terminado: boolean
+  /** El nivel que se está jugando; durante un descanso, el que viene al volver. */
+  nivel: NivelCiegas
+  /** El nivel siguiente, para poder anunciarlo. */
+  siguienteNivel: NivelCiegas | null
+}
+
+/** Dónde va el torneo después de tantos segundos de reloj. */
+export function enCurso(e: Estructura, segundos: number): EnCurso {
+  const tramos = tramosDe(e)
+  const ultimo = tramos[tramos.length - 1]
+  const total = ultimo.desdeMinuto * 60 + ultimo.minutos * 60
+
+  const nivelDe = (t: Tramo, i: number): NivelCiegas =>
+    t.tipo === 'nivel'
+      ? t.nivel
+      : /* En un descanso manda el nivel que sigue: es lo que hay que anunciar. */
+        ((tramos[i + 1] as { nivel: NivelCiegas } | undefined)?.nivel ??
+        e.niveles[e.niveles.length - 1])
+
+  if (segundos >= total) {
+    const nivel = e.niveles[e.niveles.length - 1]
+    return { tramo: ultimo, restanteSeg: 0, terminado: true, nivel, siguienteNivel: null }
   }
-  return { indice, restanteSeg: porNivel - (segundos % porNivel), terminado: false }
+
+  const i = tramos.findIndex((t) => segundos < t.desdeMinuto * 60 + t.minutos * 60)
+  const tramo = tramos[i]
+  const nivel = nivelDe(tramo, i)
+  const posterior = tramos.slice(i + 1).find((t) => t.tipo === 'nivel') as
+    { nivel: NivelCiegas } | undefined
+
+  return {
+    tramo,
+    restanteSeg: tramo.desdeMinuto * 60 + tramo.minutos * 60 - segundos,
+    terminado: false,
+    nivel,
+    siguienteNivel: tramo.tipo === 'descanso' ? null : (posterior?.nivel ?? null),
+  }
 }
 
 /*

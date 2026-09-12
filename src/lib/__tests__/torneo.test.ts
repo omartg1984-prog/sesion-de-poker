@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { calcularEstructura, nivelEnCurso, type Peticion } from '../torneo'
+import { calcularEstructura, enCurso, tramosDe, type Peticion } from '../torneo'
 
 /* La liga real: fichas de $1 arriba, ocho jugadores, tres horas. */
 const OCHO: Peticion = {
@@ -74,20 +74,60 @@ describe('el reloj', () => {
   const e = calcularEstructura(OCHO)
 
   it('al arrancar va en el primer nivel', () => {
-    const r = nivelEnCurso(e.niveles, 0, 15)
-    expect(r.indice).toBe(0)
+    const r = enCurso(e, 0)
+    expect(r.nivel).toEqual(e.niveles[0])
     expect(r.restanteSeg).toBe(900)
     expect(r.terminado).toBe(false)
   })
 
   it('cambia de nivel justo al cumplirse los minutos', () => {
-    expect(nivelEnCurso(e.niveles, 899, 15).indice).toBe(0)
-    expect(nivelEnCurso(e.niveles, 900, 15).indice).toBe(1)
+    expect(enCurso(e, 899).nivel.nivel).toBe(1)
+    expect(enCurso(e, 900).nivel.nivel).toBe(2)
   })
 
-  it('cuando se pasan todos los niveles queda en el último y marca terminado', () => {
-    const r = nivelEnCurso(e.niveles, 99999, 15)
-    expect(r.indice).toBe(e.niveles.length - 1)
+  it('cuando se acaba el torneo queda en el último nivel y marca terminado', () => {
+    const r = enCurso(e, 99999)
+    expect(r.nivel).toEqual(e.niveles[e.niveles.length - 1])
     expect(r.terminado).toBe(true)
+  })
+})
+
+describe('los descansos', () => {
+  const conDescanso = calcularEstructura({ ...OCHO, descanso: { cadaNiveles: 4, minutos: 20 } })
+
+  it('alargan la noche por lo que duran', () => {
+    const sin = calcularEstructura(OCHO)
+    // Doce niveles con descanso cada cuatro son dos descansos, no tres: después del
+    // último nivel ya no hay que descansar.
+    expect(conDescanso.duracionMinutos).toBe(sin.duracionMinutos + 2 * 20)
+  })
+
+  it('se meten entre los niveles, no al final', () => {
+    const tramos = tramosDe(conDescanso)
+    expect(tramos[3].tipo).toBe('nivel')
+    expect(tramos[4].tipo).toBe('descanso')
+    expect(tramos[tramos.length - 1].tipo).toBe('nivel')
+  })
+
+  it('el reloj entra al descanso al terminar el cuarto nivel', () => {
+    const justoAntes = enCurso(conDescanso, 4 * 15 * 60 - 1)
+    const justoDespues = enCurso(conDescanso, 4 * 15 * 60)
+    expect(justoAntes.tramo.tipo).toBe('nivel')
+    expect(justoDespues.tramo.tipo).toBe('descanso')
+    expect(justoDespues.restanteSeg).toBe(20 * 60)
+  })
+
+  it('durante el descanso ya se ve el nivel que viene al volver', () => {
+    const r = enCurso(conDescanso, 4 * 15 * 60 + 60)
+    expect(r.tramo.tipo).toBe('descanso')
+    expect(r.nivel.nivel).toBe(5)
+  })
+
+  it('el descanso recorre todo lo que viene después', () => {
+    const sin = calcularEstructura(OCHO)
+    // El nivel 5 sin descanso entra al minuto 60; con veinte de descanso, al 80.
+    expect(enCurso(sin, 60 * 60).nivel.nivel).toBe(5)
+    expect(enCurso(conDescanso, 60 * 60).tramo.tipo).toBe('descanso')
+    expect(enCurso(conDescanso, 80 * 60).nivel.nivel).toBe(5)
   })
 })

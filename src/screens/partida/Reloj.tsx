@@ -1,9 +1,9 @@
-import { ChevronRight, Pause, Play, RotateCcw } from 'lucide-react'
+import { ChevronRight, Coffee, Pause, Play, RotateCcw } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import {
   RELOJ_PARADO,
   arrancarReloj,
-  nivelEnCurso,
+  enCurso,
   pausarReloj,
   reloj as formatear,
   segundosCorridos,
@@ -50,24 +50,25 @@ export default function Reloj({ estructura, reloj, puedeEditar, onReloj, recarga
   }, [reloj.corriendo])
 
   const corridos = segundosCorridos(reloj)
-  const { indice, restanteSeg, terminado } = nivelEnCurso(
-    estructura.niveles,
-    corridos,
-    estructura.minutosPorNivel,
-  )
-  const actual = estructura.niveles[indice]
-  const siguiente = estructura.niveles[indice + 1]
-  const porNivel = estructura.minutosPorNivel * 60
-  const avance = terminado ? 1 : 1 - restanteSeg / porNivel
+  const { tramo, restanteSeg, terminado, nivel, siguienteNivel } = enCurso(estructura, corridos)
+  const enDescanso = tramo.tipo === 'descanso'
+  const duracionTramo = tramo.minutos * 60
+  const avance = terminado ? 1 : 1 - restanteSeg / duracionTramo
   /* El último minuto se pinta en rojo: es el aviso de que ya van a subir. */
-  const porSubir = !terminado && restanteSeg <= 60
+  const porSubir = !terminado && !enDescanso && restanteSeg <= 60
 
   /* El color de fondo va aparte del degradado: `.panel` trae crema y el degradado es una
      imagen encima. Si esa imagen no pintara, quedaría blanco sobre crema. */
   return (
     <section className="panel overflow-hidden bg-noche-honda bg-gradient-to-br from-[#2a1016] to-[#100e12] ring-1 ring-marca/35">
       <p className="panel-title !text-tiza-suave">
-        <span>{terminado ? 'Se acabaron los niveles' : `Nivel ${actual.nivel} de ${estructura.niveles.length}`}</span>
+        <span>
+          {terminado
+            ? 'Se acabaron los niveles'
+            : enDescanso
+              ? 'Descanso'
+              : `Nivel ${nivel.nivel} de ${estructura.niveles.length}`}
+        </span>
       </p>
 
       <div className="text-center">
@@ -78,21 +79,30 @@ export default function Reloj({ estructura, reloj, puedeEditar, onReloj, recarga
         >
           {terminado ? formatear(0) : formatear(restanteSeg)}
         </div>
-        <div className="mt-1 font-display text-2xl font-bold text-win-alto">
-          {actual.chica} / {actual.grande}
-        </div>
-        {siguiente && (
-          <div className="mt-1 flex items-center justify-center gap-1 text-[12px] text-tiza-suave">
-            <ChevronRight size={13} strokeWidth={2.6} />
-            Sigue {siguiente.chica} / {siguiente.grande}
+        {enDescanso ? (
+          <div className="mt-1 flex items-center justify-center gap-1.5 font-display text-2xl font-bold text-win-alto">
+            <Coffee size={20} strokeWidth={2.4} />
+            Al volver {nivel.chica} / {nivel.grande}
           </div>
+        ) : (
+          <>
+            <div className="mt-1 font-display text-2xl font-bold text-win-alto">
+              {nivel.chica} / {nivel.grande}
+            </div>
+            {siguienteNivel && (
+              <div className="mt-1 flex items-center justify-center gap-1 text-[12px] text-tiza-suave">
+                <ChevronRight size={13} strokeWidth={2.6} />
+                Sigue {siguienteNivel.chica} / {siguienteNivel.grande}
+              </div>
+            )}
+          </>
         )}
       </div>
 
       <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/12">
         <div
           className={`h-full rounded-full transition-[width] duration-1000 ease-linear ${
-            porSubir ? 'bg-marca-alta' : 'bg-win-alto'
+            porSubir ? 'bg-marca-alta' : enDescanso ? 'bg-tiza' : 'bg-win-alto'
           }`}
           style={{ width: `${Math.min(100, Math.max(0, avance * 100))}%` }}
         />
