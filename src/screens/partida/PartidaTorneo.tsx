@@ -9,6 +9,10 @@ import { EPS, money, num, signed } from '../../lib/money'
 import type { DatosTorneo } from '../../lib/shareImage'
 import type { ConfigTorneo, Participacion } from '../../lib/api'
 import { PAYOUT_PRESETS } from '../../store/defaults'
+import Estructura from './Estructura'
+import Reloj from './Reloj'
+import { leerJson } from '../../lib/api'
+import { RELOJ_PARADO, type Estructura as Tabla, type RelojTorneo } from '../../lib/torneo'
 import {
   FichasDelJugador,
   InventarioUsado,
@@ -51,6 +55,8 @@ interface Props extends PropsPestana {
   pestana: PestanaTorneo
   torneo: ConfigTorneo
   cambiarTorneo: (t: ConfigTorneo) => void
+  onEstructura: (e: Tabla) => void
+  onReloj: (r: RelojTorneo) => void
 }
 
 export default function PartidaTorneo({
@@ -61,6 +67,9 @@ export default function PartidaTorneo({
   tocar,
   torneo,
   cambiarTorneo,
+  onEstructura,
+  onReloj,
+  recargar,
 }: Props) {
   const ps = datos.participaciones
   const bolsa = bolsaDe(ps, torneo)
@@ -76,8 +85,28 @@ export default function PartidaTorneo({
 
   /* ---- configuración del torneo ---- */
   if (pestana === 'torneo') {
+    const estructura = leerJson<Tabla | null>(datos.partida.estructura, null)
+    const relojGuardado = leerJson<RelojTorneo>(datos.partida.reloj, RELOJ_PARADO)
     return (
       <>
+        {estructura && (
+          <Reloj
+            estructura={estructura}
+            reloj={relojGuardado}
+            puedeEditar={puedeEditar}
+            onReloj={onReloj}
+            recargar={recargar}
+          />
+        )}
+
+        <Estructura
+          jugadores={ps.length}
+          colores={colores}
+          estructura={estructura}
+          puedeEditar={puedeEditar}
+          onGuardar={onEstructura}
+        />
+
         <section className="panel">
           <p className="panel-title">
             <span>Costos</span>

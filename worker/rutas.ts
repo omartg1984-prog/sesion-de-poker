@@ -496,7 +496,8 @@ export async function rutas(
 
     if (partes.length === 2 && metodo === 'PATCH') {
       if (!esAdminLiga) return json({ error: 'Solo un admin de la liga puede cambiar la partida' }, 403)
-      const { estado, nombre, fecha, torneo, redondeo } = await cuerpo<Record<string, unknown>>()
+      const { estado, nombre, fecha, torneo, redondeo, estructura, reloj } =
+        await cuerpo<Record<string, unknown>>()
       if (estado !== undefined && estado !== 'abierta' && estado !== 'cerrada')
         return json({ error: 'Estado inválido' }, 400)
       await env.DB.prepare(
@@ -505,7 +506,9 @@ export async function rutas(
            nombre = COALESCE(?, nombre),
            fecha  = COALESCE(?, fecha),
            torneo = COALESCE(?, torneo),
-           redondeo = COALESCE(?, redondeo)
+           redondeo = COALESCE(?, redondeo),
+           estructura = COALESCE(?, estructura),
+           reloj = COALESCE(?, reloj)
          WHERE id = ?`,
       )
         .bind(
@@ -514,6 +517,8 @@ export async function rutas(
           fecha ?? null,
           torneo === undefined ? null : JSON.stringify(torneo),
           redondeo === undefined ? null : Math.max(1, Math.floor(Number(redondeo) || 1)),
+          estructura === undefined ? null : JSON.stringify(estructura),
+          reloj === undefined ? null : JSON.stringify(reloj),
           partidaId,
         )
         .run()

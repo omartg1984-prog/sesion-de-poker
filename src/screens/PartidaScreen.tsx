@@ -10,6 +10,7 @@ import { ENTRADA_POR_DEFECTO } from './partida/comun'
 import Numeros from './partida/Numeros'
 import { calcularCuadre, porQueNoSePuedeCerrar } from './partida/cuadre'
 import { calcularReparto, invertidoDe } from './partida/comun'
+import type { Estructura, RelojTorneo } from '../lib/torneo'
 import PartidaCash, { PESTANAS_CASH, type PestanaCash } from './partida/PartidaCash'
 import PartidaTorneo, {
   PESTANAS_TORNEO,
@@ -106,6 +107,20 @@ export default function PartidaScreen() {
   const cambiarRedondeo = (paso: number) => {
     setDatos((d) => (d ? { ...d, partida: { ...d.partida, redondeo: paso } } : d))
     diferido('redondeo', () => api.guardarPartida(partidaId, { redondeo: paso }))
+  }
+
+  /* La tabla de ciegas se guarda ya calculada: si guardáramos los parámetros, cambiar
+     el stack a media noche movería las ciegas de los niveles ya jugados. */
+  const cambiarEstructura = (e: Estructura) => {
+    setDatos((d) => (d ? { ...d, partida: { ...d.partida, estructura: JSON.stringify(e) } } : d))
+    diferido('estructura', () => api.guardarPartida(partidaId, { estructura: e }))
+  }
+
+  /* El reloj se guarda al instante y sin diferir: si alguien le da pausa, los demás
+     teléfonos tienen que enterarse ya, no en dos segundos. */
+  const cambiarReloj = (r: RelojTorneo) => {
+    setDatos((d) => (d ? { ...d, partida: { ...d.partida, reloj: JSON.stringify(r) } } : d))
+    void api.guardarPartida(partidaId, { reloj: r })
   }
 
   const cambiarTorneo = (t: ConfigTorneo) => {
@@ -247,6 +262,8 @@ export default function PartidaScreen() {
           pestana={pestana as PestanaTorneo}
           torneo={torneo}
           cambiarTorneo={cambiarTorneo}
+          onEstructura={cambiarEstructura}
+          onReloj={cambiarReloj}
         />
       ) : (
         <PartidaCash {...comunes} pestana={pestana as PestanaCash} onRedondeo={cambiarRedondeo} />

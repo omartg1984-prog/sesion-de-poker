@@ -4,6 +4,7 @@
  * enseñarse tal cual al usuario.
  */
 import type { ChipColor, Chips } from '../store/types'
+import type { Estructura, RelojTorneo } from './torneo'
 
 export class ErrorApi extends Error {
   estado: number
@@ -208,7 +209,14 @@ export interface TablaPosiciones {
 }
 
 export interface DetallePartida {
-  partida: PartidaResumen & { torneo: string | null; redondeo: number | null }
+  partida: PartidaResumen & {
+    torneo: string | null
+    redondeo: number | null
+    /** JSON con la tabla de ciegas ya calculada. */
+    estructura: string | null
+    /** JSON con desde cuándo corre el reloj y cuánto llevaba antes de la pausa. */
+    reloj: string | null
+  }
   liga: { id: string; nombre: string; colores: ChipColor[] }
   participaciones: Participacion[]
   soyAdmin: boolean
@@ -277,6 +285,8 @@ export const api = {
       fecha?: string
       torneo?: ConfigTorneo
       redondeo?: number
+      estructura?: Estructura
+      reloj?: RelojTorneo
     },
   ) => patch<{ ok: true }>(`partidas/${id}`, cambios),
   cargarJugadores: (partidaId: string, jugadores: { usuarioId: string; entrada: number }[]) =>
