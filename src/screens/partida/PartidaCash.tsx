@@ -3,6 +3,7 @@ import ContadorFichas from '../../components/ContadorFichas'
 import Medalla from '../../components/Medalla'
 import MoneyInput from '../../components/MoneyInput'
 import ShareBlock from '../../components/ShareBlock'
+import RepartoDinero from './RepartoDinero'
 import { leerJson } from '../../lib/api'
 import { EPS, money, num, signed } from '../../lib/money'
 import type { DatosCash } from '../../lib/shareImage'
@@ -34,7 +35,8 @@ export default function PartidaCash({
   colores,
   puedeEditar,
   tocar,
-}: PropsPestana & { pestana: PestanaCash }) {
+  onRedondeo,
+}: PropsPestana & { pestana: PestanaCash; onRedondeo: (paso: number) => void }) {
   const conTotales = datos.participaciones.map((p) => {
     const invertido = invertidoDe(p)
     const final = finalDe(p, colores)
@@ -249,7 +251,8 @@ export default function PartidaCash({
   }
 
   return (
-    <section className="panel">
+    <>
+      <section className="panel">
       <p className="panel-title">
         <span>Resultado</span>
       </p>
@@ -295,6 +298,16 @@ export default function PartidaCash({
       </ul>
 
       <ShareBlock datos={datosImagen} texto={texto} alt="Tabla de resultados de la partida" />
-    </section>
+      </section>
+
+      <RepartoDinero
+        filas={ranking.map((r) => ({ p: r, nombre: r.nombre, leToca: r.final }))}
+        totalMesa={totalMesa}
+        redondeo={datos.partida.redondeo ?? 50}
+        puedeEditar={puedeEditar}
+        onRedondeo={onRedondeo}
+        onPago={(id, pagado) => tocar(id, { pagado }, { pagado })}
+      />
+    </>
   )
 }

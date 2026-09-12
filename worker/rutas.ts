@@ -496,7 +496,7 @@ export async function rutas(
 
     if (partes.length === 2 && metodo === 'PATCH') {
       if (!esAdminLiga) return json({ error: 'Solo un admin de la liga puede cambiar la partida' }, 403)
-      const { estado, nombre, fecha, torneo } = await cuerpo<Record<string, unknown>>()
+      const { estado, nombre, fecha, torneo, redondeo } = await cuerpo<Record<string, unknown>>()
       if (estado !== undefined && estado !== 'abierta' && estado !== 'cerrada')
         return json({ error: 'Estado inválido' }, 400)
       await env.DB.prepare(
@@ -504,7 +504,8 @@ export async function rutas(
            estado = COALESCE(?, estado),
            nombre = COALESCE(?, nombre),
            fecha  = COALESCE(?, fecha),
-           torneo = COALESCE(?, torneo)
+           torneo = COALESCE(?, torneo),
+           redondeo = COALESCE(?, redondeo)
          WHERE id = ?`,
       )
         .bind(
@@ -512,6 +513,7 @@ export async function rutas(
           nombre ?? null,
           fecha ?? null,
           torneo === undefined ? null : JSON.stringify(torneo),
+          redondeo === undefined ? null : Math.max(1, Math.floor(Number(redondeo) || 1)),
           partidaId,
         )
         .run()
@@ -559,7 +561,13 @@ export async function rutas(
        JOIN partidas pa ON pa.id = p.partida_id WHERE p.id = ?`,
     )
       .bind(partes[1])
-      .first<{ id: string; usuario_id: string; liga_id: string; estado: string }>()
+      .first<{
+        id: string
+        usuario_id: string
+        liga_id: string
+        estado: string
+        pagado: number | null
+      }>()
     if (!par) return json({ error: 'No encontrado' }, 404)
 
     const mia = await membresia(env, par.liga_id, yo.id)
@@ -568,7 +576,7 @@ export async function rutas(
     if (!esAdminLiga) return json({ error: 'Solo un admin de la liga puede editar la partida' }, 403)
     if (par.estado === 'cerrada') return json({ error: 'La partida ya está cerrada' }, 409)
 
-    const { entrada, recompras, fichasManual, fichasFinal, rebuys, addons, lugar } =
+    const { entrada, recompras, fichasManual, fichasFinal, rebuys, addons, lugar, pagado } =
       await cuerpo<Record<string, unknown>>()
     const entero = (v: unknown) => (v === undefined ? null : Math.max(0, Math.floor(Number(v) || 0)))
 
@@ -580,7 +588,8 @@ export async function rutas(
          fichas_final  = COALESCE(?, fichas_final),
          rebuys        = COALESCE(?, rebuys),
          addons        = COALESCE(?, addons),
-         lugar         = COALESCE(?, lugar)
+         lugar         = COALESCE(?, lugar),
+         pagado        = ?
        WHERE id = ?`,
     )
       .bind(
@@ -591,6 +600,9 @@ export async function rutas(
         entero(rebuys),
         entero(addons),
         entero(lugar),
+        /* Sin COALESCE a propósito: mandar `pagado: null` lo borra, que es distinto de
+           haber entregado cero. No mandarlo deja lo que ya había. */
+        pagado === undefined ? (par.pagado ?? null) : pagado === null ? null : Number(pagado) || 0,
         par.id,
       )
       .run()

@@ -125,6 +125,8 @@ export interface Participacion {
   rebuys: number
   addons: number
   lugar: number
+  /** Lo que de verdad se le entregó. null = todavía no se reparte el dinero. */
+  pagado: number | null
   nombre: string
   usuario: string
   foto: string | null
@@ -206,7 +208,7 @@ export interface TablaPosiciones {
 }
 
 export interface DetallePartida {
-  partida: PartidaResumen & { torneo: string | null }
+  partida: PartidaResumen & { torneo: string | null; redondeo: number | null }
   liga: { id: string; nombre: string; colores: ChipColor[] }
   participaciones: Participacion[]
   soyAdmin: boolean
@@ -269,7 +271,13 @@ export const api = {
   borrarPartida: (id: string) => borrar<{ ok: true }>(`partidas/${id}`),
   guardarPartida: (
     id: string,
-    cambios: { estado?: 'abierta' | 'cerrada'; nombre?: string; fecha?: string; torneo?: ConfigTorneo },
+    cambios: {
+      estado?: 'abierta' | 'cerrada'
+      nombre?: string
+      fecha?: string
+      torneo?: ConfigTorneo
+      redondeo?: number
+    },
   ) => patch<{ ok: true }>(`partidas/${id}`, cambios),
   cargarJugadores: (partidaId: string, jugadores: { usuarioId: string; entrada: number }[]) =>
     put<{ ok: true }>(`partidas/${partidaId}/jugadores`, { jugadores }),
@@ -283,6 +291,8 @@ export const api = {
       rebuys?: number
       addons?: number
       lugar?: number
+      /** null borra el pago; no mandarlo lo deja como estaba. */
+      pagado?: number | null
     },
   ) => patch<{ ok: true }>(`participaciones/${id}`, cambios),
 

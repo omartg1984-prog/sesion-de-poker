@@ -1,5 +1,5 @@
 import Esqueleto from '../components/Esqueleto'
-import { AlertTriangle, ArrowLeft, Coins, Lock, Trash2, UserPlus, Users } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, Coins, Lock, Trash2, Trophy, UserPlus, Users } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import NumInput from '../components/NumInput'
 import Sheet from '../components/Sheet'
@@ -55,6 +55,7 @@ export default function PartidaScreen() {
   const [ocupado, setOcupado] = useState(false)
   const [torneo, setTorneo] = useState<ConfigTorneo>(TORNEO_POR_DEFECTO)
   const [borrando, setBorrando] = useState(false)
+  const [cerrando, setCerrando] = useState(false)
 
   const diferido = useGuardadoDiferido()
 
@@ -99,6 +100,12 @@ export default function PartidaScreen() {
     )
   }
 
+  /* El billete más chico cambia de una noche a otra según con cuánta feria llegaron. */
+  const cambiarRedondeo = (paso: number) => {
+    setDatos((d) => (d ? { ...d, partida: { ...d.partida, redondeo: paso } } : d))
+    diferido('redondeo', () => api.guardarPartida(partidaId, { redondeo: paso }))
+  }
+
   const cambiarTorneo = (t: ConfigTorneo) => {
     setTorneo(t)
     diferido('torneo', () => api.guardarPartida(partidaId, { torneo: t }))
@@ -138,10 +145,10 @@ export default function PartidaScreen() {
   }
 
   const cerrarPartida = async () => {
-    if (!window.confirm('¿Cerrar la partida? Ya no se podrá editar.')) return
     const r = await conAviso(() => api.guardarPartida(partidaId, { estado: 'cerrada' }))
     if (r) {
-      avisar('Partida cerrada')
+      setCerrando(false)
+      avisar('Partida cerrada. Ya cuenta para la liga')
       void cargar()
     }
   }
@@ -227,7 +234,7 @@ export default function PartidaScreen() {
           cambiarTorneo={cambiarTorneo}
         />
       ) : (
-        <PartidaCash {...comunes} pestana={pestana as PestanaCash} />
+        <PartidaCash {...comunes} pestana={pestana as PestanaCash} onRedondeo={cambiarRedondeo} />
       )}
 
       {!sinJugadores && puedeEditar && pestana === 'jugadores' && (
@@ -237,10 +244,11 @@ export default function PartidaScreen() {
         </button>
       )}
 
-      {!sinJugadores && puedeEditar && pestana === 'resultado' && (
-        <button type="button" className="btn btn-ghost mt-2" onClick={() => void cerrarPartida()}>
+      {/* Es la acción que cierra la noche, así que va en rojo y no escondida al final. */}
+      {!sinJugadores && puedeEditar && (pestana === 'resultado' || pestana === 'numeros') && (
+        <button type="button" className="btn btn-marca mt-2" onClick={() => setCerrando(true)}>
           <Lock size={17} strokeWidth={2.4} />
-          Cerrar partida
+          Terminar partida
         </button>
       )}
 
@@ -254,6 +262,29 @@ export default function PartidaScreen() {
           Borrar esta partida
         </button>
       )}
+
+      {/* ---- terminar la partida ---- */}
+      <Sheet abierta={cerrando} onCerrar={() => setCerrando(false)} titulo="Terminar la partida">
+        <p className="mt-0 mb-3 text-[13px] leading-snug text-ink-soft">
+          Al cerrarla queda como está: ya nadie podrá cambiar montos, fichas ni el reparto
+          del dinero. Es lo que conviene hacer cuando ya se pagó todo y todos se van.
+        </p>
+        <div className="balance balance-ok mb-4">
+          <Trophy size={16} strokeWidth={2.4} />
+          <span>Desde ese momento cuenta para la tabla y el campeonato de la liga.</span>
+        </div>
+        <button
+          type="button"
+          className="btn btn-marca mb-2"
+          onClick={() => void cerrarPartida()}
+        >
+          <Lock size={17} strokeWidth={2.4} />
+          Sí, terminar la partida
+        </button>
+        <button type="button" className="btn btn-ghost mb-2" onClick={() => setCerrando(false)}>
+          Todavía no
+        </button>
+      </Sheet>
 
       <Sheet abierta={borrando} onCerrar={() => setBorrando(false)} titulo="Borrar la partida">
         <div className="balance balance-off">
