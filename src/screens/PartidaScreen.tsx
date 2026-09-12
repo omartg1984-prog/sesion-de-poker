@@ -1,12 +1,29 @@
 import Esqueleto from '../components/Esqueleto'
-import { AlertTriangle, ArrowLeft, Coins, Lock, Trash2, Trophy, UserPlus, Users } from 'lucide-react'
+import {
+  AlertTriangle,
+  ArrowLeft,
+  Coins,
+  Lock,
+  Trash2,
+  Trophy,
+  UserPlus,
+  Users,
+} from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import NumInput from '../components/NumInput'
 import Sheet from '../components/Sheet'
-import { api, leerJson, type ConfigTorneo, type DetallePartida, type Miembro, type Participacion } from '../lib/api'
+import {
+  api,
+  leerJson,
+  type ConfigTorneo,
+  type DetallePartida,
+  type Miembro,
+  type Participacion,
+} from '../lib/api'
 import { useRecargarAlVolver } from '../lib/recargar'
 import { conAviso, useApp } from '../store/app'
 import { ENTRADA_POR_DEFECTO } from './partida/comun'
+import BannerFichas from './partida/BannerFichas'
 import Numeros from './partida/Numeros'
 import { calcularCuadre, porQueNoSePuedeCerrar } from './partida/cuadre'
 import { calcularReparto, invertidoDe } from './partida/comun'
@@ -29,7 +46,12 @@ function useGuardadoDiferido(ms = 600) {
   const pendientes = useRef(new Map<string, () => Promise<unknown>>())
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  useEffect(() => () => { if (timer.current) clearTimeout(timer.current) }, [])
+  useEffect(
+    () => () => {
+      if (timer.current) clearTimeout(timer.current)
+    },
+    [],
+  )
 
   return (clave: string, fn: () => Promise<unknown>) => {
     pendientes.current.set(clave, fn)
@@ -92,10 +114,19 @@ export default function PartidaScreen() {
   ]
 
   /** Cambia una participación en pantalla al instante y la manda al servidor con retraso. */
-  const tocar = (id: string, enPantalla: Partial<Participacion>, aGuardar: Record<string, unknown>) => {
+  const tocar = (
+    id: string,
+    enPantalla: Partial<Participacion>,
+    aGuardar: Record<string, unknown>,
+  ) => {
     setDatos((d) =>
       d
-        ? { ...d, participaciones: d.participaciones.map((p) => (p.id === id ? { ...p, ...enPantalla } : p)) }
+        ? {
+            ...d,
+            participaciones: d.participaciones.map((p) =>
+              p.id === id ? { ...p, ...enPantalla } : p,
+            ),
+          }
         : d,
     )
     diferido(id + ':' + Object.keys(aGuardar).join(), () =>
@@ -180,21 +211,21 @@ export default function PartidaScreen() {
 
   const comunes = { datos, colores, puedeEditar, tocar, recargar: cargar }
 
-  /* El candado del cierre. En torneo no aplica: ahí no se cuentan fichas al final, el
+  /* El cuadre de la noche. En torneo no aplica: ahí no se cuentan fichas al final, el
      resultado sale de los premios por lugar. */
-  const trabaParaCerrar = esTorneo
+  const cuadre = esTorneo
     ? null
-    : porQueNoSePuedeCerrar(
-        calcularCuadre(
-          datos.participaciones,
-          colores,
-          calcularReparto(datos.participaciones, colores, invertidoDe),
-          invertidoDe,
-        ),
+    : calcularCuadre(
+        datos.participaciones,
+        colores,
+        calcularReparto(datos.participaciones, colores, invertidoDe),
+        invertidoDe,
       )
+  const trabaParaCerrar = cuadre ? porQueNoSePuedeCerrar(cuadre) : null
   // La configuración del torneo se tiene que poder abrir ANTES de cargar a nadie:
   // ahí se define el costo de entrada con el que entran todos.
-  const sinJugadores = datos.participaciones.length === 0 && pestana !== 'torneo' && pestana !== 'numeros'
+  const sinJugadores =
+    datos.participaciones.length === 0 && pestana !== 'torneo' && pestana !== 'numeros'
 
   return (
     <div className="mx-auto max-w-[640px] px-3.5 pb-10">
@@ -234,6 +265,10 @@ export default function PartidaScreen() {
             </button>
           ))}
         </div>
+
+        {cuadre && pestana === 'final' && datos.participaciones.length > 0 && (
+          <BannerFichas cuadre={cuadre} />
+        )}
       </header>
 
       {sinJugadores ? (
@@ -298,11 +333,7 @@ export default function PartidaScreen() {
       )}
 
       {datos.soyAdmin && (
-        <button
-          type="button"
-          className="btn btn-borrar mt-6"
-          onClick={() => setBorrando(true)}
-        >
+        <button type="button" className="btn btn-borrar mt-6" onClick={() => setBorrando(true)}>
           <Trash2 size={17} strokeWidth={2.4} />
           Borrar esta partida
         </button>
@@ -311,18 +342,14 @@ export default function PartidaScreen() {
       {/* ---- terminar la partida ---- */}
       <Sheet abierta={cerrando} onCerrar={() => setCerrando(false)} titulo="Terminar la partida">
         <p className="mt-0 mb-3 text-[13px] leading-snug text-ink-soft">
-          Al cerrarla queda como está: ya nadie podrá cambiar montos, fichas ni el reparto
-          del dinero. Es lo que conviene hacer cuando ya se pagó todo y todos se van.
+          Al cerrarla queda como está: ya nadie podrá cambiar montos, fichas ni el reparto del
+          dinero. Es lo que conviene hacer cuando ya se pagó todo y todos se van.
         </p>
         <div className="balance balance-ok mb-4">
           <Trophy size={16} strokeWidth={2.4} />
           <span>Desde ese momento cuenta para la tabla y el campeonato de la liga.</span>
         </div>
-        <button
-          type="button"
-          className="btn btn-marca mb-2"
-          onClick={() => void cerrarPartida()}
-        >
+        <button type="button" className="btn btn-marca mb-2" onClick={() => void cerrarPartida()}>
           <Lock size={17} strokeWidth={2.4} />
           Sí, terminar la partida
         </button>
@@ -366,7 +393,10 @@ export default function PartidaScreen() {
           {miembros.map((m) => {
             const puesto = m.id in seleccion
             return (
-              <li key={m.id} className="border-b border-dashed border-paper-line py-2.5 last:border-b-0">
+              <li
+                key={m.id}
+                className="border-b border-dashed border-paper-line py-2.5 last:border-b-0"
+              >
                 <div className="flex items-center gap-2.5">
                   <input
                     type="checkbox"
@@ -376,7 +406,8 @@ export default function PartidaScreen() {
                     onChange={(e) =>
                       setSeleccion((s) => {
                         const n = { ...s }
-                        if (e.target.checked) n[m.id] = esTorneo ? torneo.buyIn : ENTRADA_POR_DEFECTO
+                        if (e.target.checked)
+                          n[m.id] = esTorneo ? torneo.buyIn : ENTRADA_POR_DEFECTO
                         else delete n[m.id]
                         return n
                       })
@@ -400,7 +431,12 @@ export default function PartidaScreen() {
             )
           })}
         </ul>
-        <button type="button" className="btn btn-marca mb-2" disabled={ocupado} onClick={() => void guardarJugadores()}>
+        <button
+          type="button"
+          className="btn btn-marca mb-2"
+          disabled={ocupado}
+          onClick={() => void guardarJugadores()}
+        >
           <Coins size={17} strokeWidth={2.4} />
           Guardar y repartir fichas
         </button>

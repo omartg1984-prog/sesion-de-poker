@@ -89,7 +89,10 @@ export default function PartidaCash({
               )}
 
               {recompras.map((r, ri) => (
-                <div key={ri} className="mb-2 rounded-xl border border-paper-line bg-paper-soft px-3 py-2">
+                <div
+                  key={ri}
+                  className="mb-2 rounded-xl border border-paper-line bg-paper-soft px-3 py-2"
+                >
                   <div className="mb-1.5 flex items-center justify-between">
                     <b className="text-[11px] tracking-[.5px] text-ink-soft uppercase">
                       Recompra {ri + 1}
@@ -98,7 +101,12 @@ export default function PartidaCash({
                       <button
                         type="button"
                         aria-label={`Quitar recompra ${ri + 1} de ${p.nombre}`}
-                        onClick={() => cambiarRecompras(p.id, recompras.filter((_, x) => x !== ri))}
+                        onClick={() =>
+                          cambiarRecompras(
+                            p.id,
+                            recompras.filter((_, x) => x !== ri),
+                          )
+                        }
                         className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg border-none bg-ink/8 text-ink-soft hover:bg-loss/12 hover:text-loss"
                       >
                         <X size={13} strokeWidth={2.6} />
@@ -168,8 +176,11 @@ export default function PartidaCash({
             <span>Cash out</span>
           </p>
           <p className="m-0 text-[13px] leading-snug text-ink-soft">
-            Cuenta las fichas de cada quien. Puedes teclear la cantidad o ir sumando con −/+.
-            Llevas <b className="text-ink">{contados} de {conTotales.length}</b>.
+            Cuenta las fichas de cada quien. Puedes teclear la cantidad o ir sumando con −/+. Llevas{' '}
+            <b className="text-ink">
+              {contados} de {conTotales.length}
+            </b>
+            .
           </p>
         </section>
 
@@ -209,11 +220,15 @@ export default function PartidaCash({
 
               <div className="mt-3 flex items-center gap-3 rounded-xl bg-noche-linea px-3.5 py-3 text-paper">
                 <span className="min-w-0">
-                  <span className="block text-[10px] tracking-[.6px] uppercase opacity-70">Puso</span>
+                  <span className="block text-[10px] tracking-[.6px] uppercase opacity-70">
+                    Puso
+                  </span>
                   <b className="font-display text-base">{money(p.invertido)}</b>
                 </span>
                 <span className="min-w-0">
-                  <span className="block text-[10px] tracking-[.6px] uppercase opacity-70">Fichas</span>
+                  <span className="block text-[10px] tracking-[.6px] uppercase opacity-70">
+                    Fichas
+                  </span>
                   <b className="font-display text-base">{money(p.final)}</b>
                 </span>
                 <span
@@ -226,6 +241,15 @@ export default function PartidaCash({
             </section>
           )
         })}
+
+        <RepartoDinero
+          filas={ranking.map((r) => ({ p: r, nombre: r.nombre, leToca: r.final }))}
+          totalMesa={totalMesa}
+          redondeo={datos.partida.redondeo ?? 50}
+          puedeEditar={puedeEditar}
+          onRedondeo={onRedondeo}
+          onPago={(id, pagado) => tocar(id, { pagado }, { pagado })}
+        />
 
         <Inventario cuadre={cuadre} />
       </>
@@ -258,8 +282,7 @@ export default function PartidaCash({
   }
 
   return (
-    <>
-      <section className="panel">
+    <section className="panel">
       <p className="panel-title">
         <span>Resultado</span>
       </p>
@@ -305,16 +328,6 @@ export default function PartidaCash({
       </ul>
 
       <ShareBlock datos={datosImagen} texto={texto} alt="Tabla de resultados de la partida" />
-      </section>
-
-      <RepartoDinero
-        filas={ranking.map((r) => ({ p: r, nombre: r.nombre, leToca: r.final }))}
-        totalMesa={totalMesa}
-        redondeo={datos.partida.redondeo ?? 50}
-        puedeEditar={puedeEditar}
-        onRedondeo={onRedondeo}
-        onPago={(id, pagado) => tocar(id, { pagado }, { pagado })}
-      />
-    </>
+    </section>
   )
 }
