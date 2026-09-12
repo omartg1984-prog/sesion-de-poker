@@ -316,7 +316,7 @@ export async function rutas(
       // PATCH /api/ligas/:id — nombre e inventario de fichas
       if (partes.length === 2 && metodo === 'PATCH') {
         if (!esAdminLiga) return json({ error: 'Solo un admin de la liga puede cambiar esto' }, 403)
-        const { nombre, colores, foto } = await cuerpo<Record<string, unknown>>()
+        const { nombre, colores, foto, reglas } = await cuerpo<Record<string, unknown>>()
         const actual = await env.DB.prepare('SELECT nombre, colores, foto FROM ligas WHERE id = ?')
           .bind(ligaId)
           .first<{ nombre: string; colores: string; foto: string | null }>()
@@ -333,8 +333,10 @@ export async function rutas(
           img = r.foto
         }
 
-        await env.DB.prepare('UPDATE ligas SET nombre = ?, colores = ?, foto = ? WHERE id = ?')
-          .bind(nom, cols, img, ligaId)
+        await env.DB.prepare(
+          'UPDATE ligas SET nombre = ?, colores = ?, foto = ?, reglas = COALESCE(?, reglas) WHERE id = ?',
+        )
+          .bind(nom, cols, img, reglas === undefined ? null : JSON.stringify(reglas), ligaId)
           .run()
         return json({ ok: true })
       }

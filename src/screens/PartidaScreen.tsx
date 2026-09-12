@@ -278,7 +278,7 @@ export default function PartidaScreen() {
           <p className="mx-auto mb-3 max-w-[300px] text-[13px] leading-snug text-ink-soft">
             {datos.soyAdmin
               ? esTorneo
-                ? 'Pon el costo de entrada en la pestaña Torneo y luego elige quiénes llegaron.'
+                ? 'Elige quiénes llegaron. Todos entran con el costo que definiste al crear el torneo.'
                 : 'Elige quiénes llegaron y con cuánto entra cada uno.'
               : 'Un admin de la liga tiene que cargar a los jugadores.'}
           </p>

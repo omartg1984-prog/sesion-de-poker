@@ -18,8 +18,21 @@ import { useEffect, useState } from 'react'
 import EditorFichas from '../components/EditorFichas'
 import Sheet from '../components/Sheet'
 import Avatar, { AvatarEditable } from '../components/Avatar'
+import PasosTorneo from './liga/PasosTorneo'
+import { TORNEO_POR_DEFECTO } from './partida/PartidaTorneo'
+import Reglas from './liga/Reglas'
+import type { SeccionReglas } from '../lib/reglas'
 import { copyText } from '../lib/portapapeles'
-import { api, type Liga, type Miembro, type PartidaResumen, type TablaPosiciones as Tabla, type TipoPartida } from '../lib/api'
+import {
+  api,
+  type ConfigTorneo,
+  type Liga,
+  type Miembro,
+  type PartidaResumen,
+  type TablaPosiciones as Tabla,
+  type TipoPartida,
+  leerJson,
+} from '../lib/api'
 import TablaPosiciones from './liga/TablaPosiciones'
 import { useRecargarAlVolver } from '../lib/recargar'
 import { conAviso, useApp } from '../store/app'
@@ -50,7 +63,7 @@ export default function LigaScreen() {
   const [tabla, setTabla] = useState<Tabla | null>(null)
   /* Abre en Posiciones: la tabla es lo que la gente entra a ver, y crear partida se
      hace una vez por noche. */
-  const [pestana, setPestana] = useState<'partidas' | 'posiciones'>('posiciones')
+  const [pestana, setPestana] = useState<'partidas' | 'posiciones' | 'reglas'>('posiciones')
   const [borrando, setBorrando] = useState(false)
   const [confirmaNombre, setConfirmaNombre] = useState('')
 
@@ -61,6 +74,7 @@ export default function LigaScreen() {
 
   const [fecha, setFecha] = useState(hoy())
   const [nombrePartida, setNombrePartida] = useState('')
+  const [torneoNuevo, setTorneoNuevo] = useState<ConfigTorneo>(TORNEO_POR_DEFECTO)
   const [tipo, setTipo] = useState<TipoPartida>('cash')
   const [colores, setColores] = useState<ChipColor[]>([])
 
@@ -92,12 +106,20 @@ export default function LigaScreen() {
     if (ocupado) return
     setOcupado(true)
     const r = await conAviso(() =>
-      api.crearPartida(ligaId, { fecha, nombre: nombrePartida.trim() || undefined, tipo }),
+      api.crearPartida(ligaId, {
+        fecha,
+        nombre: nombrePartida.trim() || undefined,
+        tipo,
+        /* En torneo el costo de entrada define el stack, así que se manda desde aquí:
+           cargar jugadores con la entrada en cero les repartía cero fichas. */
+        torneo: tipo === 'torneo' ? torneoNuevo : undefined,
+      }),
     )
     setOcupado(false)
     if (r) {
       setCreando(false)
       setNombrePartida('')
+      setTorneoNuevo(TORNEO_POR_DEFECTO)
       irAPartida(r.partida.id, ligaId)
     }
   }
@@ -109,6 +131,13 @@ export default function LigaScreen() {
     const r = await conAviso(() => api.guardarLiga(ligaId, { foto }))
     if (r) avisar(foto ? 'Foto actualizada' : 'Foto quitada')
     else setLiga(liga)
+  }
+
+  const guardarReglas = async (reglas: SeccionReglas[]) => {
+    if (!liga) return
+    setLiga({ ...liga, reglas: JSON.stringify(reglas) })
+    const r = await conAviso(() => api.guardarLiga(ligaId, { reglas }))
+    if (r) avisar('Reglas guardadas')
   }
 
   const guardarFichas = async () => {
@@ -213,8 +242,9 @@ export default function LigaScreen() {
       <div className="mb-3.5 flex gap-1 rounded-xl bg-black/30 p-1">
         {(
           [
-            ['partidas', 'Partidas'],
             ['posiciones', 'Posiciones'],
+            ['partidas', 'Partidas'],
+            ['reglas', 'Reglas'],
           ] as const
         ).map(([id, texto]) => (
           <button
@@ -233,59 +263,68 @@ export default function LigaScreen() {
 
       {pestana === 'posiciones' && <TablaPosiciones tabla={tabla} nombreLiga={liga.nombre} />}
 
+      {pestana === 'reglas' && (
+        <Reglas
+          reglas={leerJson<SeccionReglas[] | null>(liga.reglas, null)}
+          soyAdmin={soyAdmin}
+          onGuardar={(r) => void guardarReglas(r)}
+        />
+      )}
+
       {/* partidas */}
       {pestana === 'partidas' && (
-      <section className="panel">
-        <p className="panel-title">
-          <span>Partidas</span>
-        </p>
-
-        {partidas.length === 0 ? (
-          <p className="m-0 mb-3 text-[13px] text-ink-soft">
-            Todavía no hay partidas. {soyAdmin ? 'Crea la primera.' : 'Un admin tiene que crearlas.'}
+        <section className="panel">
+          <p className="panel-title">
+            <span>Partidas</span>
           </p>
-        ) : (
-          <ul className="m-0 mb-3 list-none p-0">
-            {partidas.map((p) => (
-              <li key={p.id}>
-                <button
-                  type="button"
-                  onClick={() => irAPartida(p.id, ligaId)}
-                  className="flex w-full cursor-pointer items-center gap-2.5 border-none border-b border-dashed border-paper-line bg-transparent px-0.5 py-3 text-left last:border-b-0"
-                >
-                  {p.tipo === 'torneo' ? (
-                    <Trophy size={17} className="shrink-0 text-marca-tinta" strokeWidth={2.3} />
-                  ) : (
-                    <Banknote size={17} className="shrink-0 text-marca-tinta" strokeWidth={2.3} />
-                  )}
-                  <span className="min-w-0 flex-1">
-                    <b className="block truncate text-[15px] text-ink">
-                      {p.nombre || fechaLarga(p.fecha)}
-                    </b>
-                    <span className="block text-xs text-ink-soft">
-                      {p.nombre ? `${fechaLarga(p.fecha)} · ` : ''}
-                      {p.jugadores} {p.jugadores === 1 ? 'jugador' : 'jugadores'}
-                      {p.estado === 'cerrada' && ' · cerrada'}
-                    </span>
-                  </span>
-                  <ChevronRight size={18} className="shrink-0 text-ink-soft/45" />
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
 
-        {soyAdmin && (
-          <button
-            type="button"
-            className="btn-dashed flex items-center justify-center gap-1.5"
-            onClick={() => setCreando(true)}
-          >
-            <CalendarPlus size={16} strokeWidth={2.5} />
-            Nueva partida
-          </button>
-        )}
-      </section>
+          {partidas.length === 0 ? (
+            <p className="m-0 mb-3 text-[13px] text-ink-soft">
+              Todavía no hay partidas.{' '}
+              {soyAdmin ? 'Crea la primera.' : 'Un admin tiene que crearlas.'}
+            </p>
+          ) : (
+            <ul className="m-0 mb-3 list-none p-0">
+              {partidas.map((p) => (
+                <li key={p.id}>
+                  <button
+                    type="button"
+                    onClick={() => irAPartida(p.id, ligaId)}
+                    className="flex w-full cursor-pointer items-center gap-2.5 border-none border-b border-dashed border-paper-line bg-transparent px-0.5 py-3 text-left last:border-b-0"
+                  >
+                    {p.tipo === 'torneo' ? (
+                      <Trophy size={17} className="shrink-0 text-marca-tinta" strokeWidth={2.3} />
+                    ) : (
+                      <Banknote size={17} className="shrink-0 text-marca-tinta" strokeWidth={2.3} />
+                    )}
+                    <span className="min-w-0 flex-1">
+                      <b className="block truncate text-[15px] text-ink">
+                        {p.nombre || fechaLarga(p.fecha)}
+                      </b>
+                      <span className="block text-xs text-ink-soft">
+                        {p.nombre ? `${fechaLarga(p.fecha)} · ` : ''}
+                        {p.jugadores} {p.jugadores === 1 ? 'jugador' : 'jugadores'}
+                        {p.estado === 'cerrada' && ' · cerrada'}
+                      </span>
+                    </span>
+                    <ChevronRight size={18} className="shrink-0 text-ink-soft/45" />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {soyAdmin && (
+            <button
+              type="button"
+              className="btn-dashed flex items-center justify-center gap-1.5"
+              onClick={() => setCreando(true)}
+            >
+              <CalendarPlus size={16} strokeWidth={2.5} />
+              Nueva partida
+            </button>
+          )}
+        </section>
       )}
 
       {/* accesos a jugadores y fichas */}
@@ -403,7 +442,14 @@ export default function LigaScreen() {
           />
         </label>
 
-        <button type="button" className="btn btn-marca mb-2" disabled={ocupado} onClick={() => void crearPartida()}>
+        {tipo === 'torneo' && <PasosTorneo torneo={torneoNuevo} onCambiar={setTorneoNuevo} />}
+
+        <button
+          type="button"
+          className="btn btn-marca mb-2"
+          disabled={ocupado}
+          onClick={() => void crearPartida()}
+        >
           Crear partida
         </button>
       </Sheet>
@@ -440,7 +486,9 @@ export default function LigaScreen() {
                 type="button"
                 disabled={!soyAdmin}
                 onClick={() => void alternarAdmin(m)}
-                aria-label={m.es_admin === 1 ? `Quitar admin a ${m.nombre}` : `Hacer admin a ${m.nombre}`}
+                aria-label={
+                  m.es_admin === 1 ? `Quitar admin a ${m.nombre}` : `Hacer admin a ${m.nombre}`
+                }
                 className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border-none transition-colors ${
                   m.es_admin === 1 ? 'bg-marca/22 text-marca-tinta' : 'bg-ink/8 text-ink-soft/45'
                 } ${soyAdmin ? 'cursor-pointer active:scale-95' : 'cursor-default'}`}
@@ -451,10 +499,16 @@ export default function LigaScreen() {
                 <button
                   type="button"
                   onClick={() => void sacar(m)}
-                  aria-label={m.id === yo.id ? 'Salirme de la liga' : `Sacar a ${m.nombre} de la liga`}
+                  aria-label={
+                    m.id === yo.id ? 'Salirme de la liga' : `Sacar a ${m.nombre} de la liga`
+                  }
                   className="flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-lg border-none bg-ink/8 text-ink-soft/55 transition-colors hover:bg-loss/12 hover:text-loss active:scale-95"
                 >
-                  {m.id === yo.id ? <LogOut size={15} strokeWidth={2.5} /> : <UserMinus size={15} strokeWidth={2.5} />}
+                  {m.id === yo.id ? (
+                    <LogOut size={15} strokeWidth={2.5} />
+                  ) : (
+                    <UserMinus size={15} strokeWidth={2.5} />
+                  )}
                 </button>
               )}
             </li>
@@ -465,7 +519,8 @@ export default function LigaScreen() {
       {/* ---- fichas de la casa ---- */}
       <Sheet abierta={fichas} onCerrar={() => setFichas(false)} titulo="Fichas de la casa">
         <p className="mt-0 mb-3 text-[13px] leading-snug text-ink-soft">
-          Con esto la app calcula cuántas fichas darle a cada quien según el dinero con el que entra.
+          Con esto la app calcula cuántas fichas darle a cada quien según el dinero con el que
+          entra.
           {!soyAdmin && ' Solo un admin de la liga puede cambiarlo.'}
         </p>
         <EditorFichas colores={colores} onChange={setColores} soloLectura={!soyAdmin} />

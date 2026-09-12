@@ -5,6 +5,7 @@
  */
 import type { ChipColor, Chips } from '../store/types'
 import type { Estructura, RelojTorneo } from './torneo'
+import type { SeccionReglas } from './reglas'
 
 export class ErrorApi extends Error {
   estado: number
@@ -90,6 +91,8 @@ export interface Liga {
   nombre: string
   codigo: string
   foto: string | null
+  /** JSON con las reglas de la casa. null = todavía no las han tocado. */
+  reglas: string | null
   colores: ChipColor[]
   creada_por: string
   creada_en: string
@@ -258,7 +261,12 @@ export const api = {
     pedir<{ liga: Liga; miembros: Miembro[]; soyAdmin: boolean }>(`ligas/${id}`),
   guardarLiga: (
     id: string,
-    cambios: { nombre?: string; colores?: ChipColor[]; foto?: string | null },
+    cambios: {
+      nombre?: string
+      colores?: ChipColor[]
+      foto?: string | null
+      reglas?: SeccionReglas[]
+    },
   ) =>
     patch<{ ok: true }>(`ligas/${id}`, cambios),
   cambiarAdminLiga: (ligaId: string, usuarioId: string, esAdmin: boolean) =>
