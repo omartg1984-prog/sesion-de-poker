@@ -7,6 +7,7 @@ import {
   ChevronRight,
   Coins,
   Megaphone,
+  Pencil,
   Share2,
   LogOut,
   Shield,
@@ -18,7 +19,8 @@ import {
 import { useEffect, useState } from 'react'
 import EditorFichas from '../components/EditorFichas'
 import Sheet from '../components/Sheet'
-import Avatar, { AvatarEditable } from '../components/Avatar'
+import Avatar from '../components/Avatar'
+import LaLiga from './liga/LaLiga'
 import CrearTorneo from './liga/CrearTorneo'
 import Reglas from './liga/Reglas'
 import type { SeccionReglas } from '../lib/reglas'
@@ -76,6 +78,8 @@ export default function LigaScreen() {
   const [borrando, setBorrando] = useState(false)
   const [confirmaNombre, setConfirmaNombre] = useState('')
 
+  const [ficha, setFicha] = useState(false)
+  const [editandoLiga, setEditandoLiga] = useState(false)
   const [creando, setCreando] = useState(false)
   const [fichas, setFichas] = useState(false)
   const [gente, setGente] = useState(false)
@@ -171,6 +175,15 @@ ${link}`
     else setLiga(liga)
   }
 
+  const guardarLaLiga = async ({ nombre, descripcion }: { nombre: string; descripcion: string }) => {
+    if (!liga) return
+    const antes = liga
+    setLiga({ ...liga, nombre, descripcion: descripcion || null })
+    const r = await conAviso(() => api.guardarLiga(ligaId, { nombre, descripcion }))
+    if (r) avisar('Liga actualizada')
+    else setLiga(antes)
+  }
+
   const guardarReglas = async (reglas: SeccionReglas[]) => {
     if (!liga) return
     setLiga({ ...liga, reglas: JSON.stringify(reglas) })
@@ -240,22 +253,48 @@ ${link}`
         >
           <ArrowLeft size={18} strokeWidth={2.4} />
         </button>
-        {soyAdmin ? (
-          <AvatarEditable
-            foto={liga.foto}
-            nombre={liga.nombre}
-            size={38}
-            etiqueta="Foto de la liga"
-            onCambiar={(f) => void cambiarFoto(f)}
-            onError={avisar}
-          />
-        ) : (
-          <Avatar foto={liga.foto} nombre={liga.nombre} size={38} oscuro />
+        {/* Tocar la foto es verla, no cambiarla: editar tiene su propio botón. */}
+        <button
+          type="button"
+          onClick={() => {
+            setEditandoLiga(false)
+            setFicha(true)
+          }}
+          aria-label={`Ver la liga ${liga.nombre}`}
+          className="shrink-0 cursor-pointer rounded-full border-none bg-transparent p-0 active:scale-95"
+        >
+          <Avatar foto={liga.foto} nombre={liga.nombre} size={52} oscuro />
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setEditandoLiga(false)
+            setFicha(true)
+          }}
+          className="min-w-0 flex-1 cursor-pointer border-none bg-transparent p-0 text-left"
+        >
+          <h1 className="m-0 truncate font-display text-[17px] font-bold tracking-[.5px] text-white uppercase">
+            {liga.nombre}
+          </h1>
+          {liga.descripcion && (
+            <span className="block truncate text-[11px] text-white/70">{liga.descripcion}</span>
+          )}
+        </button>
+
+        {soyAdmin && (
+          <button
+            type="button"
+            aria-label="Editar la liga"
+            onClick={() => {
+              setEditandoLiga(true)
+              setFicha(true)
+            }}
+            className="flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-full border-none bg-white/15 text-white active:scale-90"
+          >
+            <Pencil size={16} strokeWidth={2.5} />
+          </button>
         )}
-        <h1 className="m-0 min-w-0 flex-1 truncate font-display text-[17px] font-bold tracking-[.5px] text-white uppercase">
-          {liga.nombre}
-        </h1>
-        {soyAdmin && <Shield size={15} className="shrink-0 text-white/85" />}
       </header>
 
       {/* invitar: se manda un link que se abre y se acepta, no un código que teclear */}
@@ -566,6 +605,18 @@ ${link}`
           </>
         )}
       </Sheet>
+
+      {/* ---- la ficha de la liga ---- */}
+      <LaLiga
+        abierta={ficha}
+        liga={liga}
+        soyAdmin={soyAdmin}
+        editandoDeEntrada={editandoLiga}
+        onCerrar={() => setFicha(false)}
+        onGuardar={guardarLaLiga}
+        onFoto={(f) => void cambiarFoto(f)}
+        onError={avisar}
+      />
 
       {/* ---- jugadores de la liga ---- */}
       <Sheet abierta={gente} onCerrar={() => setGente(false)} titulo="Jugadores de la liga">

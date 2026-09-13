@@ -91,6 +91,8 @@ export interface Liga {
   nombre: string
   codigo: string
   foto: string | null
+  /** De qué va la liga, escrito por los de la casa. null = nadie la ha escrito. */
+  descripcion: string | null
   /** JSON con las reglas de la casa. null = todavía no las han tocado. */
   reglas: string | null
   colores: ChipColor[]
@@ -342,6 +344,8 @@ export const api = {
       nombre?: string
       colores?: ChipColor[]
       foto?: string | null
+      /** Texto vacío la borra; no mandarla la deja como estaba. */
+      descripcion?: string
       reglas?: SeccionReglas[]
     },
   ) =>

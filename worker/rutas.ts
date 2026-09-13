@@ -364,10 +364,12 @@ export async function rutas(
       // PATCH /api/ligas/:id — nombre e inventario de fichas
       if (partes.length === 2 && metodo === 'PATCH') {
         if (!esAdminLiga) return json({ error: 'Solo un admin de la liga puede cambiar esto' }, 403)
-        const { nombre, colores, foto, reglas } = await cuerpo<Record<string, unknown>>()
-        const actual = await env.DB.prepare('SELECT nombre, colores, foto FROM ligas WHERE id = ?')
+        const { nombre, colores, foto, reglas, descripcion } = await cuerpo<Record<string, unknown>>()
+        const actual = await env.DB.prepare(
+          'SELECT nombre, colores, foto, descripcion FROM ligas WHERE id = ?',
+        )
           .bind(ligaId)
-          .first<{ nombre: string; colores: string; foto: string | null }>()
+          .first<{ nombre: string; colores: string; foto: string | null; descripcion: string | null }>()
         if (!actual) return json({ error: 'Liga no encontrada' }, 404)
 
         const nom = nombre === undefined ? actual.nombre : String(nombre).trim()
@@ -381,10 +383,16 @@ export async function rutas(
           img = r.foto
         }
 
+        /* Vacía la borra; no mandarla la deja como estaba. */
+        const desc =
+          descripcion === undefined
+            ? actual.descripcion
+            : String(descripcion).trim().slice(0, 400) || null
+
         await env.DB.prepare(
-          'UPDATE ligas SET nombre = ?, colores = ?, foto = ?, reglas = COALESCE(?, reglas) WHERE id = ?',
+          'UPDATE ligas SET nombre = ?, colores = ?, foto = ?, descripcion = ?, reglas = COALESCE(?, reglas) WHERE id = ?',
         )
-          .bind(nom, cols, img, reglas === undefined ? null : JSON.stringify(reglas), ligaId)
+          .bind(nom, cols, img, desc, reglas === undefined ? null : JSON.stringify(reglas), ligaId)
           .run()
         return json({ ok: true })
       }
