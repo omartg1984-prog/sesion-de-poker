@@ -152,6 +152,32 @@ export interface PartidaResumen {
   presume?: string | null
 }
 
+/** Cómo quedó una noche, ya ordenada por el servidor. */
+export interface ResultadoNoche {
+  partida: {
+    id: string
+    fecha: string
+    nombre: string | null
+    tipo: TipoPartida
+    estado: 'abierta' | 'cerrada'
+  }
+  /** Lo que hubo sobre la mesa: la suma de lo que puso cada quien. */
+  mesa: number
+  filas: {
+    usuarioId: string
+    nombre: string
+    foto: string | null
+    puso: number
+    saco: number
+    resultado: number
+    /** Lugar en el resultado de la noche: 1 = ganó. */
+    lugar: number
+    /** Lugar capturado del torneo, si es torneo. */
+    lugarTorneo: number | null
+    recompras: number
+  }[]
+}
+
 /** El mensaje del ganador de la última noche cerrada, que es el que se ve en la liga. */
 export interface Presume {
   texto: string
@@ -351,6 +377,8 @@ export const api = {
   presumir: (partidaId: string, texto: string) =>
     put<{ ok: true; presume: string | null }>(`partidas/${partidaId}/presume`, { texto }),
   partida: (id: string) => pedir<DetallePartida>(`partidas/${id}`),
+  /** Cómo quedó una noche, para verla dentro de la tabla de la liga. */
+  resultado: (id: string) => pedir<ResultadoNoche>(`partidas/${id}/resultado`),
   borrarPartida: (id: string) => borrar<{ ok: true }>(`partidas/${id}`),
   guardarPartida: (
     id: string,

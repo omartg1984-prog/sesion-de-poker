@@ -690,6 +690,59 @@ export async function rutas(
     }
 
     /*
+     * GET /api/partidas/:id/resultado — cómo quedó esa noche, ya ordenado.
+     *
+     * Es lo que le da de comer a la vista "por partida" de la tabla de la liga. Se
+     * calcula aquí y no en el teléfono para que use la misma regla que el podio del
+     * lobby y que la tabla acumulada: una sola cuenta de quién ganó una noche.
+     */
+    if (partes[2] === 'resultado' && metodo === 'GET') {
+      const liga = await env.DB.prepare('SELECT colores FROM ligas WHERE id = ?')
+        .bind(partida.liga_id)
+        .first<{ colores: string }>()
+      const { results: jugadores } = await env.DB.prepare(
+        `SELECT p.partida_id, p.usuario_id, u.nombre, u.foto,
+                p.entrada, p.recompras, p.fichas_final, p.rebuys, p.addons, p.lugar
+         FROM participaciones p JOIN usuarios u ON u.id = p.usuario_id
+         WHERE p.partida_id = ?`,
+      )
+        .bind(partidaId)
+        .all<JugadorConNombre>()
+
+      const completa = await env.DB.prepare(
+        'SELECT fecha, nombre, tipo, torneo, estado FROM partidas WHERE id = ?',
+      )
+        .bind(partidaId)
+        .first<{ fecha: string; nombre: string | null; tipo: string; torneo: string | null; estado: string }>()
+
+      const orden = podioDe(completa!, jugadores, leerJson<ColorFicha[]>(liga?.colores, []))
+      return json({
+        partida: {
+          id: partidaId,
+          fecha: completa!.fecha,
+          nombre: completa!.nombre,
+          tipo: completa!.tipo,
+          estado: completa!.estado,
+        },
+        /* Lo que hubo sobre la mesa esa noche: la suma de lo que puso cada quien. */
+        mesa: orden.reduce((t, n) => t + n.puso, 0),
+        filas: orden.map((n) => ({
+          usuarioId: n.jugador.usuario_id,
+          nombre: n.jugador.nombre,
+          foto: n.jugador.foto,
+          puso: n.puso,
+          saco: n.saco,
+          resultado: n.resultado,
+          lugar: n.lugar,
+          /* El lugar del torneo lo captura un admin; el de la tabla sale del resultado.
+             Los dos importan: uno paga el premio, el otro ordena la noche. */
+          lugarTorneo: n.jugador.lugar || null,
+          recompras: n.recompras,
+        })),
+      })
+    }
+
+    /*
      * PUT /api/partidas/:id/presume — el mensaje del que ganó la noche.
      *
      * No lo escribe un admin ni el jefe: lo escribe el que ganó, y nadie más. Por eso
@@ -803,6 +856,25 @@ export async function rutas(
 
     const entero = (v: unknown) => (v === undefined ? null : Math.max(0, Math.floor(Number(v) || 0)))
 
+    /*
+     * Un conteo de fichas no puede ser negativo: no existen menos cuatro verdes. Sin
+     * esto, un signo de menos tecleado sin querer se guarda tal cual y desde ahí
+     * envenena el saldo de esa noche y la tabla de toda la liga —y el jugador aparece
+     * habiéndose llevado dinero en negativo—.
+     *
+     * Se limpia aquí y no sólo en la pantalla porque ahora cualquiera de la mesa puede
+     * capturar un conteo.
+     */
+    const soloFichas = (v: unknown): Record<string, number> => {
+      const limpio: Record<string, number> = {}
+      if (v && typeof v === 'object') {
+        for (const [color, cuantas] of Object.entries(v as Record<string, unknown>)) {
+          limpio[color] = Math.max(0, Math.floor(Number(cuantas) || 0))
+        }
+      }
+      return limpio
+    }
+
     await env.DB.prepare(
       `UPDATE participaciones SET
          entrada       = COALESCE(?, entrada),
@@ -819,8 +891,10 @@ export async function rutas(
       .bind(
         entrada === undefined ? null : Number(entrada) || 0,
         recompras === undefined ? null : JSON.stringify(recompras),
-        fichasManual === undefined || fichasManual === null ? null : JSON.stringify(fichasManual),
-        fichasFinal === undefined ? null : JSON.stringify(fichasFinal),
+        fichasManual === undefined || fichasManual === null
+          ? null
+          : JSON.stringify(soloFichas(fichasManual)),
+        fichasFinal === undefined ? null : JSON.stringify(soloFichas(fichasFinal)),
         entero(rebuys),
         entero(addons),
         entero(lugar),

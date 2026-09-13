@@ -1,12 +1,30 @@
-import { Flame, Info, Snowflake, Trophy } from 'lucide-react'
-import { useState } from 'react'
+import { Flame, Snowflake, Trophy } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import Esqueleto from '../../components/Esqueleto'
-import Medalla from '../../components/Medalla'
 import ShareBlock from '../../components/ShareBlock'
 import Titulos from '../../components/Titulos'
 import { EPS, money, signed } from '../../lib/money'
-import type { DatosLiga } from '../../lib/imagenTablas'
-import type { Posicion, TablaPosiciones as Tabla } from '../../lib/api'
+import type { DatosLiga, DatosTabla } from '../../lib/imagenTablas'
+import {
+  api,
+  type PartidaResumen,
+  type Posicion,
+  type ResultadoNoche,
+  type TablaPosiciones as Tabla,
+} from '../../lib/api'
+import { conAviso } from '../../store/app'
+
+/*
+ * La tabla de la liga, en tarjetas.
+ *
+ * Antes era seis bloques apilados —podio, los que van arriba, la liga en números, la
+ * tabla, récords y una tabla ancha— y la misma gente aparecía en cinco de ellos. Con
+ * doce o veinte jugadores eso se lee como una hoja de cálculo, no como una app.
+ *
+ * Ahora cada quien es una tarjeta con su saldo grande y cuatro números al pie, y arriba
+ * se cambia entre toda la liga y una noche suelta: las mismas tarjetas, pero contando
+ * lo que pasó ese día.
+ */
 
 type Orden = 'balance' | 'puntos' | 'roi' | 'promedio' | 'partidas'
 
@@ -21,7 +39,8 @@ const ORDENES: { id: Orden; label: string; ayuda: string }[] = [
   {
     id: 'roi',
     label: 'Rendimiento',
-    ayuda: 'Cuánto rinde por cada peso que mete. No premia al que juega más, sino al que juega mejor.',
+    ayuda:
+      'Cuánto rinde por cada peso que mete. No premia al que juega más, sino al que juega mejor.',
   },
   { id: 'promedio', label: 'Por noche', ayuda: 'Lo que deja una partida típica suya.' },
   { id: 'partidas', label: 'Asistencia', ayuda: 'Quién se aparece más.' },
@@ -30,17 +49,33 @@ const ORDENES: { id: Orden; label: string; ayuda: string }[] = [
 const claseSaldo = (v: number) => (v > EPS ? 'text-win' : v < -EPS ? 'text-loss' : 'text-ink-soft')
 const pct = (v: number) => `${v > 0 ? '+' : ''}${v.toFixed(0)}%`
 
-function Avatar({ p, size = 36 }: { p: Posicion; size?: number }) {
+function fechaCorta(iso: string) {
+  const [a, m, d] = iso.split('-').map(Number)
+  if (!a || !m || !d) return iso
+  return new Date(a, m - 1, d).toLocaleDateString('es-MX', { day: 'numeric', month: 'short' })
+}
+
+function Cara({
+  nombre,
+  foto,
+  size = 34,
+}: {
+  nombre: string
+  foto: string | null
+  size?: number
+}) {
   return (
     <span
-      className="shrink-0 overflow-hidden rounded-full bg-ink/8"
+      /* `block` no es adorno: un span en linea ignora el ancho y el alto, y dentro del
+         podio —que no es flex— la foto se salía del tamaño pedido. */
+      className="block shrink-0 overflow-hidden rounded-full bg-ink/8"
       style={{ width: size, height: size }}
     >
-      {p.foto ? (
-        <img src={p.foto} alt="" className="h-full w-full object-cover" />
+      {foto ? (
+        <img src={foto} alt="" className="h-full w-full object-cover" />
       ) : (
         <span className="flex h-full w-full items-center justify-center font-display font-bold text-ink-soft">
-          {p.nombre.charAt(0).toUpperCase()}
+          {nombre.charAt(0).toUpperCase()}
         </span>
       )}
     </span>
@@ -63,60 +98,146 @@ function Racha({ n }: { n: number }) {
   )
 }
 
-const ALTURA_ESCALON = ['h-[86px]', 'h-[62px]', 'h-[46px]']
-const TONO_ESCALON = ['bg-marca', 'bg-[#c9c5bd]', 'bg-[#a9764a]']
-/* El 1º y el 3º son oscuros y el 2º claro: el número se adapta o se pierde. */
-const TINTA_ESCALON = ['text-white', 'text-[#17171b]', 'text-white']
-
-/** El podio: el 1º en medio y más alto, como en el de verdad. */
-function Podio({ top }: { top: Posicion[] }) {
+/** El podio: el 1º en medio y más grande, sobre el fondo oscuro. */
+function Podio({
+  top,
+}: {
+  top: { id: string; nombre: string; foto: string | null; saldo: number }[]
+}) {
   const orden = [1, 0, 2].filter((i) => top[i])
   return (
-    <div className="mb-3.5 overflow-hidden rounded-xl bg-gradient-to-br from-[#2a1016] to-[#100e12] px-3 pt-4 pb-0 ring-1 ring-marca/35">
-      <div className="flex items-end justify-center gap-2">
-        {orden.map((i) => {
-          const p = top[i]
-          return (
-            <div key={p.usuarioId} className="flex min-w-0 flex-1 flex-col items-center">
-              <span className="mb-1.5 h-11 w-11 shrink-0 overflow-hidden rounded-full bg-white/10 ring-2 ring-marca/40">
-                {p.foto ? (
-                  <img src={p.foto} alt="" className="h-full w-full object-cover" />
-                ) : (
-                  <span className="flex h-full w-full items-center justify-center font-display text-lg font-bold text-marca-alta">
-                    {p.nombre.charAt(0).toUpperCase()}
-                  </span>
-                )}
-              </span>
-              <span className="w-full truncate text-center font-display text-[15px] font-semibold text-white">
-                {p.nombre}
-              </span>
-              <span
-                className="font-display text-lg font-bold"
-                style={{ color: p.balance > EPS ? '#4fc785' : p.balance < -EPS ? '#ff6b6b' : '#8d8a86' }}
-              >
-                {signed(p.balance)}
-              </span>
-              <div
-                className={`mt-1.5 flex w-full items-start justify-center rounded-t-lg pt-2 ${ALTURA_ESCALON[i]} ${TONO_ESCALON[i]}`}
-              >
-                <span className={`font-display text-xl font-bold ${TINTA_ESCALON[i]}`}>{i + 1}º</span>
-              </div>
+    <div className="mb-3 grid grid-cols-[1fr_1.15fr_1fr] items-end gap-1.5">
+      {orden.map((i) => {
+        const p = top[i]
+        const primero = i === 0
+        return (
+          <div
+            key={p.id}
+            className={`rounded-2xl px-1.5 pb-3 text-center ${
+              primero
+                ? 'bg-gradient-to-b from-marca to-marca-tinta pt-4 ring-1 ring-marca-alta/60'
+                : 'bg-white/6 pt-2.5 ring-1 ring-white/10'
+            }`}
+          >
+            <div
+              className={`font-display text-[11px] font-bold tracking-[1px] ${
+                primero ? 'text-white/85' : 'text-tiza-suave'
+              }`}
+            >
+              {i + 1}º
             </div>
-          )
-        })}
-      </div>
+            <span className="mx-auto mt-1.5 block w-fit">
+              <Cara nombre={p.nombre} foto={p.foto} size={primero ? 46 : 34} />
+            </span>
+            <div className="mt-1.5 truncate text-[12px] font-semibold text-white">{p.nombre}</div>
+            <div
+              className={`font-display text-[17px] font-bold ${
+                primero
+                  ? 'text-white'
+                  : p.saldo > EPS
+                    ? 'text-win-alto'
+                    : p.saldo < -EPS
+                      ? 'text-loss-alto'
+                      : 'text-tiza-suave'
+              }`}
+            >
+              {signed(p.saldo)}
+            </div>
+          </div>
+        )
+      })}
     </div>
   )
 }
 
-export default function TablaPosiciones({
-  tabla,
-  nombreLiga,
+/** Una tarjeta: quién, cuánto, y cuatro números al pie. */
+function Tarjeta({
+  puesto,
+  nombre,
+  foto,
+  saldo,
+  bajo,
+  pies,
 }: {
+  puesto: number
+  nombre: string
+  foto: string | null
+  saldo: number
+  bajo?: React.ReactNode
+  pies: { k: string; v: string; clase?: string }[]
+}) {
+  return (
+    <article className="mb-2 rounded-[14px] bg-paper p-3 shadow-[0_6px_16px_rgba(0,0,0,.22)]">
+      <div className="flex items-center gap-2.5">
+        <span className="w-5 shrink-0 text-center font-display text-[15px] font-bold text-ink-soft">
+          {puesto}
+        </span>
+        <Cara nombre={nombre} foto={foto} />
+        <span className="min-w-0 flex-1">
+          <b className="block truncate text-[15px] text-ink">{nombre}</b>
+          {bajo && (
+            <span className="mt-0.5 flex items-center gap-1.5 text-[11px] text-ink-soft">
+              {bajo}
+            </span>
+          )}
+        </span>
+        <span className={`font-display text-[19px] font-bold tabular-nums ${claseSaldo(saldo)}`}>
+          {signed(saldo)}
+        </span>
+      </div>
+
+      <dl className="mt-2.5 flex gap-1.5">
+        {pies.map((pie) => (
+          <div
+            key={pie.k}
+            className="flex-1 rounded-[9px] border border-paper-line bg-paper-soft px-0.5 py-1.5 text-center"
+          >
+            <dt className="text-[8.5px] tracking-[.4px] text-ink-soft uppercase">{pie.k}</dt>
+            <dd
+              className={`m-0 mt-px font-display text-[14px] font-bold tabular-nums ${pie.clase ?? 'text-ink'}`}
+            >
+              {pie.v}
+            </dd>
+          </div>
+        ))}
+      </dl>
+    </article>
+  )
+}
+
+interface Props {
   tabla: Tabla | null
   nombreLiga: string
-}) {
+  /** Para poder mirar una noche suelta sin salir de la tabla. */
+  partidas: PartidaResumen[]
+}
+
+export default function TablaPosiciones({ tabla, nombreLiga, partidas }: Props) {
+  const [modo, setModo] = useState<'liga' | 'noche'>('liga')
   const [orden, setOrden] = useState<Orden>('balance')
+
+  /* Sólo las cerradas tienen resultado: en una abierta las fichas no están contadas. */
+  const jugadas = partidas.filter((p) => p.estado === 'cerrada')
+  const [cual, setCual] = useState<string | null>(null)
+  const [noche, setNoche] = useState<ResultadoNoche | null>(null)
+  const [cargando, setCargando] = useState(false)
+
+  const elegida = cual ?? jugadas[0]?.id ?? null
+
+  useEffect(() => {
+    if (modo !== 'noche' || !elegida) return
+    let cancelado = false
+    setCargando(true)
+    void (async () => {
+      const r = await conAviso(() => api.resultado(elegida))
+      if (cancelado) return
+      setNoche(r ?? null)
+      setCargando(false)
+    })()
+    return () => {
+      cancelado = true
+    }
+  }, [modo, elegida])
 
   if (!tabla) return <Esqueleto filas={2} />
 
@@ -134,10 +255,162 @@ export default function TablaPosiciones({
     )
   }
 
-  // El podio y los "en positivo" siempre van por saldo: presumir es por dinero.
-  const porSaldo = [...tabla.posiciones].sort((a, b) => b.balance - a.balance)
-  const enPositivo = porSaldo.filter((p) => p.balance > EPS)
+  const Interruptor = (
+    <div className="mb-3 flex gap-1 rounded-xl bg-black/30 p-1">
+      {(
+        [
+          ['liga', 'Toda la liga'],
+          ['noche', 'Por partida'],
+        ] as const
+      ).map(([id, texto]) => (
+        <button
+          key={id}
+          type="button"
+          aria-pressed={modo === id}
+          onClick={() => setModo(id)}
+          className={`flex-1 cursor-pointer rounded-[9px] border-none py-1.5 text-[12.5px] font-bold transition-colors ${
+            modo === id ? 'bg-paper text-ink' : 'bg-transparent text-tiza-suave'
+          }`}
+        >
+          {texto}
+        </button>
+      ))}
+    </div>
+  )
 
+  /* ---- una noche suelta ---- */
+  if (modo === 'noche') {
+    if (jugadas.length === 0) {
+      return (
+        <>
+          {Interruptor}
+          <section className="panel text-center">
+            <p className="m-0 text-[13px] leading-snug text-ink-soft">
+              Todavía no hay ninguna partida cerrada que mirar.
+            </p>
+          </section>
+        </>
+      )
+    }
+
+    const esTorneo = noche?.partida.tipo === 'torneo'
+    const texto = () => {
+      if (!noche) return ''
+      const lineas = [
+        `♠ ${nombreLiga} — ${noche.partida.nombre || fechaCorta(noche.partida.fecha)}`,
+        '',
+      ]
+      noche.filas.forEach((f) => {
+        const medalla = ['🥇', '🥈', '🥉'][f.lugar - 1] ?? `${f.lugar}º`
+        lineas.push(`${medalla} ${f.nombre}: ${signed(f.resultado)}`)
+      })
+      lineas.push('', `${noche.filas.length} jugadores · ${money(noche.mesa)} en la mesa`)
+      return lineas.join('\n')
+    }
+
+    const imagen: DatosTabla | null = noche && {
+      tipo: 'tabla',
+      titulo: noche.partida.nombre || fechaCorta(noche.partida.fecha),
+      subtitulo: `${noche.filas.length} jugadores · ${money(noche.mesa)} en la mesa`,
+      gorro: nombreLiga,
+      columnas: ['Jugador', 'Puso', esTorneo ? 'Premio' : 'Sacó', 'Saldo'],
+      filas: noche.filas.map((f) => [f.nombre, money(f.puso), money(f.saco), signed(f.resultado)]),
+      fotos: noche.filas.map((f) => f.foto),
+      pie: `${noche.filas.length} jugadores`,
+    }
+
+    return (
+      <>
+        {Interruptor}
+
+        <div className="no-scrollbar -mx-1 mb-3 flex gap-1.5 overflow-x-auto px-1">
+          {jugadas.map((p) => (
+            <button
+              key={p.id}
+              type="button"
+              aria-pressed={elegida === p.id}
+              onClick={() => setCual(p.id)}
+              className={`shrink-0 cursor-pointer rounded-full border px-3 py-1.5 text-[12px] font-semibold whitespace-nowrap transition-colors ${
+                elegida === p.id
+                  ? 'border-paper bg-paper text-ink'
+                  : 'border-white/12 bg-white/8 text-tiza-suave'
+              }`}
+            >
+              {p.nombre || fechaCorta(p.fecha)}
+            </button>
+          ))}
+        </div>
+
+        {cargando || !noche ? (
+          <Esqueleto filas={2} />
+        ) : noche.filas.length === 0 ? (
+          <section className="panel text-center">
+            <p className="m-0 text-[13px] text-ink-soft">Esa noche no tiene jugadores cargados.</p>
+          </section>
+        ) : (
+          <>
+            <p className="mt-0 mb-3 px-1 text-[12px] text-tiza-suave">
+              {esTorneo ? 'Torneo' : 'Cash'} · {noche.filas.length} jugadores ·{' '}
+              <b className="text-white">{money(noche.mesa)}</b> en la mesa
+            </p>
+
+            <Podio
+              top={noche.filas.slice(0, 3).map((f) => ({
+                id: f.usuarioId,
+                nombre: f.nombre,
+                foto: f.foto,
+                saldo: f.resultado,
+              }))}
+            />
+
+            {noche.filas.map((f) => (
+              <Tarjeta
+                key={f.usuarioId}
+                puesto={f.lugar}
+                nombre={f.nombre}
+                foto={f.foto}
+                saldo={f.resultado}
+                bajo={
+                  esTorneo && f.lugarTorneo ? (
+                    <span>{f.lugarTorneo}º lugar · premio de la bolsa</span>
+                  ) : f.recompras > 0 ? (
+                    <span>
+                      {f.recompras} {f.recompras === 1 ? 'recompra' : 'recompras'}
+                    </span>
+                  ) : undefined
+                }
+                pies={[
+                  { k: 'Puso', v: money(f.puso) },
+                  { k: esTorneo ? 'Premio' : 'Sacó', v: money(f.saco) },
+                  {
+                    k: 'Saldo',
+                    v: signed(f.resultado),
+                    clase: claseSaldo(f.resultado),
+                  },
+                  {
+                    k: 'De la mesa',
+                    v: `${noche.mesa > 0 ? Math.round((f.saco / noche.mesa) * 100) : 0}%`,
+                  },
+                ]}
+              />
+            ))}
+
+            <section className="panel">
+              <p className="panel-title">
+                <span>Presumir esta noche</span>
+              </p>
+              {imagen && (
+                <ShareBlock datos={imagen} texto={texto} alt="Cómo quedó la noche" />
+              )}
+            </section>
+          </>
+        )}
+      </>
+    )
+  }
+
+  /* ---- toda la liga ---- */
+  const porSaldo = [...tabla.posiciones].sort((a, b) => b.balance - a.balance)
   const ordenadas = [...tabla.posiciones].sort((a, b) => {
     if (orden === 'puntos') return b.puntos - a.puntos || b.balance - a.balance
     if (orden === 'roi') return b.roi - a.roi
@@ -174,45 +447,76 @@ export default function TablaPosiciones({
     return lineas.join('\n')
   }
 
+  /** El número grande de la derecha cambia con el orden elegido. */
+  const cifraDe = (p: Posicion) =>
+    orden === 'puntos'
+      ? p.puntos
+      : orden === 'roi'
+        ? p.roi
+        : orden === 'partidas'
+          ? p.partidas
+          : orden === 'promedio'
+            ? p.promedio
+            : p.balance
+
   return (
     <>
-      <Podio top={porSaldo.slice(0, 3)} />
+      {Interruptor}
 
-      {/* los que van arriba */}
-      {enPositivo.length > 0 && (
-        <section className="panel">
-          <p className="panel-title">
-            <span>Los que van arriba</span>
-          </p>
-          <ul className="m-0 list-none p-0">
-            {enPositivo.map((p, i) => (
-              <li
-                key={p.usuarioId}
-                className="flex items-center gap-2.5 border-b border-dashed border-paper-line py-2.5 last:border-b-0"
-              >
-                <span className="w-5 shrink-0 text-center">
-                  {i < 3 ? (
-                    <Medalla lugar={i + 1} size={17} />
-                  ) : (
-                    <span className="font-display text-sm font-bold text-ink-soft">{i + 1}</span>
-                  )}
-                </span>
-                <Avatar p={p} size={32} />
-                <span className="min-w-0 flex-1">
-                  <b className="block truncate text-[15px] text-ink">{p.nombre}</b>
-                  <Titulos titulos={p.titulos} max={2} />
-                </span>
-                <span className="shrink-0 font-display font-bold text-win">{signed(p.balance)}</span>
-              </li>
-            ))}
-          </ul>
-          <p className="mt-2.5 mb-0 text-[12px] leading-snug text-ink-soft">
-            {enPositivo.length} de {tabla.posiciones.length} van con saldo a favor.
-          </p>
-        </section>
-      )}
+      <Podio
+        top={porSaldo.slice(0, 3).map((p) => ({
+          id: p.usuarioId,
+          nombre: p.nombre,
+          foto: p.foto,
+          saldo: p.balance,
+        }))}
+      />
 
-      {/* resumen de la liga */}
+      <div className="no-scrollbar -mx-1 mb-1 flex gap-1.5 overflow-x-auto px-1">
+        {ORDENES.map((o) => (
+          <button
+            key={o.id}
+            type="button"
+            aria-pressed={orden === o.id}
+            onClick={() => setOrden(o.id)}
+            className={`shrink-0 cursor-pointer rounded-full border px-3 py-1.5 text-[12px] font-semibold whitespace-nowrap transition-colors ${
+              orden === o.id
+                ? 'border-marca bg-marca text-white'
+                : 'border-white/12 bg-white/8 text-tiza-suave'
+            }`}
+          >
+            {o.label}
+          </button>
+        ))}
+      </div>
+      <p className="mt-1 mb-3 px-1 text-[11px] leading-snug text-tiza-suave">{ayuda}</p>
+
+      {ordenadas.map((p, i) => (
+        <Tarjeta
+          key={p.usuarioId}
+          puesto={i + 1}
+          nombre={p.nombre}
+          foto={p.foto}
+          saldo={cifraDe(p)}
+          bajo={
+            <>
+              <span className="truncate">
+                {p.partidas} {p.partidas === 1 ? 'partida' : 'partidas'} · ganó {p.ganadas}
+                {!p.esMiembro && ' · ya no está'}
+              </span>
+              <Racha n={p.rachaActual} />
+              <Titulos titulos={p.titulos} max={1} />
+            </>
+          }
+          pies={[
+            { k: 'Rendim.', v: pct(p.roi), clase: claseSaldo(p.roi) },
+            { k: 'Por noche', v: signed(p.promedio), clase: claseSaldo(p.promedio) },
+            { k: 'Mejor', v: signed(p.mejor), clase: 'text-win' },
+            { k: 'Podios', v: String(p.podios) },
+          ]}
+        />
+      ))}
+
       <section className="panel">
         <p className="panel-title">
           <span>La liga en números</span>
@@ -226,205 +530,20 @@ export default function TablaPosiciones({
             <div className="stat-k">Dinero movido</div>
             <div className="stat-v">{money(tabla.dineroMovido)}</div>
           </div>
-          <div className="stat">
-            <div className="stat-k">Promedio por mesa</div>
-            <div className="stat-v">{money(tabla.promedioMesa)}</div>
-          </div>
-          <div className="stat">
-            <div className="stat-k">Jugadores</div>
-            <div className="stat-v">{tabla.posiciones.length}</div>
-          </div>
         </div>
-        {tabla.mayorMesa && (
-          <p className="mt-2.5 mb-0 text-[13px] text-ink-soft">
-            La noche más grande fue <b className="text-ink">{tabla.mayorMesa.detalle}</b> con{' '}
-            <b className="text-ink">{money(tabla.mayorMesa.monto)}</b> en la mesa.
+        {tabla.partidasAbiertas > 0 && (
+          <p className="mt-3 mb-0 text-[12px] leading-snug text-ink-soft">
+            Hay {tabla.partidasAbiertas} sin cerrar. No cuentan hasta que se cierren.
           </p>
         )}
       </section>
 
-      {/* tabla ordenable */}
-      <section className="panel">
-        <p className="panel-title">
-          <span>Tabla de la liga</span>
-        </p>
-
-        <div className="no-scrollbar mb-1 flex gap-1 overflow-x-auto rounded-xl bg-ink/6 p-1">
-          {ORDENES.map((o) => (
-            <button
-              key={o.id}
-              type="button"
-              aria-pressed={orden === o.id}
-              onClick={() => setOrden(o.id)}
-              className={`flex-1 cursor-pointer rounded-lg border-none px-2.5 py-1.5 text-[12px] font-bold whitespace-nowrap transition-colors ${
-                orden === o.id ? 'bg-marca text-white' : 'bg-transparent text-ink-soft'
-              }`}
-            >
-              {o.label}
-            </button>
-          ))}
-        </div>
-        <p className="mt-0 mb-2 px-1 text-[11px] leading-snug text-ink-soft">{ayuda}</p>
-
-        <ul className="m-0 list-none p-0">
-          {ordenadas.map((p, i) => (
-            <li
-              key={p.usuarioId}
-              className="flex items-center gap-2.5 border-b border-dashed border-paper-line py-2.5 last:border-b-0"
-            >
-              <span className="w-5 shrink-0 text-center font-display text-sm font-bold text-ink-soft">
-                {i < 3 ? <Medalla lugar={i + 1} size={16} /> : i + 1}
-              </span>
-
-              <Avatar p={p} />
-
-              <span className="min-w-0 flex-1">
-                <span className="flex items-center gap-1.5">
-                  <b className="truncate text-[15px] text-ink">{p.nombre}</b>
-                  <Racha n={p.rachaActual} />
-                </span>
-                <span className="block truncate text-xs text-ink-soft">
-                  {p.partidas} {p.partidas === 1 ? 'partida' : 'partidas'} · ganó {p.ganadas}
-                  {p.podios > 0 && ` · ${p.podios} podio${p.podios === 1 ? '' : 's'}`}
-                  {!p.esMiembro && ' · ya no está'}
-                </span>
-              </span>
-
-              <span className="shrink-0 text-right">
-                {orden === 'puntos' ? (
-                  <>
-                    <span className="block font-display font-bold text-ink">
-                      {p.puntos}
-                      <span className="text-[11px] font-normal text-ink-soft"> pts</span>
-                    </span>
-                    <span className={`block text-[11px] ${claseSaldo(p.balance)}`}>
-                      {signed(p.balance)}
-                    </span>
-                  </>
-                ) : (
-                  <>
-                    <span className={`block font-display font-bold ${claseSaldo(p.balance)}`}>
-                      {orden === 'roi'
-                        ? pct(p.roi)
-                        : orden === 'partidas'
-                          ? p.partidas
-                          : signed(orden === 'promedio' ? p.promedio : p.balance)}
-                    </span>
-                    <span className="block text-[11px] text-ink-soft">
-                      {orden === 'balance' ? pct(p.roi) : signed(p.balance)}
-                    </span>
-                  </>
-                )}
-              </span>
-            </li>
-          ))}
-        </ul>
-      </section>
-
-      {/* récords */}
-      {tabla.records.length > 0 && (
-        <section className="panel">
-          <p className="panel-title">
-            <span>Récords</span>
-          </p>
-          <ul className="m-0 list-none p-0">
-            {tabla.records.map((r) => (
-              <li
-                key={r.etiqueta}
-                className="flex items-center gap-2.5 border-b border-dashed border-paper-line py-2.5 last:border-b-0"
-              >
-                <span className="min-w-0 flex-1">
-                  <span className="block text-[10px] font-semibold tracking-[.5px] text-ink-soft uppercase">
-                    {r.etiqueta}
-                  </span>
-                  <b className="block truncate text-[15px] text-ink">{r.nombre}</b>
-                </span>
-                <span className="shrink-0 text-right">
-                  <b className="block font-display text-[15px] text-ink">
-                    {r.etiqueta === 'Mejor rendimiento'
-                      ? pct(r.valor)
-                      : r.etiqueta === 'Peor noche'
-                        ? signed(-r.valor)
-                        : r.etiqueta === 'Mejor noche'
-                          ? signed(r.valor)
-                          : r.valor}
-                  </b>
-                  {r.detalle && <span className="block text-[11px] text-ink-soft">{r.detalle}</span>}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-
-      {/* el detalle completo */}
-      <section className="panel">
-        <p className="panel-title">
-          <span>El detalle</span>
-        </p>
-        <div className="no-scrollbar -mx-1 overflow-x-auto">
-          <table className="w-full border-collapse text-[13px] whitespace-nowrap">
-            <thead>
-              <tr className="text-left text-[10px] tracking-[.5px] text-ink-soft uppercase">
-                <th className="px-1 pb-2 font-semibold">Jugador</th>
-                <th className="px-1 pb-2 text-right font-semibold">Puso</th>
-                <th className="px-1 pb-2 text-right font-semibold">Sacó</th>
-                <th className="px-1 pb-2 text-right font-semibold">Saldo</th>
-                <th className="px-1 pb-2 text-right font-semibold">Rend.</th>
-                <th className="px-1 pb-2 text-right font-semibold">Mejor</th>
-                <th className="px-1 pb-2 text-right font-semibold">Peor</th>
-                <th className="px-1 pb-2 text-right font-semibold">Recom.</th>
-                <th className="px-1 pb-2 text-right font-semibold">Asist.</th>
-              </tr>
-            </thead>
-            <tbody>
-              {ordenadas.map((p) => (
-                <tr key={p.usuarioId} className="border-t border-dashed border-paper-line">
-                  <td className="max-w-[110px] truncate px-1 py-2 font-semibold text-ink">
-                    {p.nombre}
-                  </td>
-                  <td className="px-1 py-2 text-right text-ink-soft">{money(p.invertido)}</td>
-                  <td className="px-1 py-2 text-right text-ink-soft">{money(p.recuperado)}</td>
-                  <td className={`px-1 py-2 text-right font-semibold ${claseSaldo(p.balance)}`}>
-                    {signed(p.balance)}
-                  </td>
-                  <td className={`px-1 py-2 text-right font-semibold ${claseSaldo(p.roi)}`}>
-                    {pct(p.roi)}
-                  </td>
-                  <td className="px-1 py-2 text-right font-semibold text-win">
-                    {p.mejor > EPS ? signed(p.mejor) : '—'}
-                  </td>
-                  <td className="px-1 py-2 text-right font-semibold text-loss">
-                    {p.peor < -EPS ? signed(p.peor) : '—'}
-                  </td>
-                  <td className="px-1 py-2 text-right text-ink-soft">
-                    {p.recompras > 0 ? `${p.recompras} · ${money(p.montoRecompras)}` : '—'}
-                  </td>
-                  <td className="px-1 py-2 text-right text-ink-soft">{p.asistencia.toFixed(0)}%</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      {/* compartir */}
       <section className="panel">
         <p className="panel-title">
           <span>Presumir la tabla</span>
         </p>
-        <ShareBlock datos={datosImagen} texto={texto} alt="Tabla acumulada de la liga" />
+        <ShareBlock datos={datosImagen} texto={texto} alt="Tabla de la liga" />
       </section>
-
-      <p className="flex items-start gap-2 px-1 text-xs leading-snug text-tiza-suave">
-        <Info size={14} strokeWidth={2.4} className="mt-0.5 shrink-0" />
-        <span>
-          Suma {tabla.partidasContadas}{' '}
-          {tabla.partidasContadas === 1 ? 'partida cerrada' : 'partidas cerradas'}.
-          {tabla.partidasAbiertas > 0 &&
-            ` Las ${tabla.partidasAbiertas} abiertas no cuentan hasta que se cierren: sin las fichas contadas, todos aparecerían perdiendo.`}
-        </span>
-      </p>
     </>
   )
 }

@@ -102,3 +102,49 @@ describe('el derecho a presumir', () => {
     expect(ganadorDe(mesa, [], COLORES)).toBeNull()
   })
 })
+
+describe('un conteo de fichas nunca es negativo', () => {
+  /* La misma limpieza que hace la ruta al guardar. Se prueba aparte porque es lo que
+     impide que un signo de menos tecleado sin querer envenene la tabla de la liga. */
+  const soloFichas = (v: unknown): Record<string, number> => {
+    const limpio: Record<string, number> = {}
+    if (v && typeof v === 'object') {
+      for (const [color, cuantas] of Object.entries(v as Record<string, unknown>)) {
+        limpio[color] = Math.max(0, Math.floor(Number(cuantas) || 0))
+      }
+    }
+    return limpio
+  }
+
+  it('un menos se vuelve cero', () => {
+    expect(soloFichas({ green: -4, red: 3 })).toEqual({ green: 0, red: 3 })
+  })
+
+  it('los decimales y la basura tampoco pasan', () => {
+    expect(soloFichas({ green: 2.7, red: 'x', blue: null })).toEqual({ green: 2, red: 0, blue: 0 })
+  })
+
+  it('lo que no es un objeto queda vacío', () => {
+    expect(soloFichas(null)).toEqual({})
+    expect(soloFichas('7')).toEqual({})
+  })
+
+  it('una ficha en negativo haría que alguien se lleve dinero negativo', () => {
+    /* El caso real que apareció en los datos de prueba: −4 verdes de $25 dejaban a un
+       jugador "sacando" −$100 de una mesa donde sólo se puede sacar de cero para arriba. */
+    const COLOR = [{ key: 'green', label: 'V', color: '#0f0', value: 25, inventory: 200 }]
+    const conMenos = podioDe(
+      { tipo: 'cash', torneo: null },
+      [jugador('a', { fichas_final: JSON.stringify({ green: -4 }) })],
+      COLOR,
+    )
+    expect(conMenos[0].saco).toBeLessThan(0)
+
+    const limpio = podioDe(
+      { tipo: 'cash', torneo: null },
+      [jugador('a', { fichas_final: JSON.stringify(soloFichas({ green: -4 })) })],
+      COLOR,
+    )
+    expect(limpio[0].saco).toBe(0)
+  })
+})

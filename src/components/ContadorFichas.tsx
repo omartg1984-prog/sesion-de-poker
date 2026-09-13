@@ -51,7 +51,8 @@ export default function ContadorFichas({ colores, fichas, onChange, deshabilitad
                 showZero
                 aria-label={`Fichas ${c.label}`}
                 className="w-12 border-none bg-transparent py-2 text-center font-display text-lg font-bold text-ink outline-none disabled:opacity-60"
-                onChange={(v) => !deshabilitado && onChange(c.key, v)}
+                /* También al teclear: el − ya no baja de cero, pero escribir "-4" sí podía. */
+                onChange={(v) => !deshabilitado && onChange(c.key, Math.max(0, Math.floor(v) || 0))}
               />
 
               <button

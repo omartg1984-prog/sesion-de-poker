@@ -317,7 +317,9 @@ ${link}`
         ))}
       </div>
 
-      {pestana === 'posiciones' && <TablaPosiciones tabla={tabla} nombreLiga={liga.nombre} />}
+      {pestana === 'posiciones' && (
+        <TablaPosiciones tabla={tabla} nombreLiga={liga.nombre} partidas={partidas} />
+      )}
 
       {pestana === 'reglas' && (
         <Reglas
