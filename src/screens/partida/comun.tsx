@@ -1,11 +1,14 @@
 import { AlertTriangle, Check, RotateCcw } from 'lucide-react'
 import Chip from '../../components/Chip'
 import NumInput from '../../components/NumInput'
+import ShareBlock from '../../components/ShareBlock'
 import {
   computeDistribution,
+  distributionText,
   type Distribution,
   type DistributionRow,
 } from '../../lib/distribution'
+import type { DatosTabla } from '../../lib/imagenTablas'
 import { EPS, money, num } from '../../lib/money'
 import { leerJson, type DetallePartida, type Participacion } from '../../lib/api'
 import type { ChipColor, Chips } from '../../store/types'
@@ -83,11 +86,15 @@ export function FichasDelJugador({
   colores,
   puedeEditar,
   tocar,
+  /* En cash las fichas son pesos y se escriben con signo; en torneo son puntos y
+     escribirlas con signo de pesos es justo la confusión que hay que evitar. */
+  formato = money,
 }: {
   fila: DistributionRow
   colores: ChipColor[]
   puedeEditar: boolean
   tocar: PropsPestana['tocar']
+  formato?: (n: number) => string
 }) {
   return (
     <div className="mt-3 border-t border-dashed border-paper-line pt-2.5">
@@ -130,13 +137,16 @@ export function FichasDelJugador({
       </div>
 
       <p className="mt-2 mb-0 flex items-center gap-1.5 text-xs text-ink-soft">
-        En fichas: <b className="text-ink">{money(fila.total)}</b>
+        En fichas: <b className="text-ink">{formato(fila.total)}</b>
         {Math.abs(fila.leftover) < EPS ? (
           <Check size={13} strokeWidth={3} className="text-win" />
         ) : (
           <>
             <span>
-              · {fila.leftover > 0 ? `faltan ${money(fila.leftover)}` : `se pasa ${money(-fila.leftover)}`}
+              ·{' '}
+              {fila.leftover > 0
+                ? `faltan ${formato(fila.leftover)}`
+                : `se pasa ${formato(-fila.leftover)}`}
             </span>
             <AlertTriangle size={13} strokeWidth={2.6} className="text-loss" />
           </>
@@ -185,5 +195,46 @@ export function InventarioUsado({
         })}
       </ul>
     </section>
+  )
+}
+
+/**
+ * El reparto de fichas, para mandarlo al chat.
+ *
+ * Sirve para que cada quien vea las suyas antes de sentarse y para que después nadie
+ * discuta con cuántas arrancó.
+ */
+export function CompartirReparto({
+  reparto,
+  colores,
+  datos,
+}: {
+  reparto: Distribution
+  colores: ChipColor[]
+  datos: DetallePartida
+}) {
+  const tabla: DatosTabla = {
+    tipo: 'tabla',
+    titulo: 'Reparto de fichas',
+    subtitulo: datos.partida.nombre || datos.partida.fecha,
+    gorro: datos.liga.nombre,
+    columnas: ['Jugador', ...colores.map((c) => c.label), 'Total'],
+    filas: reparto.rows.map((r) => [
+      r.name,
+      ...colores.map((c) => String(r.counts[c.key] ?? 0)),
+      Math.round(r.total).toLocaleString('es-MX'),
+    ]),
+    fotos: reparto.rows.map(
+      (r) => datos.participaciones.find((p) => p.id === r.id)?.foto ?? null,
+    ),
+    pie: `${reparto.rows.length} jugadores`,
+  }
+
+  return (
+    <ShareBlock
+      datos={tabla}
+      texto={() => distributionText(reparto, colores, money)}
+      alt="Reparto de fichas"
+    />
   )
 }

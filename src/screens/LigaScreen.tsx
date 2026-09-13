@@ -18,14 +18,12 @@ import { useEffect, useState } from 'react'
 import EditorFichas from '../components/EditorFichas'
 import Sheet from '../components/Sheet'
 import Avatar, { AvatarEditable } from '../components/Avatar'
-import PasosTorneo from './liga/PasosTorneo'
-import { TORNEO_POR_DEFECTO } from './partida/PartidaTorneo'
+import CrearTorneo from './liga/CrearTorneo'
 import Reglas from './liga/Reglas'
 import type { SeccionReglas } from '../lib/reglas'
 import { copyText } from '../lib/portapapeles'
 import {
   api,
-  type ConfigTorneo,
   type Liga,
   type Miembro,
   type PartidaResumen,
@@ -74,7 +72,6 @@ export default function LigaScreen() {
 
   const [fecha, setFecha] = useState(hoy())
   const [nombrePartida, setNombrePartida] = useState('')
-  const [torneoNuevo, setTorneoNuevo] = useState<ConfigTorneo>(TORNEO_POR_DEFECTO)
   const [tipo, setTipo] = useState<TipoPartida>('cash')
   const [colores, setColores] = useState<ChipColor[]>([])
 
@@ -106,20 +103,18 @@ export default function LigaScreen() {
     if (ocupado) return
     setOcupado(true)
     const r = await conAviso(() =>
+      /* Sólo las de cash pasan por aquí: el torneo lo crea su asistente, que ya llega
+         con jugadores, fichas y escalera de ciegas. */
       api.crearPartida(ligaId, {
         fecha,
         nombre: nombrePartida.trim() || undefined,
-        tipo,
-        /* En torneo el costo de entrada define el stack, así que se manda desde aquí:
-           cargar jugadores con la entrada en cero les repartía cero fichas. */
-        torneo: tipo === 'torneo' ? torneoNuevo : undefined,
+        tipo: 'cash',
       }),
     )
     setOcupado(false)
     if (r) {
       setCreando(false)
       setNombrePartida('')
-      setTorneoNuevo(TORNEO_POR_DEFECTO)
       irAPartida(r.partida.id, ligaId)
     }
   }
@@ -421,39 +416,53 @@ export default function LigaScreen() {
           ))}
         </div>
 
-        <label className="mb-4 block">
-          <span className="field-label">Fecha</span>
-          <input
-            type="date"
-            value={fecha}
-            onChange={(e) => setFecha(e.target.value)}
-            className="mt-1 w-full rounded-xl border border-paper-line bg-white px-3 py-3 text-base font-semibold text-ink outline-none focus:border-marca"
+        {/* El torneo se arma por pasos: quiénes, cuánto cuesta, cuánto dura y el plan.
+            La de cash no necesita nada de eso, con la fecha basta. */}
+        {tipo === 'torneo' ? (
+          <CrearTorneo
+            ligaId={ligaId}
+            nombreLiga={liga.nombre}
+            miembros={miembros}
+            colores={colores}
+            onCreada={() => void cargar()}
+            onIrAlTorneo={(id) => {
+              setCreando(false)
+              irAPartida(id, ligaId)
+            }}
           />
-        </label>
+        ) : (
+          <>
+            <label className="mb-4 block">
+              <span className="field-label">Fecha</span>
+              <input
+                type="date"
+                value={fecha}
+                onChange={(e) => setFecha(e.target.value)}
+                className="mt-1 w-full rounded-xl border border-paper-line bg-white px-3 py-3 text-base font-semibold text-ink outline-none focus:border-marca"
+              />
+            </label>
 
-        <label className="mb-4 block">
-          <span className="field-label">Nombre (opcional)</span>
-          <input
-            type="text"
-            value={nombrePartida}
-            onChange={(e) => setNombrePartida(e.target.value)}
-            placeholder="ej. Cumpleaños de Beto"
-            className="mt-1 w-full rounded-xl border border-paper-line bg-white px-3 py-3 text-base font-semibold text-ink outline-none focus:border-marca"
-          />
-        </label>
+            <label className="mb-4 block">
+              <span className="field-label">Nombre (opcional)</span>
+              <input
+                type="text"
+                value={nombrePartida}
+                onChange={(e) => setNombrePartida(e.target.value)}
+                placeholder="ej. Cumpleaños de Beto"
+                className="mt-1 w-full rounded-xl border border-paper-line bg-white px-3 py-3 text-base font-semibold text-ink outline-none focus:border-marca"
+              />
+            </label>
 
-        {tipo === 'torneo' && (
-          <PasosTorneo torneo={torneoNuevo} colores={colores} onCambiar={setTorneoNuevo} />
+            <button
+              type="button"
+              className="btn btn-marca mb-2"
+              disabled={ocupado}
+              onClick={() => void crearPartida()}
+            >
+              Crear partida
+            </button>
+          </>
         )}
-
-        <button
-          type="button"
-          className="btn btn-marca mb-2"
-          disabled={ocupado}
-          onClick={() => void crearPartida()}
-        >
-          Crear partida
-        </button>
       </Sheet>
 
       {/* ---- jugadores de la liga ---- */}

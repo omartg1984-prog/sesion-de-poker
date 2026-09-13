@@ -115,6 +115,16 @@ export interface ConfigTorneo {
   addOnChips?: number
   /** Valor de cada color dentro del torneo, por key de color. */
   valores?: Record<string, number>
+  /*
+   * Con cuántas recompras y add-ons se hizo la cuenta de las fichas. No es un
+   * pronóstico ocioso: si no se cuentan, la caja alcanza el día del arranque y se queda
+   * corta a media noche.
+   */
+  recomprasEsperadas?: number
+  addOnsEsperados?: number
+  /** A qué hora se quedó de empezar y de terminar, "HH:MM". */
+  horaInicio?: string
+  horaFin?: string
 }
 
 export interface PartidaResumen {

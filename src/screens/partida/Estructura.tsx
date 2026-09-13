@@ -1,16 +1,18 @@
-import { AlertTriangle, Coffee, Timer } from 'lucide-react'
+import { AlertTriangle, Timer } from 'lucide-react'
 import { useState } from 'react'
-import NumInput from '../../components/NumInput'
-import { calcularEstructura, tramosDe, type Estructura as Tabla } from '../../lib/torneo'
-import type { ChipColor } from '../../store/types'
+import { calcularEstructura, type Estructura as Tabla } from '../../lib/torneo'
+import TablaCiegas from './TablaCiegas'
 
 /*
- * De cuánto son las ciegas y cada cuánto suben.
+ * De cuánto son las ciegas y cada cuánto suben, con el torneo ya empezado.
  *
- * No se pide "dame estas ciegas" sino "somos tantos y queremos que dure tanto": el resto
- * sale de la matemática de torneos (ver src/lib/torneo.ts). Lo que se guarda es la tabla
- * ya calculada, no los parámetros, para que no se mueva sola a media noche si alguien
- * cambia el stack.
+ * La escalera nace armada en el asistente de creación; esto es para moverla en caliente:
+ * llegó gente tarde, se decidió acabar antes, hay que meter otro descanso. El stack y el
+ * valor de las fichas no se tocan aquí —vienen de lo que se definió abajo— para no tener
+ * el mismo campo en dos lugares de la misma pantalla.
+ *
+ * Lo que se guarda es la tabla ya calculada, no los parámetros, para que no se mueva sola
+ * a media noche si alguien cambia otra cosa.
  */
 
 const DURACIONES = [90, 120, 180, 240]
@@ -20,30 +22,26 @@ const DURACION_DESCANSO = [10, 15, 20, 30]
 
 interface Props {
   jugadores: number
-  colores: ChipColor[]
+  /** Con cuántas fichas arranca cada quien, según lo que se definió en el torneo. */
+  stack: number
+  /** La ficha más chica que va a estar en la mesa: la ciega chica tiene que pagarse con ella. */
+  fichaMasChica: number
   estructura: Tabla | null
   puedeEditar: boolean
+  /** Hora a la que se quedó de arrancar, para poner la tabla en hora de reloj. */
+  horaInicio?: string
   onGuardar: (e: Tabla) => void
-}
-
-/* Cambiar una ciega a mano deja la tabla fuera de la fórmula, y está bien: el
-   calculador propone, pero la mesa manda. */
-function conNivelCambiado(e: Tabla, indice: number, chica: number): Tabla {
-  return {
-    ...e,
-    niveles: e.niveles.map((n, i) => (i === indice ? { ...n, chica, grande: chica * 2 } : n)),
-  }
 }
 
 export default function Estructura({
   jugadores,
-  colores,
+  stack,
+  fichaMasChica,
   estructura,
   puedeEditar,
+  horaInicio,
   onGuardar,
 }: Props) {
-  const fichaMasChica = Math.min(...colores.map((c) => Number(c.value) || 1), 1) || 1
-  const [stack, setStack] = useState(estructura?.stackInicial ?? 1000)
   const [duracion, setDuracion] = useState(estructura?.duracionMinutos ?? 180)
   const [porNivel, setPorNivel] = useState(estructura?.minutosPorNivel ?? 15)
   const [cadaNiveles, setCadaNiveles] = useState(estructura?.descanso?.cadaNiveles ?? 4)
@@ -96,22 +94,10 @@ export default function Estructura({
       {puedeEditar && (
         <>
           <p className="mt-0 mb-3 text-[13px] leading-snug text-ink-soft">
-            Dile con cuántas fichas arranca cada quien y cuánto quieres que dure. Las ciegas se
-            calculan solas para que el torneo termine a esa hora.
+            Arrancan con {Math.round(stack).toLocaleString('es-MX')} fichas. Dile cuánto quieres
+            que dure y las ciegas se calculan solas para que termine a esa hora, descansos
+            incluidos.
           </p>
-
-          <div className="mb-3">
-            <span className="field-label">Fichas con las que arranca cada quien</span>
-            <div className="field-box mt-1">
-              <NumInput
-                value={stack}
-                showZero
-                mode="decimal"
-                aria-label="Stack inicial"
-                onChange={setStack}
-              />
-            </div>
-          </div>
 
           <div className="mb-3">
             <span className="field-label">Cuánto quieres que dure (minutos)</span>
@@ -195,72 +181,12 @@ export default function Estructura({
         </div>
       </div>
 
-      <div className="no-scrollbar mt-3 -mx-1 overflow-x-auto">
-        <table className="w-full border-collapse text-[13px] whitespace-nowrap">
-          <thead>
-            <tr className="text-left text-[10px] tracking-[.5px] text-ink-soft uppercase">
-              <th className="px-1 pb-2 font-semibold">Nivel</th>
-              <th className="px-1 pb-2 text-right font-semibold">Ciegas</th>
-              <th className="px-1 pb-2 text-right font-semibold">Entra a las</th>
-            </tr>
-          </thead>
-          <tbody>
-            {tramosDe(mostrada).map((t, i) =>
-              t.tipo === 'descanso' ? (
-                <tr
-                  key={`d${i}`}
-                  className="border-t border-dashed border-paper-line bg-paper-soft"
-                >
-                  <td className="px-1 py-1.5">
-                    <Coffee size={14} strokeWidth={2.4} className="text-ink-soft" />
-                  </td>
-                  <td className="px-1 py-1.5 text-right text-[12px] font-semibold text-ink-soft">
-                    Descanso de {t.minutos} min
-                  </td>
-                  <td className="px-1 py-1.5 text-right text-ink-soft">
-                    {Math.floor(t.desdeMinuto / 60)}:{String(t.desdeMinuto % 60).padStart(2, '0')}
-                  </td>
-                </tr>
-              ) : (
-                ((n) => (
-                  <tr key={n.nivel} className="border-t border-dashed border-paper-line">
-                    <td className="px-1 py-1.5 font-semibold text-ink">{n.nivel}</td>
-                    <td className="px-1 py-1.5 text-right">
-                      {puedeEditar && estructura ? (
-                        <span className="ml-auto flex w-[122px] items-center justify-end gap-1">
-                          <span className="flex w-[58px] items-center rounded-lg border border-paper-line bg-white px-1">
-                            <NumInput
-                              value={n.chica}
-                              showZero
-                              mode="decimal"
-                              aria-label={`Ciega chica del nivel ${n.nivel}`}
-                              className="w-full border-none bg-transparent px-0.5 py-1 text-right font-display text-[15px] font-bold outline-none"
-                              /* El índice del tramo no sirve: los descansos lo recorren. El número
-                             de nivel sí apunta siempre al mismo renglón de la tabla. */
-                              onChange={(v) =>
-                                onGuardar(conNivelCambiado(estructura, n.nivel - 1, v))
-                              }
-                            />
-                          </span>
-                          <span className="font-display text-[15px] font-bold text-ink-soft">
-                            / {n.grande}
-                          </span>
-                        </span>
-                      ) : (
-                        <span className="font-display font-bold text-ink">
-                          {n.chica} / {n.grande}
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-1 py-1.5 text-right text-ink-soft">
-                      {Math.floor(t.desdeMinuto / 60)}:{String(t.desdeMinuto % 60).padStart(2, '0')}
-                    </td>
-                  </tr>
-                ))(t.nivel)
-              ),
-            )}
-          </tbody>
-        </table>
+      <div className="mt-3">
+        <TablaCiegas
+          estructura={mostrada}
+          horaInicio={horaInicio ?? null}
+          onCambiar={puedeEditar && estructura ? onGuardar : undefined}
+        />
       </div>
     </section>
   )

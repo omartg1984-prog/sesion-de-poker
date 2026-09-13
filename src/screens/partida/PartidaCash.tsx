@@ -12,6 +12,7 @@ import { EPS, money, num, signed } from '../../lib/money'
 import type { DatosCash } from '../../lib/shareImage'
 import type { Chips } from '../../store/types'
 import {
+  CompartirReparto,
   FichasDelJugador,
   InventarioUsado,
   calcularReparto,
@@ -162,6 +163,13 @@ export default function PartidaCash({
         })}
 
         <InventarioUsado reparto={reparto} colores={colores} />
+
+        <section className="panel">
+          <p className="panel-title">
+            <span>Mandar el reparto</span>
+          </p>
+          <CompartirReparto reparto={reparto} colores={colores} datos={datos} />
+        </section>
       </>
     )
   }

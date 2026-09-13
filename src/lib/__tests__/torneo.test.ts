@@ -95,11 +95,16 @@ describe('el reloj', () => {
 describe('los descansos', () => {
   const conDescanso = calcularEstructura({ ...OCHO, descanso: { cadaNiveles: 4, minutos: 20 } })
 
-  it('alargan la noche por lo que duran', () => {
+  it('salen del tiempo pedido, no se le suman', () => {
+    /* Si se quedó de jugar hasta la una, a la una hay que estar levantando la mesa:
+       cenar sale de esas horas. Un torneo que se pasa de la hora prometida es justo lo
+       que esta tabla existe para evitar. */
+    expect(conDescanso.duracionMinutos).toBeLessThanOrEqual(OCHO.minutosDeseados)
+  })
+
+  it('a cambio caben menos niveles que jugando de corrido', () => {
     const sin = calcularEstructura(OCHO)
-    // Doce niveles con descanso cada cuatro son dos descansos, no tres: después del
-    // último nivel ya no hay que descansar.
-    expect(conDescanso.duracionMinutos).toBe(sin.duracionMinutos + 2 * 20)
+    expect(conDescanso.niveles.length).toBeLessThan(sin.niveles.length)
   })
 
   it('se meten entre los niveles, no al final', () => {

@@ -1,116 +1,161 @@
-import { Plus, X } from 'lucide-react'
 import MoneyInput from '../../components/MoneyInput'
 import NumInput from '../../components/NumInput'
-import { EPS, num } from '../../lib/money'
-import { PAYOUT_PRESETS } from '../../store/defaults'
+import { money, num } from '../../lib/money'
 import type { ConfigTorneo } from '../../lib/api'
-import { asignarValores } from '../../lib/torneo'
+import { fichasPorPrecio, planFichas, stackSugerido } from '../../lib/torneo'
 import Chip from '../../components/Chip'
+import Premios from './Premios'
 import type { ChipColor } from '../../store/types'
 
 /*
- * Lo que hay que definir antes de cargar a nadie en un torneo: qué cuesta, qué fichas
- * da y cómo se reparte la bolsa.
+ * Corregir lo que se definió al armar el torneo.
  *
- * Antes esto vivía dentro de la partida ya creada y se entraba al registro con todo en
- * cero, así que a todos les tocaban cero fichas y había que volver atrás.
+ * El torneo nace en su asistente (ver CrearTorneo), con todo calculado. Esto es para
+ * después: llegó uno más, se acordó subir la recompra, se decidió pagar un cuarto lugar.
  *
  * Lo importante: el dinero y las fichas son dos cosas distintas. Se paga una entrada de
- * $500 y se reciben, digamos, 1,000 puntos que no se cambian por nada hasta que el
- * torneo acaba y se reparte la bolsa entre los que quedaron arriba.
+ * $500 y se reciben, digamos, 10,000 puntos que no se cambian por nada hasta que el
+ * torneo acaba y se reparte la bolsa. Y los puntos no salen más baratos por recomprar:
+ * lo que da una recompra es la misma proporción que la entrada, así que lo calcula la
+ * app y no se teclea.
  */
 
-const sumaPct = (t: ConfigTorneo) => t.payouts.reduce((s, x) => s + num(x.pct), 0)
+const miles = (n: number) => Math.round(n).toLocaleString('es-MX')
 
 export default function PasosTorneo({
   torneo,
   colores,
+  jugadores,
   onCambiar,
 }: {
   torneo: ConfigTorneo
   colores: ChipColor[]
+  /** Cuántos están cargados: de eso depende que las fichas alcancen. */
+  jugadores: number
   onCambiar: (t: ConfigTorneo) => void
 }) {
-  const suma = sumaPct(torneo)
-  const cuadra = Math.abs(suma - 100) < EPS
+  const stack = num(torneo.stack) || stackSugerido(torneo.buyIn)
+  const recomprasEsperadas = num(torneo.recomprasEsperadas)
+  const addOnsEsperados = num(torneo.addOnsEsperados)
 
-  const stack = num(torneo.stack) || 1000
+  const plan = planFichas({
+    colores,
+    jugadores: Math.max(2, jugadores),
+    stack,
+    fichasRecompra: fichasPorPrecio(torneo.rebuyPrice, torneo.buyIn, stack),
+    fichasAddOn: fichasPorPrecio(torneo.addOnPrice, torneo.buyIn, stack),
+    recomprasEsperadas,
+    addOnsEsperados,
+  })
+  const valores = torneo.valores ?? plan.valores
+  const aMano = JSON.stringify(valores) !== JSON.stringify(plan.valores)
+
   /*
-   * La ficha más chica tiene que valer lo que la ciega chica del primer nivel, que sale
-   * de la profundidad estándar: cien ciegas grandes de stack. Los valores se asignan
-   * solos con esa unidad y se recalculan si cambia el stack.
+   * Cualquier cambio vuelve a bajar las fichas del dinero: si no, quedaría una recompra
+   * de $400 dando los puntos de cuando la entrada costaba otra cosa.
    */
-  const unidad = Math.max(1, Math.round(stack / 200))
-  const valores = torneo.valores ?? asignarValores(colores, unidad)
-
-  const ponerStack = (v: number) =>
+  const aplicar = (cambios: Partial<ConfigTorneo>, valoresNuevos = valores) => {
+    const t = { ...torneo, ...cambios }
+    const s = num(t.stack) || stackSugerido(t.buyIn)
+    const masChica = Math.min(...Object.values(valoresNuevos))
     onCambiar({
-      ...torneo,
-      stack: v,
-      valores: asignarValores(colores, Math.max(1, Math.round((v || 1000) / 200))),
+      ...t,
+      stack: s,
+      valores: valoresNuevos,
+      rebuyChips: fichasPorPrecio(t.rebuyPrice, t.buyIn, s, masChica),
+      addOnChips: fichasPorPrecio(t.addOnPrice, t.buyIn, s, masChica),
     })
+  }
+
+  /* Mover el stack deja los valores hechos a mano sin sentido: se calcularon con otro
+     número. Vuelven a los que propone la app para ese stack. */
+  const cambiarStack = (v: number) => {
+    const s = Math.max(1, v)
+    const conElNuevo = planFichas({
+      colores,
+      jugadores: Math.max(2, jugadores),
+      stack: s,
+      fichasRecompra: fichasPorPrecio(torneo.rebuyPrice, torneo.buyIn, s),
+      fichasAddOn: fichasPorPrecio(torneo.addOnPrice, torneo.buyIn, s),
+      recomprasEsperadas,
+      addOnsEsperados,
+    })
+    aplicar({ stack: v }, conElNuevo.valores)
+  }
 
   return (
     <>
       <p className="field-label mt-1 mb-1">Cuánto cuesta jugar</p>
       <p className="mt-0 mb-2 text-[12px] leading-snug text-ink-soft">
-        Lo que cada quien paga. Es igual para todos y arma la bolsa que se reparte al final.
+        Lo que cada quien paga. Arma la bolsa que se reparte al final.
       </p>
-      <MoneyInput
-        label="Entrada"
-        value={torneo.buyIn}
-        onChange={(v) => onCambiar({ ...torneo, buyIn: v })}
-      />
+      <MoneyInput label="Entrada" value={torneo.buyIn} onChange={(v) => aplicar({ buyIn: v })} />
       <MoneyInput
         label="Recompra"
         value={torneo.rebuyPrice}
-        onChange={(v) => onCambiar({ ...torneo, rebuyPrice: v })}
+        onChange={(v) => aplicar({ rebuyPrice: v })}
       />
       <MoneyInput
         label="Add-on"
         value={torneo.addOnPrice}
-        onChange={(v) => onCambiar({ ...torneo, addOnPrice: v })}
+        onChange={(v) => aplicar({ addOnPrice: v })}
       />
 
-      <p className="field-label mt-4 mb-1">Cuántas fichas da cada cosa</p>
-      <p className="mt-0 mb-2 text-[12px] leading-snug text-ink-soft">
-        En torneo las fichas no son dinero: son puntos que no se cambian hasta el final. Por eso el
-        stack se pone aparte de lo que cuesta.
-      </p>
-      <div className="mb-2">
-        <span className="field-label">Fichas de la entrada</span>
+      <div className="mt-1 mb-4 rounded-xl border border-paper-line bg-paper-soft px-3 py-2.5">
+        <p className="field-label mt-0 mb-1.5">Lo que da cada cosa</p>
+        <ul className="m-0 list-none p-0 text-[13px]">
+          <li className="flex justify-between py-0.5">
+            <span className="text-ink-soft">Entrada {money(torneo.buyIn)}</span>
+            <b className="text-ink">{miles(stack)} fichas</b>
+          </li>
+          {num(torneo.rebuyPrice) > 0 && (
+            <li className="flex justify-between py-0.5">
+              <span className="text-ink-soft">Recompra {money(torneo.rebuyPrice)}</span>
+              <b className="text-ink">{miles(num(torneo.rebuyChips) || stack)} fichas</b>
+            </li>
+          )}
+          {num(torneo.addOnPrice) > 0 && (
+            <li className="flex justify-between py-0.5">
+              <span className="text-ink-soft">Add-on {money(torneo.addOnPrice)}</span>
+              <b className="text-ink">{miles(num(torneo.addOnChips) || stack)} fichas</b>
+            </li>
+          )}
+        </ul>
+      </div>
+
+      <div className="mb-3">
+        <span className="field-label">Fichas con las que arranca cada quien</span>
         <div className="field-box mt-1">
           <NumInput
             value={stack}
             showZero
             mode="decimal"
-            aria-label="Fichas de la entrada"
-            onChange={ponerStack}
+            aria-label="Fichas con las que arranca cada quien"
+            onChange={cambiarStack}
           />
         </div>
       </div>
-      <div className="mb-2 grid grid-cols-2 gap-2">
+
+      <div className="mb-3 grid grid-cols-2 gap-2">
         <div>
-          <span className="field-label">Por recompra</span>
+          <span className="field-label">Recompras que calculas</span>
           <div className="field-box mt-1">
             <NumInput
-              value={num(torneo.rebuyChips) || stack}
+              value={recomprasEsperadas}
               showZero
-              mode="decimal"
-              aria-label="Fichas por recompra"
-              onChange={(v) => onCambiar({ ...torneo, rebuyChips: v })}
+              aria-label="Recompras que calculas"
+              onChange={(v) => aplicar({ recomprasEsperadas: v })}
             />
           </div>
         </div>
         <div>
-          <span className="field-label">Por add-on</span>
+          <span className="field-label">Add-ons que calculas</span>
           <div className="field-box mt-1">
             <NumInput
-              value={num(torneo.addOnChips) || stack}
+              value={addOnsEsperados}
               showZero
-              mode="decimal"
-              aria-label="Fichas por add-on"
-              onChange={(v) => onCambiar({ ...torneo, addOnChips: v })}
+              aria-label="Add-ons que calculas"
+              onChange={(v) => aplicar({ addOnsEsperados: v })}
             />
           </div>
         </div>
@@ -121,6 +166,7 @@ export default function PasosTorneo({
         Se asignan solas para que alcancen y para que la más chica pague la ciega chica. Puedes
         cambiarlas.
       </p>
+      {plan.aviso && <div className="balance balance-off">{plan.aviso}</div>}
       <div className="mb-1 grid grid-cols-[repeat(auto-fit,minmax(64px,1fr))] gap-1.5">
         {colores.map((c) => (
           <label key={c.key} className="flex flex-col items-center gap-1">
@@ -134,78 +180,23 @@ export default function PasosTorneo({
               mode="decimal"
               aria-label={`Valor de ${c.label} en el torneo`}
               className="w-full rounded-lg border border-paper-line bg-white px-0.5 py-1.5 text-center text-[14px] font-semibold outline-none focus:border-marca"
-              onChange={(v) => onCambiar({ ...torneo, valores: { ...valores, [c.key]: v } })}
+              onChange={(v) => aplicar({}, { ...valores, [c.key]: v })}
             />
           </label>
         ))}
       </div>
+      {aMano && (
+        <button
+          type="button"
+          className="btn btn-ghost mt-1 mb-2"
+          onClick={() => aplicar({}, plan.valores)}
+        >
+          Volver a los valores que propone la app
+        </button>
+      )}
 
       <p className="field-label mt-4 mb-1.5">Cómo se reparten los premios</p>
-      <div className="mb-2.5 flex flex-wrap gap-2">
-        {PAYOUT_PRESETS.map((pr) => (
-          <button
-            key={pr.label}
-            type="button"
-            onClick={() => onCambiar({ ...torneo, payouts: pr.pcts.map((pct) => ({ pct })) })}
-            className="cursor-pointer rounded-full border border-paper-line bg-white px-2.5 py-1.5 text-xs font-semibold text-ink-soft hover:border-marca hover:text-ink"
-          >
-            {pr.label}
-          </button>
-        ))}
-      </div>
-
-      {torneo.payouts.map((po, i) => (
-        <div
-          key={i}
-          className="mb-2 flex items-center gap-2 rounded-[10px] border border-paper-line bg-paper-soft px-2.5 py-2"
-        >
-          <span className="min-w-[42px] font-display text-base font-bold text-ink">{i + 1}º</span>
-          <div className="field-box w-[86px] shrink-0">
-            <NumInput
-              value={po.pct}
-              mode="decimal"
-              showZero
-              aria-label={`Porcentaje del lugar ${i + 1}`}
-              onChange={(v) =>
-                onCambiar({
-                  ...torneo,
-                  payouts: torneo.payouts.map((x, xi) => (xi === i ? { pct: v } : x)),
-                })
-              }
-            />
-            <span className="font-bold text-ink-soft">%</span>
-          </div>
-          {torneo.payouts.length > 1 && (
-            <button
-              type="button"
-              aria-label={`Quitar el lugar ${i + 1}`}
-              onClick={() =>
-                onCambiar({ ...torneo, payouts: torneo.payouts.filter((_, xi) => xi !== i) })
-              }
-              className="ml-auto flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-lg border-none bg-ink/8 text-ink-soft hover:bg-loss/12 hover:text-loss"
-            >
-              <X size={14} strokeWidth={2.5} />
-            </button>
-          )}
-        </div>
-      ))}
-
-      <button
-        type="button"
-        className="btn-dashed mb-2 flex items-center justify-center gap-1.5"
-        onClick={() => onCambiar({ ...torneo, payouts: [...torneo.payouts, { pct: 0 }] })}
-      >
-        <Plus size={15} strokeWidth={2.6} />
-        Agregar lugar
-      </button>
-
-      <p
-        className={`mt-0 mb-3 text-center text-[12px] font-semibold ${
-          cuadra ? 'text-win' : 'text-loss'
-        }`}
-      >
-        {cuadra ? 'Los premios suman 100%' : `Suman ${suma}%, tienen que sumar 100%`}
-      </p>
+      <Premios payouts={torneo.payouts} onCambiar={(payouts) => onCambiar({ ...torneo, payouts })} />
     </>
   )
 }

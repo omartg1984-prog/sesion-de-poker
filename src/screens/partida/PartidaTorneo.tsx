@@ -13,6 +13,7 @@ import Reloj from './Reloj'
 import { leerJson } from '../../lib/api'
 import { RELOJ_PARADO, type Estructura as Tabla, type RelojTorneo } from '../../lib/torneo'
 import {
+  CompartirReparto,
   FichasDelJugador,
   InventarioUsado,
   calcularReparto,
@@ -44,6 +45,14 @@ export const bolsaDe = (ps: Participacion[], t: ConfigTorneo) =>
   ps.reduce((s, p) => s + pagadoPor(p, t), 0)
 
 const sumaPct = (t: ConfigTorneo) => t.payouts.reduce((s, x) => s + num(x.pct), 0)
+
+/* Las fichas del torneo son puntos, no pesos: nada de signo de dólares. */
+const enFichas = (n: number) => Math.round(n).toLocaleString('es-MX')
+
+/* La ficha más chica que va a haber en la mesa. Los torneos viejos no traen valores de
+   torneo, y ahí manda el valor en dinero de la liga. */
+const fichaMasChicaDe = (t: ConfigTorneo, colores: { key: string; value: number }[]) =>
+  Math.min(...(t.valores ? Object.values(t.valores) : colores.map((c) => num(c.value) || 1)), Infinity) || 1
 
 const premioDe = (i: number, ps: Participacion[], t: ConfigTorneo) => {
   const po = t.payouts[i]
@@ -102,9 +111,11 @@ export default function PartidaTorneo({
 
         <Estructura
           jugadores={ps.length}
-          colores={colores}
+          stack={num(torneo.stack) || num(torneo.buyIn)}
+          fichaMasChica={fichaMasChicaDe(torneo, colores)}
           estructura={estructura}
           puedeEditar={puedeEditar}
+          horaInicio={torneo.horaInicio}
           onGuardar={onEstructura}
         />
 
@@ -115,7 +126,12 @@ export default function PartidaTorneo({
           {/* El mismo formulario que al crear la partida: lo que se define ahí se
               corrige aquí, sin dos versiones del mismo campo. */}
           {puedeEditar ? (
-            <PasosTorneo torneo={torneo} colores={colores} onCambiar={cambiarTorneo} />
+            <PasosTorneo
+              torneo={torneo}
+              colores={colores}
+              jugadores={ps.length}
+              onCambiar={cambiarTorneo}
+            />
           ) : (
             <p className="m-0 text-[13px] text-ink-soft">
               Entrada {money(torneo.buyIn)} · recompra {money(torneo.rebuyPrice)} · add-on{' '}
@@ -182,6 +198,7 @@ export default function PartidaTorneo({
                   colores={coloresTorneo}
                   puedeEditar={puedeEditar}
                   tocar={tocar}
+                  formato={enFichas}
                 />
               ) : null
             })()}
@@ -189,6 +206,13 @@ export default function PartidaTorneo({
         ))}
 
         <InventarioUsado reparto={reparto} colores={coloresTorneo} />
+
+        <section className="panel">
+          <p className="panel-title">
+            <span>Mandar el reparto</span>
+          </p>
+          <CompartirReparto reparto={reparto} colores={coloresTorneo} datos={datos} />
+        </section>
       </>
     )
   }

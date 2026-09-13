@@ -112,7 +112,19 @@ export function calcularEstructura(p: Peticion): Estructura {
   const stackInicial = Math.max(1, Math.round(p.stackInicial))
   const ficha = Math.max(1, p.fichaMasChica)
   const minutosPorNivel = Math.max(5, Math.round(p.minutosPorNivel))
-  const cuantos = Math.max(2, Math.round(p.minutosDeseados / minutosPorNivel))
+
+  /* Cuánto reloj se lleva jugar tantos niveles, con sus descansos en medio. */
+  const loQueDura = (niveles: number) => {
+    const cuantosDescansos = descanso
+      ? Math.max(0, Math.ceil(niveles / descanso.cadaNiveles) - 1)
+      : 0
+    return niveles * minutosPorNivel + cuantosDescansos * (descanso?.minutos ?? 0)
+  }
+
+  /* Los descansos salen del tiempo que se pidió, no se le suman: si se quedó de jugar
+     de ocho a una, a la una hay que estar levantando la mesa. Cenar sale de ahí. */
+  let cuantos = Math.max(2, Math.round(p.minutosDeseados / minutosPorNivel))
+  while (cuantos > 2 && loQueDura(cuantos) > p.minutosDeseados) cuantos--
 
   /* La ciega chica es la mitad de la grande, así que se trabaja con ella y la grande
      sale al doble: así las dos se pueden pagar con las fichas que hay. */
@@ -150,15 +162,12 @@ export function calcularEstructura(p: Peticion): Estructura {
   if (!aviso && profundidad < 30)
     aviso = 'Cada quien arranca con muy pocas ciegas. Con un stack más grande se juega mejor.'
 
-  /* Los descansos también cuentan para lo que va a durar la noche. */
-  const cuantosDescansos = descanso ? Math.max(0, Math.ceil(cuantos / descanso.cadaNiveles) - 1) : 0
-
   return {
     niveles,
     descanso,
     stackInicial,
     minutosPorNivel,
-    duracionMinutos: cuantos * minutosPorNivel + cuantosDescansos * (descanso?.minutos ?? 0),
+    duracionMinutos: loQueDura(cuantos),
     profundidad,
     factor,
     aviso,
@@ -278,6 +287,10 @@ export type ValoresTorneo = Record<string, number>
  */
 const ESCALERA = [1, 4, 20, 40, 200, 1000]
 
+/** El paso que le toca al color en la posicion `i` de precio, de mas barato a mas caro. */
+const pasoDe = (i: number) =>
+  ESCALERA[i] ?? ESCALERA[ESCALERA.length - 1] * 5 ** (i - ESCALERA.length + 1)
+
 /**
  * Reparte denominaciones entre los colores: el más barato en dinero se queda con la más
  * baja del torneo.
@@ -292,8 +305,7 @@ export function asignarValores(
   const orden = [...colores].sort((a, b) => (Number(a.value) || 0) - (Number(b.value) || 0))
   const valores: ValoresTorneo = {}
   orden.forEach((c, i) => {
-    const paso = ESCALERA[i] ?? ESCALERA[ESCALERA.length - 1] * 5 ** (i - ESCALERA.length + 1)
-    valores[c.key] = Math.max(1, Math.round(unidad * paso))
+    valores[c.key] = Math.max(1, Math.round(unidad * pasoDe(i)))
   })
   return valores
 }
@@ -305,4 +317,168 @@ export function coloresDelTorneo<T extends { key: string; value: number }>(
 ): T[] {
   if (!valores) return colores
   return colores.map((c) => (valores[c.key] ? { ...c, value: valores[c.key] } : c))
+}
+
+/*
+ * Cuánto vale cada ficha, contando lo que hay en la caja.
+ *
+ * Poner valores bonitos no basta: las fichas tienen que alcanzar. Y no sólo para los
+ * stacks del arranque —las recompras y los add-ons también salen de la misma caja—, así
+ * que el cálculo cuenta desde ya los que se esperan.
+ *
+ * La cuenta se apoya en que todos los valores salen de una sola unidad: subirla al doble
+ * hace que la misma caja dé el doble de puntos. Así que la unidad más baja que sirve es
+ * la que hace que el inventario completo cubra los puntos que se van a necesitar.
+ *
+ * Entre esa y la que dejaría arrancar con cien ciegas grandes, gana la más alta: antes
+ * que una tabla de ciegas bonita que no se puede repartir, más vale un torneo un poco
+ * más corto que sí cabe en la caja.
+ */
+
+/** Unidades con las que las denominaciones se ven normales: 25, 50, 100, 250… */
+const UNIDADES = [1, 2, 2.5, 5]
+
+function unidadBonita(v: number): number {
+  if (v <= 1) return 1
+  const magnitud = 10 ** Math.floor(Math.log10(v))
+  for (const u of UNIDADES) {
+    const cand = u * magnitud
+    /* El 2.5 sólo sirve de 25 para arriba: una ficha de 2.5 no existe. */
+    if (!Number.isInteger(cand)) continue
+    /* Hacia arriba siempre: redondear hacia abajo dejaría las fichas cortas. */
+    if (cand >= v - 1e-9) return cand
+  }
+  return 10 * magnitud
+}
+
+export interface PeticionFichas {
+  colores: { key: string; value: number; inventory: number }[]
+  jugadores: number
+  stack: number
+  fichasRecompra: number
+  fichasAddOn: number
+  recomprasEsperadas: number
+  addOnsEsperados: number
+}
+
+export interface PlanFichas {
+  valores: ValoresTorneo
+  unidad: number
+  /** Puntos que hay que poner sobre la mesa, contando recompras y add-ons esperados. */
+  puntosNecesarios: number
+  /** Puntos que da toda la caja con estos valores. */
+  puntosDisponibles: number
+  /** Valor de la ficha más chica: es lo que tiene que poder pagar la ciega chica. */
+  fichaMasChica: number
+  aviso: string | null
+}
+
+export function planFichas(p: PeticionFichas): PlanFichas {
+  const jugadores = Math.max(2, Math.floor(p.jugadores) || 2)
+  const stack = Math.max(1, Math.round(p.stack) || 1)
+  const orden = [...p.colores].sort((a, b) => (Number(a.value) || 0) - (Number(b.value) || 0))
+
+  const cuantas = (c: { inventory: number }) => Math.max(0, Math.floor(Number(c.inventory) || 0))
+
+  /* Lo que pesa la caja con unidad 1. Todo lo demás escala con ella. */
+  const peso = orden.reduce((s, c, i) => s + cuantas(c) * pasoDe(i), 0)
+
+  /* Y lo que pesa la parte que le toca a uno solo: el reparto no puede darle a nadie más
+     fichas de un color que las que hay divididas entre todos, así que un stack que no
+     quepa ahí no se puede armar aunque en la caja sobren puntos. */
+  const pesoDeUno = orden.reduce(
+    (s, c, i) => s + Math.floor(cuantas(c) / jugadores) * pasoDe(i),
+    0,
+  )
+
+  const puntosNecesarios =
+    jugadores * stack +
+    Math.max(0, Math.floor(p.recomprasEsperadas) || 0) * Math.max(0, p.fichasRecompra || 0) +
+    Math.max(0, Math.floor(p.addOnsEsperados) || 0) * Math.max(0, p.fichasAddOn || 0)
+
+  const comoda = unidadBonita(Math.max(1, stack / (PROFUNDIDAD * 2)))
+  const necesaria =
+    peso > 0
+      ? unidadBonita(
+          /* Sin pesoDeUno no hay unidad que salve el reparto; eso lo dice el aviso. */
+          Math.max(puntosNecesarios / peso, pesoDeUno > 0 ? stack / pesoDeUno : 0),
+        )
+      : comoda
+  const unidad = Math.max(comoda, necesaria)
+
+  const valores = asignarValores(p.colores, unidad)
+  const puntosDisponibles = unidad * peso
+  const fichaMasChica = Math.min(...Object.values(valores), unidad)
+
+  let aviso: string | null = null
+  if (peso <= 0)
+    aviso = 'La liga no tiene fichas cargadas, así que no hay con qué repartir. Revísalas en la liga.'
+  else if (pesoDeUno <= 0)
+    aviso =
+      'No hay fichas para tantos jugadores: de algún color no alcanza ni a una por cabeza. Juega con menos gente o carga más fichas.'
+  else if (necesaria > comoda)
+    aviso =
+      'No hay fichas para arrancar con cien ciegas grandes, así que la ficha más chica sube de valor y el torneo empieza más corto. Baja el stack o las recompras que esperas.'
+  else if (puntosNecesarios > puntosDisponibles * 0.85)
+    aviso =
+      'Se va a usar casi toda la caja. Si llega gente de más o se recompra más de lo calculado, no van a alcanzar las fichas.'
+
+  return { valores, unidad, puntosNecesarios, puntosDisponibles, fichaMasChica, aviso }
+}
+
+/**
+ * Las fichas que da una recompra o un add-on.
+ *
+ * Es la misma proporción que la entrada: si $500 dan 1,000 puntos, una recompra de $400
+ * da 800 y un add-on de $300 da 600. El dinero se acuerda entre todos; las fichas salen
+ * de ahí solas, para que nadie compre puntos más baratos que los demás.
+ */
+export function fichasPorPrecio(
+  precio: number,
+  entrada: number,
+  stack: number,
+  fichaMasChica = 1,
+): number {
+  const pagado = Math.max(0, Number(precio) || 0)
+  if (pagado <= 0) return 0
+  const cobrado = Number(entrada) || 0
+  const crudo = cobrado > 0 ? (stack * pagado) / cobrado : stack
+  const paso = Math.max(1, Math.round(fichaMasChica) || 1)
+  return Math.max(paso, Math.round(crudo / paso) * paso)
+}
+
+/* ---- la hora de la pared ---- */
+
+const enMinutos = (hhmm: string): number => {
+  const [h, m] = String(hhmm).split(':').map(Number)
+  return Number.isFinite(h) && Number.isFinite(m) ? h * 60 + m : NaN
+}
+
+/** Minutos entre dos horas "HH:MM". Si la de salida es menor, es que se pasó la medianoche. */
+export function minutosEntre(inicio: string, fin: string): number {
+  const a = enMinutos(inicio)
+  const b = enMinutos(fin)
+  if (Number.isNaN(a) || Number.isNaN(b)) return 0
+  const diferencia = b - a
+  return diferencia > 0 ? diferencia : diferencia + 24 * 60
+}
+
+/** La hora que va a ser tantos minutos después de arrancar, en "HH:MM". */
+export function horaMas(inicio: string, minutos: number): string {
+  const a = enMinutos(inicio)
+  if (Number.isNaN(a)) return ''
+  const t = (((a + Math.round(minutos)) % 1440) + 1440) % 1440
+  return `${String(Math.floor(t / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`
+}
+
+/*
+ * Con cuántas fichas arranca cada quien si nadie dice otra cosa.
+ *
+ * El número en sí da igual —son puntos— pero conviene que se vea como un torneo de
+ * verdad, así que sale de la entrada y se redondea a dos cifras: $500 dan 10,000.
+ */
+export function stackSugerido(buyIn: number): number {
+  const crudo = Math.max(1000, Math.round((Number(buyIn) || 0) * 20))
+  const magnitud = 10 ** Math.max(0, Math.floor(Math.log10(crudo)) - 1)
+  return Math.round(crudo / magnitud) * magnitud
 }
