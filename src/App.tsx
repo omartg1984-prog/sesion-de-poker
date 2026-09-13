@@ -1,6 +1,7 @@
 import { Loader2 } from 'lucide-react'
 import Logo from './components/Logo'
 import { useEffect } from 'react'
+import Invitacion from './components/Invitacion'
 import Toast from './components/Toast'
 import AdminScreen from './screens/AdminScreen'
 import EntrarScreen from './screens/EntrarScreen'
@@ -44,6 +45,8 @@ export default function App() {
       ) : (
         <HomeScreen />
       )}
+      {/* La invitación vive fuera de las pantallas: puede llegar esté donde esté. */}
+      <Invitacion />
       <Toast />
     </>
   )

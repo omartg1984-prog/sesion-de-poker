@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { sonar, sonidoGuardado } from '../../lib/sonidos'
 import {
   enCurso,
   segundosCorridos,
@@ -87,4 +88,43 @@ export function horaDeVuelta(restanteSeg: number): string {
     minute: '2-digit',
     hour12: false,
   })
+}
+
+/**
+ * El aviso de que cambiaron las ciegas.
+ *
+ * Vive aparte del reloj visible a propósito: tiene que sonar aunque en ese momento
+ * estés en la pestaña del registro apuntando una recompra, que es justo cuando se te
+ * pasa que subieron. Por eso se engancha a la pantalla de la partida y no al reloj.
+ *
+ * La primera vuelta no suena: abrir la app a media noche no es un cambio de nivel.
+ */
+export function useAvisoDeNivel(estructura: Estructura | null, reloj: RelojTorneo) {
+  const ultimoTramo = useRef<number | null>(null)
+
+  useEffect(() => {
+    if (!estructura || !reloj.corriendo) {
+      ultimoTramo.current = null
+      return
+    }
+
+    const revisar = () => {
+      const segundos = segundosCorridos(reloj)
+      const { tramo, terminado } = enCurso(estructura, segundos)
+      if (terminado) return
+      const cual = tramo.desdeMinuto
+      if (ultimoTramo.current === null) {
+        ultimoTramo.current = cual
+        return
+      }
+      if (cual !== ultimoTramo.current) {
+        ultimoTramo.current = cual
+        sonar(sonidoGuardado())
+      }
+    }
+
+    revisar()
+    const t = setInterval(revisar, 1000)
+    return () => clearInterval(t)
+  }, [estructura, reloj])
 }

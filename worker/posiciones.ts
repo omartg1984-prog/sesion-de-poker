@@ -1,3 +1,4 @@
+import { leerJson, podioDe } from './podio'
 import type { ColorFicha, Env } from './tipos'
 
 /**
@@ -126,20 +127,6 @@ export interface TablaLiga {
   records: RecordLiga[]
 }
 
-const num = (v: unknown) => {
-  const n = typeof v === 'number' ? v : parseFloat(String(v ?? ''))
-  return Number.isFinite(n) ? n : 0
-}
-
-function leerJson<T>(crudo: string | null | undefined, porDefecto: T): T {
-  if (!crudo) return porDefecto
-  try {
-    return JSON.parse(crudo) as T
-  } catch {
-    return porDefecto
-  }
-}
-
 /** Lo que hizo una persona en una noche concreta. */
 interface Noche {
   puesto: number
@@ -156,8 +143,6 @@ export async function calcularPosiciones(env: Env, ligaId: string): Promise<Tabl
     .bind(ligaId)
     .first<{ colores: string }>()
   const colores = leerJson<ColorFicha[]>(liga?.colores, [])
-  const valorDe = (fichas: Record<string, number> | Record<string, unknown>) =>
-    colores.reduce((t, c) => t + num((fichas as Record<string, number>)[c.key]) * num(c.value), 0)
 
   // En orden cronológico: las rachas necesitan saber qué pasó antes.
   const { results: partidas } = await env.DB.prepare(
@@ -221,59 +206,26 @@ export async function calcularPosiciones(env: Env, ligaId: string): Promise<Tabl
     if (jugadores.length === 0) continue
 
     const etiqueta = partida.nombre || partida.fecha
-    const esTorneo = partida.tipo === 'torneo'
-    const t = leerJson(partida.torneo, {
-      buyIn: 0,
-      rebuyPrice: 0,
-      addOnPrice: 0,
-      payouts: [] as { pct: number }[],
-    })
+    /* La misma regla que usa el lobby para el podio y el permiso de presumir: si
+       aquí se ordenara distinto, el ganador de la noche no sería el mismo en dos
+       pantallas de la misma app. */
+    const ordenadas = podioDe(partida, jugadores, colores)
 
-    const pagadoTorneo = (j: FilaParticipacion) =>
-      num(t.buyIn) + num(j.rebuys) * num(t.rebuyPrice) + num(j.addons) * num(t.addOnPrice)
-    const bolsa = esTorneo ? jugadores.reduce((s, j) => s + pagadoTorneo(j), 0) : 0
-
-    // Primero el resultado de cada quien, para poder ordenar la mesa.
-    const noches = jugadores.map((j) => {
-      if (esTorneo) {
-        const po = j.lugar ? t.payouts[j.lugar - 1] : undefined
-        const puesto = pagadoTorneo(j)
-        const saco = po ? (bolsa * num(po.pct)) / 100 : 0
-        return {
-          j,
-          puesto,
-          saco,
-          recompras: num(j.rebuys),
-          montoRecompras: num(j.rebuys) * num(t.rebuyPrice),
-        }
-      }
-      const recompras = leerJson<{ dinero: number }[]>(j.recompras, [])
-      const montoRecompras = recompras.reduce((a, r) => a + num(r.dinero), 0)
-      return {
-        j,
-        puesto: num(j.entrada) + montoRecompras,
-        saco: valorDe(leerJson<Record<string, number>>(j.fichas_final, {})),
-        recompras: recompras.length,
-        montoRecompras,
-      }
-    })
-
-    const mesa = noches.reduce((s, n) => s + n.puesto, 0)
+    const mesa = ordenadas.reduce((s, n) => s + n.puso, 0)
     dineroMovido += mesa
     if (!mayorMesa || mesa > mayorMesa.monto) mayorMesa = { monto: mesa, detalle: etiqueta }
 
-    const ordenadas = [...noches].sort((a, b) => b.saco - b.puesto - (a.saco - a.puesto))
-    ordenadas.forEach((n, i) => {
-      anotar(n.j, {
-        puesto: n.puesto,
+    for (const n of ordenadas) {
+      anotar(n.jugador, {
+        puesto: n.puso,
         saco: n.saco,
-        resultado: n.saco - n.puesto,
+        resultado: n.resultado,
         recompras: n.recompras,
         montoRecompras: n.montoRecompras,
-        lugarEnLaMesa: i + 1,
+        lugarEnLaMesa: n.lugar,
         deCuantos: ordenadas.length,
       })
-    })
+    }
   }
 
   /** Noches ganando seguidas al final del historial; negativo si va perdiendo. */

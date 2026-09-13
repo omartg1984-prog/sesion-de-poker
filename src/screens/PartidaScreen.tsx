@@ -25,9 +25,11 @@ import { conAviso, useApp } from '../store/app'
 import { ENTRADA_POR_DEFECTO } from './partida/comun'
 import BannerFichas from './partida/BannerFichas'
 import Numeros from './partida/Numeros'
+import Presume from './partida/Presume'
+import { useAvisoDeNivel } from './partida/usarReloj'
 import { calcularCuadre, porQueNoSePuedeCerrar } from './partida/cuadre'
 import { calcularReparto, invertidoDe } from './partida/comun'
-import type { Estructura, RelojTorneo } from '../lib/torneo'
+import { RELOJ_PARADO, type Estructura, type RelojTorneo } from '../lib/torneo'
 import PartidaCash, { PESTANAS_CASH, type PestanaCash } from './partida/PartidaCash'
 import PartidaTorneo, {
   PESTANAS_TORNEO,
@@ -70,6 +72,7 @@ export default function PartidaScreen() {
   const irALiga = useApp((s) => s.irALiga)
   const irAHome = useApp((s) => s.irAHome)
   const avisar = useApp((s) => s.avisar)
+  const yo = useApp((s) => s.usuario)
 
   const [datos, setDatos] = useState<DetallePartida | null>(null)
   const [miembros, setMiembros] = useState<Miembro[]>([])
@@ -104,10 +107,33 @@ export default function PartidaScreen() {
   // Otro admin pudo haber tocado la partida desde su teléfono mientras no mirabas.
   useRecargarAlVolver(() => void cargar())
 
+  /*
+   * El aviso de que subieron las ciegas suena estés en la pestaña que estés.
+   *
+   * Se memoriza contra el texto crudo y no contra el objeto: abrirlo en cada render
+   * daría un objeto nuevo cada vez y el reloj del aviso se estaría reiniciando solo.
+   */
+  const crudoEstructura =
+    datos?.partida.tipo === 'torneo' ? (datos.partida.estructura ?? null) : null
+  const crudoReloj = datos?.partida.reloj ?? null
+  const estructuraDelAviso = useMemo(
+    () => leerJson<Estructura | null>(crudoEstructura, null),
+    [crudoEstructura],
+  )
+  const relojDelAviso = useMemo(
+    () => leerJson<RelojTorneo>(crudoReloj, RELOJ_PARADO),
+    [crudoReloj],
+  )
+  useAvisoDeNivel(estructuraDelAviso, relojDelAviso)
+
   const colores = useMemo(() => datos?.liga.colores ?? [], [datos])
   const esTorneo = datos?.partida.tipo === 'torneo'
   const cerrada = datos?.partida.estado === 'cerrada'
   const puedeEditar = !!datos?.soyAdmin && !cerrada
+  /* Contar fichas es de todos los de la mesa; cerrar la noche es sólo del que llevó
+     el banco, aunque haya otros admins en la liga. */
+  const puedeContar = !cerrada
+  const soyJefe = !!datos?.soyJefe
   const pestanas = [
     ...(esTorneo ? PESTANAS_TORNEO : PESTANAS_CASH),
     { id: 'numeros' as const, label: 'Estadísticas' },
@@ -209,7 +235,7 @@ export default function PartidaScreen() {
     }
   }
 
-  const comunes = { datos, colores, puedeEditar, tocar, recargar: cargar }
+  const comunes = { datos, colores, puedeEditar, puedeContar, tocar, recargar: cargar }
 
   /* El cuadre de la noche. En torneo no aplica: ahí no se cuentan fichas al final, el
      resultado sale de los premios por lugar. */
@@ -312,7 +338,7 @@ export default function PartidaScreen() {
       )}
 
       {/* Es la acción que cierra la noche, así que va en rojo y no escondida al final. */}
-      {!sinJugadores && puedeEditar && (pestana === 'resultado' || pestana === 'numeros') && (
+      {!sinJugadores && soyJefe && !cerrada && (pestana === 'resultado' || pestana === 'numeros') && (
         <>
           <button
             type="button"
@@ -330,6 +356,18 @@ export default function PartidaScreen() {
             </p>
           )}
         </>
+      )}
+
+      {/* El micrófono del ganador. Sale al final de la partida cerrada, que es cuando
+          ya se sabe de qué presumir. */}
+      {cerrada && datos.ganadorId && yo && datos.ganadorId === yo.id && (
+        <Presume
+          partidaId={partidaId}
+          actual={datos.partida.presume ?? null}
+          onGuardado={(texto) =>
+            setDatos((d) => (d ? { ...d, partida: { ...d.partida, presume: texto } } : d))
+          }
+        />
       )}
 
       {datos.soyAdmin && (

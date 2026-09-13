@@ -3,6 +3,7 @@ import { useState } from 'react'
 import Chip from '../../components/Chip'
 import MoneyInput from '../../components/MoneyInput'
 import NumInput from '../../components/NumInput'
+import SelectorJugador from '../../components/SelectorJugador'
 import ShareBlock from '../../components/ShareBlock'
 import { api, type ConfigTorneo, type Miembro } from '../../lib/api'
 import { computeDistribution } from '../../lib/distribution'
@@ -90,6 +91,8 @@ function Opciones({
 interface Props {
   ligaId: string
   nombreLiga: string
+  /** Quién está creando el torneo: es el jefe de la noche salvo que digan otra cosa. */
+  yoId: string
   miembros: Miembro[]
   colores: ChipColor[]
   /** La partida ya existe: hay que refrescar la lista de la liga. */
@@ -100,6 +103,7 @@ interface Props {
 export default function CrearTorneo({
   ligaId,
   nombreLiga,
+  yoId,
   miembros,
   colores,
   onCreada,
@@ -114,6 +118,8 @@ export default function CrearTorneo({
   const [fecha, setFecha] = useState(hoy())
   const [nombre, setNombre] = useState('')
   const [elegidos, setElegidos] = useState<string[]>([])
+  /* Quién funge de banco esa noche. */
+  const [jefe, setJefe] = useState(yoId)
 
   const [buyIn, setBuyIn] = useState(500)
   const [rebuyPrice, setRebuyPrice] = useState(400)
@@ -222,6 +228,7 @@ export default function CrearTorneo({
         nombre: nombre.trim() || undefined,
         tipo: 'torneo',
         torneo,
+        jefeId: jefe,
       }),
     )
     if (!r) {
@@ -389,6 +396,19 @@ export default function CrearTorneo({
             className="mt-1 w-full rounded-xl border border-paper-line bg-white px-3 py-3 text-base font-semibold text-ink outline-none focus:border-marca"
           />
         </label>
+
+        <div className="mb-4">
+          <span className="field-label">Quién lleva el banco</span>
+          <p className="mt-0.5 mb-1.5 text-[12px] leading-snug text-ink-soft">
+            Recibe el dinero y es el único que puede cerrar el torneo al final.
+          </p>
+          <SelectorJugador
+            titulo="¿Quién lleva el banco?"
+            valor={jefe}
+            onChange={(id) => setJefe(id ?? yoId)}
+            opciones={miembros.map((m) => ({ id: m.id, nombre: m.nombre, foto: m.foto }))}
+          />
+        </div>
 
         <Navegar puede={jugadores >= 2} rotulo="Continuar" />
         {jugadores < 2 && (

@@ -127,6 +127,15 @@ export interface ConfigTorneo {
   horaFin?: string
 }
 
+/** Un lugar del podio de una noche, para el resumen del lobby. */
+export interface PuestoPodio {
+  usuarioId: string
+  nombre: string
+  foto: string | null
+  resultado: number
+  lugar: number
+}
+
 export interface PartidaResumen {
   id: string
   liga_id: string
@@ -135,6 +144,21 @@ export interface PartidaResumen {
   tipo: TipoPartida
   estado: 'abierta' | 'cerrada'
   jugadores: number
+  /** Quién llevó el banco esa noche. null en las de antes de que esto existiera. */
+  jefe_id?: string | null
+  /** Los tres primeros. Vacío mientras la partida sigue abierta. */
+  podio?: PuestoPodio[]
+  /** El mensaje del que ganó, si lo escribió. */
+  presume?: string | null
+}
+
+/** El mensaje del ganador de la última noche cerrada, que es el que se ve en la liga. */
+export interface Presume {
+  texto: string
+  partidaId: string
+  etiqueta: string
+  autor: string | null
+  foto: string | null
 }
 
 export interface Participacion {
@@ -151,6 +175,9 @@ export interface Participacion {
   lugar: number
   /** Lo que de verdad se le entregó. null = todavía no se reparte el dinero. */
   pagado: number | null
+  /** Quién capturó el conteo de fichas del final. */
+  contadas_por: string | null
+  contadas_por_nombre: string | null
   nombre: string
   usuario: string
   foto: string | null
@@ -243,6 +270,10 @@ export interface DetallePartida {
   liga: { id: string; nombre: string; colores: ChipColor[] }
   participaciones: Participacion[]
   soyAdmin: boolean
+  /** Llevé el banco esa noche: soy el único que puede cerrarla. */
+  soyJefe: boolean
+  /** Quién ganó, una vez cerrada. Lo decide el servidor, que es quien da el micrófono. */
+  ganadorId: string | null
 }
 
 /** Las columnas JSON llegan como texto; esto las abre sin tronar si vienen mal. */
@@ -296,13 +327,29 @@ export const api = {
     borrar<{ ok: true }>(`ligas/${ligaId}/miembros/${usuarioId}`),
 
   posiciones: (ligaId: string) => pedir<TablaPosiciones>(`ligas/${ligaId}/posiciones`),
+  /** El nombre detrás de un código de invitación, para poder preguntar antes de entrar. */
+  invitacion: (codigo: string) =>
+    pedir<{ liga: { id: string; nombre: string }; yaEstaba: boolean }>(
+      `ligas/invitacion/${encodeURIComponent(codigo)}`,
+    ),
 
   /* partidas */
-  partidas: (ligaId: string) => pedir<{ partidas: PartidaResumen[] }>(`ligas/${ligaId}/partidas`),
+  partidas: (ligaId: string) =>
+    pedir<{ partidas: PartidaResumen[]; presume: Presume | null }>(`ligas/${ligaId}/partidas`),
   crearPartida: (
     ligaId: string,
-    datos: { fecha: string; nombre?: string; tipo: TipoPartida; torneo?: ConfigTorneo },
+    datos: {
+      fecha: string
+      nombre?: string
+      tipo: TipoPartida
+      torneo?: ConfigTorneo
+      /** Quién funge de banco. Sin esto, queda quien la creó. */
+      jefeId?: string
+    },
   ) => post<{ partida: PartidaResumen }>(`ligas/${ligaId}/partidas`, datos),
+  /** El mensaje del que ganó la noche. Texto vacío lo borra. */
+  presumir: (partidaId: string, texto: string) =>
+    put<{ ok: true; presume: string | null }>(`partidas/${partidaId}/presume`, { texto }),
   partida: (id: string) => pedir<DetallePartida>(`partidas/${id}`),
   borrarPartida: (id: string) => borrar<{ ok: true }>(`partidas/${id}`),
   guardarPartida: (

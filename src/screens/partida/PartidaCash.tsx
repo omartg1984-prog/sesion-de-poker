@@ -37,6 +37,7 @@ export default function PartidaCash({
   datos,
   colores,
   puedeEditar,
+  puedeContar,
   tocar,
   onRedondeo,
 }: PropsPestana & { pestana: PestanaCash; onRedondeo: (paso: number) => void }) {
@@ -190,6 +191,11 @@ export default function PartidaCash({
             </b>
             .
           </p>
+          {/* Que cada quien cuente las suyas es lo que hace rápido el cash out. */}
+          <p className="mt-2 mb-0 text-[12px] leading-snug text-ink-soft">
+            Cualquiera de la mesa puede capturar un conteo, no hace falta ser admin. Debajo de cada
+            uno queda apuntado quién lo puso.
+          </p>
         </section>
 
         {conTotales.map((p) => {
@@ -219,7 +225,7 @@ export default function PartidaCash({
               <ContadorFichas
                 colores={colores}
                 fichas={fichas}
-                deshabilitado={!puedeEditar}
+                deshabilitado={!puedeContar}
                 onChange={(key, v) => {
                   const nuevas = { ...fichas, [key]: v }
                   tocar(p.id, { fichas_final: JSON.stringify(nuevas) }, { fichasFinal: nuevas })
@@ -264,6 +270,9 @@ export default function PartidaCash({
                 <span>
                   Puso <b className="text-ink">{money(p.invertido)}</b>
                 </span>
+                {yaContado && p.contadas_por_nombre && (
+                  <span className="truncate">las contó {p.contadas_por_nombre}</span>
+                )}
                 {p.pagado !== null && Math.abs(p.pagado - p.final) > EPS && (
                   <span className={p.pagado > p.final ? 'text-win' : 'text-loss'}>
                     {p.pagado > p.final ? '+' : '−'}

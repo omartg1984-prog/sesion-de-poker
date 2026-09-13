@@ -1,4 +1,5 @@
 import { json } from './index'
+import { ganadorDe, leerJson, podioDe } from './podio'
 import { calcularPosiciones } from './posiciones'
 import {
   DIAS_SESION,
@@ -15,9 +16,42 @@ import {
   pinValido,
   usuarioValido,
 } from './seguridad'
-import { aPublico, type Env, type FilaUsuario } from './tipos'
+import { aPublico, type ColorFicha, type Env, type FilaUsuario } from './tipos'
 
 const COOKIE = 'sesion'
+
+/** Una partida como sale de la lista del lobby. */
+interface FilaPartidaLista {
+  id: string
+  fecha: string
+  nombre: string | null
+  tipo: string
+  torneo: string | null
+  estado: string
+  presume: string | null
+}
+
+/** Una participación con el nombre de su dueño, para armar el podio. */
+interface JugadorConNombre {
+  partida_id: string
+  usuario_id: string
+  nombre: string
+  foto: string | null
+  entrada: number
+  recompras: string
+  fichas_final: string
+  rebuys: number
+  addons: number
+  lugar: number
+}
+
+interface Podio {
+  usuarioId: string
+  nombre: string
+  foto: string | null
+  resultado: number
+  lugar: number
+}
 /** Una foto de perfil no tiene por qué pesar más que esto ya redimensionada. */
 const MAX_FOTO = 300_000
 
@@ -289,6 +323,20 @@ export async function rutas(
       return json({ liga, yaEstaba: false }, 201)
     }
 
+    /*
+     * GET /api/ligas/invitacion/:codigo — sólo el nombre.
+     *
+     * Es para poder preguntar "¿entrar a Los Domingos?" en vez de "¿entrar a 5GNNTH?".
+     * No filtra nada: quien trae el código ya podía entrar con él.
+     */
+    if (partes[1] === 'invitacion' && partes[2] && metodo === 'GET') {
+      const liga = await env.DB.prepare('SELECT id, nombre FROM ligas WHERE codigo = ?')
+        .bind(String(partes[2]).trim().toUpperCase())
+        .first<{ id: string; nombre: string }>()
+      if (!liga) return json({ error: 'Esa invitación ya no sirve' }, 404)
+      return json({ liga, yaEstaba: !!(await membresia(env, liga.id, yo.id)) })
+    }
+
     const ligaId = partes[1]
     if (ligaId) {
       const mia = await membresia(env, ligaId, yo.id)
@@ -421,18 +469,88 @@ export async function rutas(
 
       if (partes[2] === 'partidas') {
         if (metodo === 'GET') {
-          const { results } = await env.DB.prepare(
+          const { results: filas } = await env.DB.prepare(
             `SELECT p.*, (SELECT COUNT(*) FROM participaciones x WHERE x.partida_id = p.id) AS jugadores
              FROM partidas p WHERE p.liga_id = ? ORDER BY p.fecha DESC, p.creada_en DESC`,
           )
             .bind(ligaId)
-            .all()
-          return json({ partidas: results })
+            .all<FilaPartidaLista>()
+
+          /* El lobby abre con esta lista, así que cada noche llega con su podio ya
+             resuelto: entrar a ver quién ganó una por una era el trabajo que hacía
+             falta hacer a mano. Las abiertas no traen podio porque todavía no hay. */
+          const cerradas = filas.filter((f) => f.estado === 'cerrada')
+          const podios = new Map<string, Podio[]>()
+
+          if (cerradas.length > 0) {
+            const liga = await env.DB.prepare('SELECT colores FROM ligas WHERE id = ?')
+              .bind(ligaId)
+              .first<{ colores: string }>()
+            const colores = leerJson<ColorFicha[]>(liga?.colores, [])
+            const marcas = cerradas.map(() => '?').join(',')
+            const { results: jugadores } = await env.DB.prepare(
+              `SELECT p.partida_id, p.usuario_id, u.nombre, u.foto,
+                      p.entrada, p.recompras, p.fichas_final, p.rebuys, p.addons, p.lugar
+               FROM participaciones p JOIN usuarios u ON u.id = p.usuario_id
+               WHERE p.partida_id IN (${marcas})`,
+            )
+              .bind(...cerradas.map((f) => f.id))
+              .all<JugadorConNombre>()
+
+            const porPartida = new Map<string, JugadorConNombre[]>()
+            for (const j of jugadores) {
+              const lista = porPartida.get(j.partida_id) ?? []
+              lista.push(j)
+              porPartida.set(j.partida_id, lista)
+            }
+
+            for (const f of cerradas) {
+              const suyos = porPartida.get(f.id) ?? []
+              if (suyos.length === 0) continue
+              podios.set(
+                f.id,
+                podioDe(f, suyos, colores)
+                  .slice(0, 3)
+                  .map((n) => ({
+                    usuarioId: n.jugador.usuario_id,
+                    nombre: n.jugador.nombre,
+                    foto: n.jugador.foto,
+                    resultado: n.resultado,
+                    lugar: n.lugar,
+                  })),
+              )
+            }
+          }
+
+          /* El derecho a presumir es de la última noche cerrada, no de todas: por eso
+             el mensaje viejo desaparece solo en cuanto se cierra otra partida. */
+          const ultima = cerradas[0]
+          const presume =
+            ultima && ultima.presume
+              ? {
+                  texto: ultima.presume,
+                  partidaId: ultima.id,
+                  etiqueta: ultima.nombre || ultima.fecha,
+                  autor: podios.get(ultima.id)?.[0]?.nombre ?? null,
+                  foto: podios.get(ultima.id)?.[0]?.foto ?? null,
+                }
+              : null
+
+          return json({
+            partidas: filas.map((f) => ({ ...f, podio: podios.get(f.id) ?? [] })),
+            presume,
+          })
         }
 
         if (metodo === 'POST') {
           if (!esAdminLiga) return json({ error: 'Solo un admin de la liga puede crear partidas' }, 403)
-          const { fecha, nombre, tipo, torneo } = await cuerpo<Record<string, unknown>>()
+          const { fecha, nombre, tipo, torneo, jefeId } = await cuerpo<Record<string, unknown>>()
+
+          /* El jefe de la noche: quien funge de banco. Si no dicen quién, es quien la
+             creó, que es el que está con el teléfono en la mano. */
+          const jefe = jefeId === undefined || jefeId === null ? yo.id : String(jefeId)
+          if (!(await membresia(env, ligaId, jefe)))
+            return json({ error: 'El jefe de la partida tiene que estar en la liga' }, 400)
           const f = String(fecha ?? '').trim() || ahora().slice(0, 10)
           if (!/^\d{4}-\d{2}-\d{2}$/.test(f)) return json({ error: 'La fecha no es válida' }, 400)
 
@@ -448,11 +566,14 @@ export async function rutas(
 
           const id = nuevoId()
           await env.DB.prepare(
-            'INSERT INTO partidas (id, liga_id, fecha, nombre, tipo, torneo, estado, creada_por, creada_en) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            'INSERT INTO partidas (id, liga_id, fecha, nombre, tipo, torneo, estado, jefe_id, creada_por, creada_en) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
           )
-            .bind(id, ligaId, f, String(nombre ?? '').trim() || null, t, configTorneo, 'abierta', yo.id, ahora())
+            .bind(id, ligaId, f, String(nombre ?? '').trim() || null, t, configTorneo, 'abierta', jefe, yo.id, ahora())
             .run()
-          return json({ partida: { id, liga_id: ligaId, fecha: f, tipo: t, estado: 'abierta' } }, 201)
+          return json(
+            { partida: { id, liga_id: ligaId, fecha: f, tipo: t, estado: 'abierta', jefe_id: jefe } },
+            201,
+          )
         }
       }
     }
@@ -464,7 +585,7 @@ export async function rutas(
     const partidaId = partes[1]
     const partida = await env.DB.prepare('SELECT * FROM partidas WHERE id = ?')
       .bind(partidaId)
-      .first<{ id: string; liga_id: string; estado: string }>()
+      .first<{ id: string; liga_id: string; estado: string; jefe_id: string | null }>()
     if (!partida) return json({ error: 'Partida no encontrada' }, 404)
 
     const mia = await membresia(env, partida.liga_id, yo.id)
@@ -476,17 +597,32 @@ export async function rutas(
         .bind(partida.liga_id)
         .first<{ id: string; nombre: string; colores: string }>()
       const { results: participaciones } = await env.DB.prepare(
-        `SELECT p.*, u.nombre, u.usuario, u.foto
+        `SELECT p.*, u.nombre, u.usuario, u.foto,
+                (SELECT c.nombre FROM usuarios c WHERE c.id = p.contadas_por) AS contadas_por_nombre
          FROM participaciones p JOIN usuarios u ON u.id = p.usuario_id
          WHERE p.partida_id = ? ORDER BY u.nombre COLLATE NOCASE`,
       )
         .bind(partidaId)
         .all()
+      /* Quién ganó lo dice el servidor, no la pantalla: es lo mismo que decide quién
+         tiene derecho a presumir, y las dos respuestas tienen que ser una sola. */
+      const completa = partida as unknown as { tipo: string; torneo: string | null }
+      const gano =
+        partida.estado === 'cerrada'
+          ? ganadorDe(
+              completa,
+              participaciones as unknown as JugadorConNombre[],
+              JSON.parse(liga!.colores) as ColorFicha[],
+            )
+          : null
+
       return json({
         partida,
         liga: { ...liga, colores: JSON.parse(liga!.colores) },
         participaciones,
         soyAdmin: esAdminLiga,
+        soyJefe: partida.jefe_id ? partida.jefe_id === yo.id : esAdminLiga,
+        ganadorId: gano?.usuario_id ?? null,
       })
     }
 
@@ -497,11 +633,37 @@ export async function rutas(
     }
 
     if (partes.length === 2 && metodo === 'PATCH') {
-      if (!esAdminLiga) return json({ error: 'Solo un admin de la liga puede cambiar la partida' }, 403)
       const { estado, nombre, fecha, torneo, redondeo, estructura, reloj } =
         await cuerpo<Record<string, unknown>>()
       if (estado !== undefined && estado !== 'abierta' && estado !== 'cerrada')
         return json({ error: 'Estado inválido' }, 400)
+
+      /*
+       * Abrir y cerrar la noche es del jefe de la partida y de nadie más, aunque haya
+       * otros admins en la liga y aunque el jefe no sea admin: es quien recibió el
+       * dinero y a quien le reclaman si algo no cuadra.
+       *
+       * Las partidas de antes de que existiera el jefe no tienen a nadie apuntado; ésas
+       * las sigue cerrando cualquier admin, como siempre.
+       */
+      const esJefe = partida.jefe_id ? partida.jefe_id === yo.id : esAdminLiga
+      if (estado !== undefined && !esJefe && yo.es_admin_app !== 1) {
+        const jefe = await env.DB.prepare('SELECT nombre FROM usuarios WHERE id = ?')
+          .bind(partida.jefe_id)
+          .first<{ nombre: string }>()
+        return json(
+          { error: `Esta partida la cierra ${jefe?.nombre ?? 'su jefe'}, que llevó el banco` },
+          403,
+        )
+      }
+
+      /* Todo lo demás de la partida —nombre, fecha, ciegas, reloj— sigue siendo de los
+         admins: el jefe lleva el banco, no la configuración. */
+      const tocaAlgoMas = [nombre, fecha, torneo, redondeo, estructura, reloj].some(
+        (v) => v !== undefined,
+      )
+      if (tocaAlgoMas && !esAdminLiga)
+        return json({ error: 'Solo un admin de la liga puede cambiar la partida' }, 403)
       await env.DB.prepare(
         `UPDATE partidas SET
            estado = COALESCE(?, estado),
@@ -525,6 +687,46 @@ export async function rutas(
         )
         .run()
       return json({ ok: true })
+    }
+
+    /*
+     * PUT /api/partidas/:id/presume — el mensaje del que ganó la noche.
+     *
+     * No lo escribe un admin ni el jefe: lo escribe el que ganó, y nadie más. Por eso
+     * el permiso no se pregunta por el rol sino por el resultado, con la misma cuenta
+     * que arma el podio del lobby.
+     */
+    if (partes[2] === 'presume' && metodo === 'PUT') {
+      if (partida.estado !== 'cerrada')
+        return json({ error: 'Todavía no acaba la partida' }, 409)
+
+      const liga = await env.DB.prepare('SELECT colores FROM ligas WHERE id = ?')
+        .bind(partida.liga_id)
+        .first<{ colores: string }>()
+      const { results: jugadores } = await env.DB.prepare(
+        `SELECT p.partida_id, p.usuario_id, u.nombre, u.foto,
+                p.entrada, p.recompras, p.fichas_final, p.rebuys, p.addons, p.lugar
+         FROM participaciones p JOIN usuarios u ON u.id = p.usuario_id
+         WHERE p.partida_id = ?`,
+      )
+        .bind(partidaId)
+        .all<JugadorConNombre>()
+
+      const completa = await env.DB.prepare('SELECT tipo, torneo FROM partidas WHERE id = ?')
+        .bind(partidaId)
+        .first<{ tipo: string; torneo: string | null }>()
+      const gano = ganadorDe(completa!, jugadores, leerJson<ColorFicha[]>(liga?.colores, []))
+
+      if (!gano || gano.usuario_id !== yo.id)
+        return json({ error: 'Presume el que ganó la noche' }, 403)
+
+      const { texto } = await cuerpo<Record<string, unknown>>()
+      /* Vacío borra el mensaje: es cómo se baja uno del escenario. */
+      const limpio = String(texto ?? '').trim().slice(0, 280)
+      await env.DB.prepare('UPDATE partidas SET presume = ?, presume_en = ? WHERE id = ?')
+        .bind(limpio || null, limpio ? ahora() : null, partidaId)
+        .run()
+      return json({ ok: true, presume: limpio || null })
     }
 
     // PUT /api/partidas/:id/jugadores — quiénes asistieron y con cuánto entran
@@ -580,11 +782,25 @@ export async function rutas(
     const mia = await membresia(env, par.liga_id, yo.id)
     if (!mia && !yo.es_admin_app) return json({ error: 'No perteneces a esa liga' }, 403)
     const esAdminLiga = mia?.es_admin === 1 || yo.es_admin_app === 1
-    if (!esAdminLiga) return json({ error: 'Solo un admin de la liga puede editar la partida' }, 403)
     if (par.estado === 'cerrada') return json({ error: 'La partida ya está cerrada' }, 409)
 
     const { entrada, recompras, fichasManual, fichasFinal, rebuys, addons, lugar, pagado } =
       await cuerpo<Record<string, unknown>>()
+
+    /*
+     * Contar las fichas del final lo puede hacer cualquiera de la mesa, no sólo un
+     * admin: el cash out se atora cuando una sola persona tiene que teclear el conteo
+     * de todos. Contando en paralelo se acaba en una fracción del tiempo.
+     *
+     * El dinero es otra cosa. Lo que alguien puso, lo que recompró, en qué lugar quedó
+     * y cuánto se le entregó sigue siendo del admin: eso no lo apura contar entre todos
+     * y sí es lo que decide quién le debe a quién.
+     */
+    const delAdmin = { entrada, recompras, fichasManual, rebuys, addons, lugar, pagado }
+    const soloEsElConteo = fichasFinal !== undefined && Object.values(delAdmin).every((v) => v === undefined)
+    if (!esAdminLiga && !soloEsElConteo)
+      return json({ error: 'Eso sólo lo cambia un admin de la liga' }, 403)
+
     const entero = (v: unknown) => (v === undefined ? null : Math.max(0, Math.floor(Number(v) || 0)))
 
     await env.DB.prepare(
@@ -596,7 +812,8 @@ export async function rutas(
          rebuys        = COALESCE(?, rebuys),
          addons        = COALESCE(?, addons),
          lugar         = COALESCE(?, lugar),
-         pagado        = ?
+         pagado        = ?,
+         contadas_por  = COALESCE(?, contadas_por)
        WHERE id = ?`,
     )
       .bind(
@@ -610,6 +827,9 @@ export async function rutas(
         /* Sin COALESCE a propósito: mandar `pagado: null` lo borra, que es distinto de
            haber entregado cero. No mandarlo deja lo que ya había. */
         pagado === undefined ? (par.pagado ?? null) : pagado === null ? null : Number(pagado) || 0,
+        /* Quién capturó el conteo, para que el que lleva el banco pueda revisar de un
+           vistazo antes de soltar el dinero. */
+        fichasFinal === undefined ? null : yo.id,
         par.id,
       )
       .run()

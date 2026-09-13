@@ -18,6 +18,13 @@ export interface PropsPestana {
   datos: DetallePartida
   colores: ChipColor[]
   puedeEditar: boolean
+  /*
+   * Contar las fichas del final lo puede hacer cualquiera de la mesa, no sólo un admin.
+   * Es lo que hace rápido el cash out: cuatro contando en paralelo en vez de uno
+   * tecleando lo de todos. El dinero —quién puso qué, a quién se le pagó— sigue
+   * siendo de `puedeEditar`.
+   */
+  puedeContar: boolean
   tocar: (
     id: string,
     enPantalla: Partial<Participacion>,

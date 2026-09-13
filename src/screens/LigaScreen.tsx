@@ -5,8 +5,9 @@ import {
   Banknote,
   CalendarPlus,
   ChevronRight,
-  ClipboardCopy,
   Coins,
+  Megaphone,
+  Share2,
   LogOut,
   Shield,
   Trash2,
@@ -22,11 +23,17 @@ import CrearTorneo from './liga/CrearTorneo'
 import Reglas from './liga/Reglas'
 import type { SeccionReglas } from '../lib/reglas'
 import { copyText } from '../lib/portapapeles'
+import Medalla from '../components/Medalla'
+import SelectorJugador from '../components/SelectorJugador'
+import { linkDeInvitacion } from '../components/Invitacion'
+import { compartirTextoNativo, esNativo } from '../lib/nativo'
+import { signed } from '../lib/money'
 import {
   api,
   type Liga,
   type Miembro,
   type PartidaResumen,
+  type Presume,
   type TablaPosiciones as Tabla,
   type TipoPartida,
   leerJson,
@@ -58,10 +65,14 @@ export default function LigaScreen() {
   const [miembros, setMiembros] = useState<Miembro[]>([])
   const [soyAdmin, setSoyAdmin] = useState(false)
   const [partidas, setPartidas] = useState<PartidaResumen[]>([])
+  const [presume, setPresume] = useState<Presume | null>(null)
   const [tabla, setTabla] = useState<Tabla | null>(null)
-  /* Abre en Posiciones: la tabla es lo que la gente entra a ver, y crear partida se
-     hace una vez por noche. */
-  const [pestana, setPestana] = useState<'partidas' | 'posiciones' | 'reglas'>('posiciones')
+  /*
+   * Abre en Partidas. La tabla acumulada es mucha información de golpe para lo primero
+   * que ves; las noches jugadas, con quién ganó cada una, se leen de un vistazo y son
+   * de lo que se habla al día siguiente. La tabla sigue a un toque.
+   */
+  const [pestana, setPestana] = useState<'partidas' | 'posiciones' | 'reglas'>('partidas')
   const [borrando, setBorrando] = useState(false)
   const [confirmaNombre, setConfirmaNombre] = useState('')
 
@@ -73,6 +84,8 @@ export default function LigaScreen() {
   const [fecha, setFecha] = useState(hoy())
   const [nombrePartida, setNombrePartida] = useState('')
   const [tipo, setTipo] = useState<TipoPartida>('cash')
+  /* Quién funge de banco esa noche. Por defecto, quien está creando la partida. */
+  const [jefe, setJefe] = useState<string>(yo.id)
   const [colores, setColores] = useState<ChipColor[]>([])
 
   const cargar = async () => {
@@ -87,7 +100,10 @@ export default function LigaScreen() {
       setSoyAdmin(l.soyAdmin)
       setColores(l.liga.colores)
     }
-    if (p) setPartidas(p.partidas)
+    if (p) {
+      setPartidas(p.partidas)
+      setPresume(p.presume)
+    }
     if (t) setTabla(t)
   }
 
@@ -109,6 +125,7 @@ export default function LigaScreen() {
         fecha,
         nombre: nombrePartida.trim() || undefined,
         tipo: 'cash',
+        jefeId: jefe,
       }),
     )
     setOcupado(false)
@@ -117,6 +134,32 @@ export default function LigaScreen() {
       setNombrePartida('')
       irAPartida(r.partida.id, ligaId)
     }
+  }
+
+  /*
+   * Invitar: se manda un link, no un código.
+   *
+   * Se intenta con la hoja de compartir del teléfono —que es donde está el grupo de
+   * WhatsApp— y si no hay, se copia al portapapeles.
+   */
+  const invitar = async () => {
+    if (!liga) return
+    const link = linkDeInvitacion(liga.codigo)
+    const texto = `Te invito a ${liga.nombre} en OnlyCards:
+${link}`
+    try {
+      if (esNativo()) {
+        await compartirTextoNativo(texto, 'Invitación a la liga')
+        return
+      }
+      if (navigator.share) {
+        await navigator.share({ title: liga.nombre, text: texto })
+        return
+      }
+    } catch {
+      /* si cancela o el teléfono no deja, queda el portapapeles */
+    }
+    avisar((await copyText(texto)) ? 'Link copiado' : 'No se pudo copiar')
   }
 
   /* La foto se guarda sola al elegirla: no hay nada más que confirmar. */
@@ -215,30 +258,48 @@ export default function LigaScreen() {
         {soyAdmin && <Shield size={15} className="shrink-0 text-white/85" />}
       </header>
 
-      {/* código para invitar */}
+      {/* invitar: se manda un link que se abre y se acepta, no un código que teclear */}
       <button
         type="button"
-        onClick={async () =>
-          avisar((await copyText(liga.codigo)) ? 'Código copiado' : 'No se pudo copiar')
-        }
+        onClick={() => void invitar()}
         className="mb-3.5 flex w-full cursor-pointer items-center gap-3 rounded-xl border border-marca/25 bg-gradient-to-br from-[#2a1016] to-[#100e12] px-4 py-3 text-left active:scale-[.99]"
       >
         <div className="min-w-0 flex-1">
           <div className="text-[10px] font-semibold tracking-[1px] text-tiza-suave uppercase">
-            Código para invitar
+            Invitar a la liga
           </div>
           <div className="font-display text-2xl font-bold tracking-[4px] text-marca-alta">
             {liga.codigo}
           </div>
+          <div className="mt-0.5 text-[11px] text-tiza-suave">
+            Manda el link; con abrirlo y aceptar ya están dentro.
+          </div>
         </div>
-        <ClipboardCopy size={18} className="shrink-0 text-marca-alta" />
+        <Share2 size={18} className="shrink-0 text-marca-alta" />
       </button>
+
+      {/* El que ganó la última noche tiene la palabra. Va sobre el fondo oscuro de la
+          liga y no sobre una tarjeta crema, por eso el texto es claro: con tinta oscura
+          aquí no se lee nada. */}
+      {presume && (
+        <div className="mb-3.5 flex items-start gap-3 rounded-xl border border-win/35 bg-noche-honda bg-gradient-to-br from-[#12291d] to-[#100e12] px-3.5 py-3">
+          <Megaphone size={18} className="mt-0.5 shrink-0 text-win-alto" strokeWidth={2.4} />
+          <div className="min-w-0 flex-1">
+            <p className="m-0 text-[14px] leading-snug font-semibold text-white">
+              “{presume.texto}”
+            </p>
+            <p className="mt-1 mb-0 text-[11px] text-tiza-suave">
+              {presume.autor ?? 'El ganador'} · ganó {presume.etiqueta}
+            </p>
+          </div>
+        </div>
+      )}
 
       <div className="mb-3.5 flex gap-1 rounded-xl bg-black/30 p-1">
         {(
           [
-            ['posiciones', 'Posiciones'],
             ['partidas', 'Partidas'],
+            ['posiciones', 'Posiciones'],
             ['reglas', 'Reglas'],
           ] as const
         ).map(([id, texto]) => (
@@ -285,7 +346,7 @@ export default function LigaScreen() {
                   <button
                     type="button"
                     onClick={() => irAPartida(p.id, ligaId)}
-                    className="flex w-full cursor-pointer items-center gap-2.5 border-none border-b border-dashed border-paper-line bg-transparent px-0.5 py-3 text-left last:border-b-0"
+                    className="flex w-full cursor-pointer items-start gap-2.5 border-none border-b border-dashed border-paper-line bg-transparent px-0.5 py-3 text-left last:border-b-0"
                   >
                     {p.tipo === 'torneo' ? (
                       <Trophy size={17} className="shrink-0 text-marca-tinta" strokeWidth={2.3} />
@@ -299,8 +360,33 @@ export default function LigaScreen() {
                       <span className="block text-xs text-ink-soft">
                         {p.nombre ? `${fechaLarga(p.fecha)} · ` : ''}
                         {p.jugadores} {p.jugadores === 1 ? 'jugador' : 'jugadores'}
-                        {p.estado === 'cerrada' && ' · cerrada'}
+                        {p.estado === 'abierta' && ' · en juego'}
                       </span>
+
+                      {/* Cómo quedó esa noche, sin tener que entrar a verla. */}
+                      {p.podio && p.podio.length > 0 && (
+                        <span className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
+                          {p.podio.map((q) => (
+                            <span key={q.usuarioId} className="flex items-center gap-1">
+                              <Medalla lugar={q.lugar} size={13} />
+                              <span className="max-w-[86px] truncate text-[12px] font-semibold text-ink">
+                                {q.nombre}
+                              </span>
+                              <span
+                                className={`text-[12px] font-bold tabular-nums ${
+                                  q.resultado > 0
+                                    ? 'text-win'
+                                    : q.resultado < 0
+                                      ? 'text-loss'
+                                      : 'text-ink-soft'
+                                }`}
+                              >
+                                {signed(q.resultado)}
+                              </span>
+                            </span>
+                          ))}
+                        </span>
+                      )}
                     </span>
                     <ChevronRight size={18} className="shrink-0 text-ink-soft/45" />
                   </button>
@@ -422,6 +508,7 @@ export default function LigaScreen() {
           <CrearTorneo
             ligaId={ligaId}
             nombreLiga={liga.nombre}
+            yoId={yo.id}
             miembros={miembros}
             colores={colores}
             onCreada={() => void cargar()}
@@ -452,6 +539,19 @@ export default function LigaScreen() {
                 className="mt-1 w-full rounded-xl border border-paper-line bg-white px-3 py-3 text-base font-semibold text-ink outline-none focus:border-marca"
               />
             </label>
+
+            <div className="mb-4">
+              <span className="field-label">Quién lleva el banco</span>
+              <p className="mt-0.5 mb-1.5 text-[12px] leading-snug text-ink-soft">
+                Recibe el dinero y es el único que puede cerrar la partida al final.
+              </p>
+              <SelectorJugador
+                titulo="¿Quién lleva el banco?"
+                valor={jefe}
+                onChange={(id) => setJefe(id ?? yo.id)}
+                opciones={miembros.map((m) => ({ id: m.id, nombre: m.nombre, foto: m.foto }))}
+              />
+            </div>
 
             <button
               type="button"

@@ -1,5 +1,13 @@
-import { ChevronRight, Coffee, Maximize2, Pause, Play, RotateCcw } from 'lucide-react'
+import { Bell, ChevronRight, Coffee, Maximize2, Pause, Play, RotateCcw } from 'lucide-react'
 import { useState } from 'react'
+import {
+  SONIDOS,
+  despertarAudio,
+  guardarSonido,
+  sonar,
+  sonidoGuardado,
+  type NombreSonido,
+} from '../../lib/sonidos'
 import {
   RELOJ_PARADO,
   arrancarReloj,
@@ -28,6 +36,9 @@ interface Props {
 
 export default function Reloj({ estructura, reloj, puedeEditar, onReloj, recargar }: Props) {
   const [grande, setGrande] = useState(false)
+  /* El sonido es de este teléfono, no de la partida: si fuera de la partida sonarían
+     cinco aparatos a la vez. */
+  const [sonido, setSonido] = useState<NombreSonido>(sonidoGuardado)
 
   /* Con el grande abierto, éste deja de pedirle el estado al servidor: el de arriba ya
      lo está haciendo y serían dos peticiones para lo mismo. */
@@ -100,12 +111,43 @@ export default function Reloj({ estructura, reloj, puedeEditar, onReloj, recarga
           Llevan {formatear(corridos)} de {estructura.duracionMinutos} minutos
         </p>
 
+        {/* El aviso de que suben las ciegas. Se prueba al tocarlo, que además es el
+            toque que el navegador necesita para dejar sonar algo después. */}
+        <div className="mt-3 border-t border-white/10 pt-2.5">
+          <p className="mb-1.5 flex items-center gap-1.5 text-[10px] font-semibold tracking-[.6px] text-tiza-suave uppercase">
+            <Bell size={11} strokeWidth={2.6} />
+            Aviso al subir las ciegas
+          </p>
+          <div className="no-scrollbar -mx-1 flex gap-1.5 overflow-x-auto px-1">
+            {SONIDOS.map((s) => (
+              <button
+                key={s.id}
+                type="button"
+                onClick={() => {
+                  despertarAudio()
+                  setSonido(s.id)
+                  guardarSonido(s.id)
+                  sonar(s.id)
+                }}
+                className={`shrink-0 cursor-pointer rounded-full border-none px-3 py-1.5 text-[12px] font-semibold transition-colors ${
+                  sonido === s.id ? 'bg-marca text-white' : 'bg-white/12 text-tiza-suave'
+                }`}
+              >
+                {s.etiqueta}
+              </button>
+            ))}
+          </div>
+        </div>
+
         {puedeEditar && (
           <div className="mt-3 flex gap-2">
             <button
               type="button"
               className="btn btn-marca"
-              onClick={() => onReloj(reloj.corriendo ? pausarReloj(reloj) : arrancarReloj(reloj))}
+              onClick={() => {
+                despertarAudio()
+                onReloj(reloj.corriendo ? pausarReloj(reloj) : arrancarReloj(reloj))
+              }}
             >
               {reloj.corriendo ? (
                 <>
