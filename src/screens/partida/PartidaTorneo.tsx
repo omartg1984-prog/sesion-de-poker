@@ -243,6 +243,9 @@ export default function PartidaTorneo({
     jugadores: ps.length,
     recompras: totalRecompras,
     addons: totalAddons,
+    dineroEntradas: ps.length * num(torneo.buyIn),
+    dineroRecompras: totalRecompras * num(torneo.rebuyPrice),
+    dineroAddons: totalAddons * num(torneo.addOnPrice),
     lugares: torneo.payouts.map((po, i) => ({
       lugar: i + 1,
       pct: num(po.pct),

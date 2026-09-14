@@ -432,6 +432,23 @@ export default function CrearTorneo({
         <MoneyInput label="Recompra" value={rebuyPrice} onChange={setRebuyPrice} />
         <MoneyInput label="Add-on" value={addOnPrice} onChange={setAddOnPrice} />
 
+        <div className="mt-1 mb-2">
+          <span className="field-label">Puntos con los que arranca cada quien</span>
+          <p className="mt-0.5 mb-1 text-[12px] leading-snug text-ink-soft">
+            Las fichas del torneo son puntos, no pesos. De este número salen las ciegas y lo
+            que dan la recompra y el add-on.
+          </p>
+          <div className="field-box">
+            <NumInput
+              value={stack}
+              showZero
+              mode="decimal"
+              aria-label="Puntos con los que arranca cada quien"
+              onChange={cambiarStack}
+            />
+          </div>
+        </div>
+
         <div className="mt-1 mb-4 rounded-xl border border-paper-line bg-paper-soft px-3 py-2.5">
           <p className="field-label mt-0 mb-1.5">Lo que da cada cosa</p>
           <ul className="m-0 list-none p-0 text-[13px]">
@@ -613,19 +630,6 @@ export default function CrearTorneo({
             menos jugadores.
           </div>
         )}
-
-        <div className="mb-3">
-          <span className="field-label">Fichas con las que arranca cada quien</span>
-          <div className="field-box mt-1">
-            <NumInput
-              value={stack}
-              showZero
-              mode="decimal"
-              aria-label="Fichas con las que arranca cada quien"
-              onChange={cambiarStack}
-            />
-          </div>
-        </div>
 
         <p className="field-label mt-4 mb-1">Cuánto vale cada ficha esa noche</p>
         <p className="mt-0 mb-2 text-[12px] leading-snug text-ink-soft">

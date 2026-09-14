@@ -65,10 +65,59 @@ export interface DatosTorneo {
   jugadores: number
   recompras: number
   addons: number
+  /* De dónde salió la bolsa. No es lo mismo una de pura entrada que una donde la mitad
+     fueron recompras: el que la ve en el chat quiere saber eso. */
+  dineroEntradas: number
+  dineroRecompras: number
+  dineroAddons: number
   lugares: LugarTorneo[]
 }
 
 export type DatosImagen = DatosCash | DatosTorneo | DatosLiga | DatosNumeros | DatosTabla
+
+/*
+ * La caja de la bolsa: el número que todos buscan primero cuando les llega la imagen al
+ * chat. Antes en cash era un renglón chico al pie, del tamaño de la firma, así que
+ * había que sumar de cabeza para saber de cuánto fue la noche.
+ *
+ * Debajo va de qué se compone, que es la otra mitad de la pregunta: no es lo mismo una
+ * bolsa de $12,000 de pura entrada que una donde la mitad fueron recompras.
+ */
+const ALTO_BOLSA = 136
+
+function dibujarBolsa(
+  ctx: CanvasRenderingContext2D,
+  W: number,
+  pad: number,
+  arriba: number,
+  rotulo: string,
+  monto: number,
+  desglose: string,
+) {
+  const alto = ALTO_BOLSA - 16
+  ctx.fillStyle = 'rgba(255,255,255,.06)'
+  roundRect(ctx, pad, arriba, W - 2 * pad, alto, 16)
+  ctx.fill()
+  ctx.strokeStyle = 'rgba(223,31,46,.7)'
+  ctx.lineWidth = 2
+  roundRect(ctx, pad, arriba, W - 2 * pad, alto, 16)
+  ctx.stroke()
+
+  ctx.textAlign = 'center'
+  ctx.fillStyle = CREAM
+  ctx.font = "600 18px 'Inter',Arial,sans-serif"
+  ctx.fillText(rotulo, W / 2, arriba + 36)
+
+  ctx.fillStyle = MARCA_ALTA
+  ctx.font = "700 52px 'Khand',Arial,sans-serif"
+  ctx.fillText(moneyShort(monto), W / 2, arriba + 88)
+
+  if (desglose) {
+    ctx.fillStyle = 'rgba(255,255,255,.6)'
+    ctx.font = "500 17px 'Inter',Arial,sans-serif"
+    ctx.fillText(desglose, W / 2, arriba + 114)
+  }
+}
 
 /* ---------- cash ---------- */
 
@@ -81,11 +130,27 @@ function dibujarCash(d: DatosCash): HTMLCanvasElement {
   const theadH = 58
   const rowH = 76
   const footerH = 120
-  const H = headerH + theadH + rowH * Math.max(filas.length, 1) + footerH + pad
+  const H =
+    headerH + ALTO_BOLSA + theadH + rowH * Math.max(filas.length, 1) + footerH + pad
 
   const { cv, ctx } = makeCanvas(W, H)
   pintarMesa(ctx, W, H, d.titulo, d.subtitulo, '♠ ♥ ♣ ♦')
 
+  const entradas = filas.reduce((t, r) => t + r.entrada, 0)
+  const recompras = filas.reduce((t, r) => t + r.recompra, 0)
+  dibujarBolsa(
+    ctx,
+    W,
+    pad,
+    headerH - 6,
+    'EN LA MESA',
+    d.totalMesa,
+    recompras > 0
+      ? `${moneyShort(entradas)} de entradas · ${moneyShort(recompras)} en recompras`
+      : `${filas.length} jugadores de entrada`,
+  )
+
+  const arribaTabla = headerH + ALTO_BOLSA
   const colName = pad + 26
   const cEnt = 500
   const cRec = 660
@@ -95,15 +160,15 @@ function dibujarCash(d: DatosCash): HTMLCanvasElement {
   ctx.font = "600 16px 'Inter',Arial,sans-serif"
   ctx.fillStyle = 'rgba(255,255,255,.65)'
   ctx.textAlign = 'left'
-  ctx.fillText('JUGADOR', colName, headerH + theadH / 2 + 5)
+  ctx.fillText('JUGADOR', colName, arribaTabla + theadH / 2 + 5)
   ctx.textAlign = 'right'
-  ctx.fillText('Entrada', cEnt, headerH + theadH / 2 + 5)
-  ctx.fillText('Recompra', cRec, headerH + theadH / 2 + 5)
-  ctx.fillText('Final', cFin, headerH + theadH / 2 + 5)
-  ctx.fillText('Resultado', cRes, headerH + theadH / 2 + 5)
-  lineaTenue(ctx, pad, W - pad, headerH + theadH)
+  ctx.fillText('Entrada', cEnt, arribaTabla + theadH / 2 + 5)
+  ctx.fillText('Recompra', cRec, arribaTabla + theadH / 2 + 5)
+  ctx.fillText('Final', cFin, arribaTabla + theadH / 2 + 5)
+  ctx.fillText('Resultado', cRes, arribaTabla + theadH / 2 + 5)
+  lineaTenue(ctx, pad, W - pad, arribaTabla + theadH)
 
-  let ry = headerH + theadH
+  let ry = arribaTabla + theadH
   filas.forEach((r, i) => {
     if (i % 2 === 1) {
       ctx.fillStyle = 'rgba(255,255,255,.05)'
@@ -140,7 +205,11 @@ function dibujarCash(d: DatosCash): HTMLCanvasElement {
   ctx.textAlign = 'left'
   ctx.fillStyle = MARCA
   ctx.font = "600 22px 'Inter',Arial,sans-serif"
-  ctx.fillText('Total en la mesa: ' + moneyShort(d.totalMesa), colName, ry + 50)
+  ctx.fillText(
+    `${filas.length} ${filas.length === 1 ? 'jugador' : 'jugadores'} en la mesa`,
+    colName,
+    ry + 50,
+  )
   ctx.textAlign = 'right'
   ctx.fillStyle = 'rgba(255,255,255,.5)'
   ctx.font = "400 18px 'Inter',Arial,sans-serif"
@@ -155,30 +224,21 @@ function dibujarTorneo(d: DatosTorneo): HTMLCanvasElement {
   const W = 1000
   const pad = 44
   const headerH = 170
-  const poolH = 120
   const theadH = 54
   const rowH = 76
   const footerH = 110
-  const H = headerH + poolH + theadH + rowH * Math.max(d.lugares.length, 1) + footerH + pad
+  const H =
+    headerH + ALTO_BOLSA + theadH + rowH * Math.max(d.lugares.length, 1) + footerH + pad
 
   const { cv, ctx } = makeCanvas(W, H)
   pintarMesa(ctx, W, H, d.titulo, d.subtitulo, '🏆 TORNEO')
 
-  ctx.fillStyle = 'rgba(255,255,255,.06)'
-  roundRect(ctx, pad, headerH - 6, W - 2 * pad, poolH - 16, 16)
-  ctx.fill()
-  ctx.strokeStyle = 'rgba(223,31,46,.7)'
-  ctx.lineWidth = 2
-  roundRect(ctx, pad, headerH - 6, W - 2 * pad, poolH - 16, 16)
-  ctx.stroke()
-  ctx.textAlign = 'center'
-  ctx.fillStyle = CREAM
-  ctx.font = "600 18px 'Inter',Arial,sans-serif"
-  ctx.fillText('BOLSA A REPARTIR', W / 2, headerH + 34)
-  ctx.fillStyle = MARCA_ALTA
-  ctx.font = "700 46px 'Khand',Arial,sans-serif"
-  ctx.fillText(moneyShort(d.bolsa), W / 2, headerH + 82)
+  const partes = [`${moneyShort(d.dineroEntradas)} de entradas`]
+  if (d.dineroRecompras > 0) partes.push(`${moneyShort(d.dineroRecompras)} en recompras`)
+  if (d.dineroAddons > 0) partes.push(`${moneyShort(d.dineroAddons)} en add-ons`)
+  dibujarBolsa(ctx, W, pad, headerH - 6, 'BOLSA A REPARTIR', d.bolsa, partes.join(' · '))
 
+  const poolH = ALTO_BOLSA
   const colName = pad + 22
   const cPct = 470
   const cPrize = 700

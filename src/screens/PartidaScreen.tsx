@@ -88,13 +88,26 @@ export default function PartidaScreen() {
   const [cerrando, setCerrando] = useState(false)
 
   const diferido = useGuardadoDiferido()
+  /** Para saber si la pestaña de arranque ya se eligió o es la primera vez que se abre. */
+  const primeraCarga = useRef(true)
 
   const cargar = async () => {
     const d = await conAviso(() => api.partida(partidaId))
     if (d) {
       setDatos(d)
       setTorneo(leerJson<ConfigTorneo>(d.partida.torneo, TORNEO_POR_DEFECTO))
-      if (d.partida.tipo === 'torneo') setPestana((p) => (p === 'final' ? 'torneo' : p))
+      /*
+       * Un torneo abre en su pestaña, que es donde está el reloj: recién creado lo
+       * primero que se hace es arrancarlo, y ya empezado es lo que se viene a mirar.
+       * Sólo la primera vez —después manda donde estaba, que si no, recargar al volver
+       * de otra app te sacaría del registro a media captura.
+       */
+      if (primeraCarga.current) {
+        primeraCarga.current = false
+        setPestana(d.partida.tipo === 'torneo' ? 'torneo' : 'jugadores')
+      } else if (d.partida.tipo === 'torneo') {
+        setPestana((p) => (p === 'final' ? 'torneo' : p))
+      }
       const l = await conAviso(() => api.liga(d.partida.liga_id))
       if (l) setMiembros(l.miembros)
     }
@@ -102,6 +115,7 @@ export default function PartidaScreen() {
   }
 
   useEffect(() => {
+    primeraCarga.current = true
     void cargar()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [partidaId])
