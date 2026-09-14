@@ -4,6 +4,7 @@ import NumInput from '../../components/NumInput'
 import ShareBlock from '../../components/ShareBlock'
 import {
   computeDistribution,
+  dineroDeLaCaja,
   distributionText,
   type Distribution,
   type DistributionRow,
@@ -167,15 +168,45 @@ export function FichasDelJugador({
 export function InventarioUsado({
   reparto,
   colores,
+  /* En torneo las fichas son puntos: multiplicarlas por su valor en dinero no
+     significa nada, así que la cuenta en pesos sólo sale en cash. */
+  enDinero = false,
 }: {
   reparto: Distribution
   colores: ChipColor[]
+  enDinero?: boolean
 }) {
+  const caja = dineroDeLaCaja(colores, reparto)
   return (
     <section className="panel">
       <p className="panel-title">
         <span>Fichas en uso</span>
       </p>
+
+      {enDinero && (
+        <div className="mb-3 grid grid-cols-3 gap-2 rounded-xl border border-paper-line bg-paper-soft px-2 py-2.5 text-center">
+          <div>
+            <div className="text-[9.5px] tracking-[.5px] text-ink-soft uppercase">En la caja</div>
+            <b className="font-display text-[17px] text-ink tabular-nums">{money(caja.total)}</b>
+          </div>
+          <div>
+            <div className="text-[9.5px] tracking-[.5px] text-ink-soft uppercase">Repartido</div>
+            <b className="font-display text-[17px] text-ink tabular-nums">
+              {money(caja.repartido)}
+            </b>
+          </div>
+          <div>
+            <div className="text-[9.5px] tracking-[.5px] text-ink-soft uppercase">Queda</div>
+            <b
+              className={`font-display text-[17px] tabular-nums ${
+                caja.queda < 0 ? 'text-loss' : 'text-win'
+              }`}
+            >
+              {money(caja.queda)}
+            </b>
+          </div>
+        </div>
+      )}
       {reparto.anyOver && (
         <div className="balance balance-off">
           <AlertTriangle size={16} strokeWidth={2.4} />

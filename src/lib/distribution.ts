@@ -233,3 +233,33 @@ export function distributionText(dist: Distribution, colors: ChipColor[], moneyF
   }
   return lines.join('\n')
 }
+
+/*
+ * Lo que vale la caja de fichas, en dinero.
+ *
+ * La pregunta de la mesa nunca es "cuántas fichas quedan" sino "¿alcanza para que entre
+ * otro?" o "¿le puedo dar una recompra de $500?". Eso no se responde contando fichas: se
+ * responde en pesos, y hay que sumar cada color por su valor.
+ *
+ * Es una cuenta de cash. En torneo las fichas son puntos y multiplicarlas por su valor
+ * en dinero no significa nada.
+ */
+export interface CajaEnDinero {
+  /** Lo que puede repartir la caja llena. */
+  total: number
+  /** Lo que ya está sobre la mesa. */
+  repartido: number
+  /** Lo que se puede seguir repartiendo. Negativo = se repartió de más. */
+  queda: number
+}
+
+export function dineroDeLaCaja(colors: ChipColor[], dist?: Distribution): CajaEnDinero {
+  let total = 0
+  let repartido = 0
+  for (const c of colors) {
+    const valor = num(c.value)
+    total += count(c.inventory) * valor
+    repartido += count(dist?.usage[c.key]?.used) * valor
+  }
+  return { total, repartido, queda: total - repartido }
+}

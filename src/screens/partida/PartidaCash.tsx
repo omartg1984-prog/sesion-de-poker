@@ -163,7 +163,7 @@ export default function PartidaCash({
           )
         })}
 
-        <InventarioUsado reparto={reparto} colores={colores} />
+        <InventarioUsado reparto={reparto} colores={colores} enDinero />
 
         <section className="panel">
           <p className="panel-title">

@@ -23,12 +23,14 @@ import {
 import { useRecargarAlVolver } from '../lib/recargar'
 import { conAviso, useApp } from '../store/app'
 import { ENTRADA_POR_DEFECTO } from './partida/comun'
+import BannerCaja from './partida/BannerCaja'
 import BannerFichas from './partida/BannerFichas'
 import Numeros from './partida/Numeros'
 import Presume from './partida/Presume'
 import { useAvisoDeNivel } from './partida/usarReloj'
 import { calcularCuadre, porQueNoSePuedeCerrar } from './partida/cuadre'
 import { calcularReparto, invertidoDe } from './partida/comun'
+import { dineroDeLaCaja } from '../lib/distribution'
 import { RELOJ_PARADO, type Estructura, type RelojTorneo } from '../lib/torneo'
 import PartidaCash, { PESTANAS_CASH, type PestanaCash } from './partida/PartidaCash'
 import PartidaTorneo, {
@@ -239,15 +241,21 @@ export default function PartidaScreen() {
 
   /* El cuadre de la noche. En torneo no aplica: ahí no se cuentan fichas al final, el
      resultado sale de los premios por lugar. */
-  const cuadre = esTorneo
+  const repartoCash = esTorneo
     ? null
-    : calcularCuadre(
-        datos.participaciones,
-        colores,
-        calcularReparto(datos.participaciones, colores, invertidoDe),
-        invertidoDe,
-      )
+    : calcularReparto(datos.participaciones, colores, invertidoDe)
+  const cuadre = repartoCash
+    ? calcularCuadre(datos.participaciones, colores, repartoCash, invertidoDe)
+    : null
   const trabaParaCerrar = cuadre ? porQueNoSePuedeCerrar(cuadre) : null
+
+  /* Lo que le queda a la caja, en dinero. Es la cuenta de "¿alcanza para otra
+     recompra?", y por eso vive arriba mientras se captura y no al fondo. En torneo no
+     aplica: ahí las fichas son puntos. */
+  const caja =
+    repartoCash && datos.participaciones.length > 0
+      ? dineroDeLaCaja(colores, repartoCash)
+      : null
   // La configuración del torneo se tiene que poder abrir ANTES de cargar a nadie:
   // ahí se define el costo de entrada con el que entran todos.
   const sinJugadores =
@@ -295,6 +303,8 @@ export default function PartidaScreen() {
         {cuadre && pestana === 'final' && datos.participaciones.length > 0 && (
           <BannerFichas cuadre={cuadre} />
         )}
+
+        {caja && pestana === 'jugadores' && <BannerCaja caja={caja} />}
       </header>
 
       {sinJugadores ? (

@@ -1,6 +1,8 @@
 import { Plus, X } from 'lucide-react'
 import Chip from './Chip'
 import NumInput from './NumInput'
+import { dineroDeLaCaja } from '../lib/distribution'
+import { money } from '../lib/money'
 import { EXTRA_PALETTE, uid } from '../store/defaults'
 import type { ChipColor } from '../store/types'
 
@@ -16,6 +18,8 @@ interface Props {
  * global, así sirve igual para crear una liga que para editarla.
  */
 export default function EditorFichas({ colores, onChange, soloLectura = false }: Props) {
+  const caja = dineroDeLaCaja(colores)
+
   const cambiar = (key: string, cambios: Partial<ChipColor>) =>
     onChange(colores.map((c) => (c.key === key ? { ...c, ...cambios } : c)))
 
@@ -110,14 +114,28 @@ export default function EditorFichas({ colores, onChange, soloLectura = false }:
         </div>
       ))}
 
-      <button
-        type="button"
-        className="btn-dashed flex items-center justify-center gap-1.5"
-        onClick={agregar}
-      >
-        <Plus size={16} strokeWidth={2.5} />
-        Agregar color de ficha
-      </button>
+      {/* La pregunta de la mesa no es cuántas fichas hay sino hasta cuánto alcanzan. */}
+      <div className="mt-1 flex items-baseline justify-between rounded-xl border border-paper-line bg-paper-soft px-3.5 py-2.5">
+        <span className="text-[11px] font-semibold tracking-[.5px] text-ink-soft uppercase">
+          Se puede repartir hasta
+        </span>
+        <b className="font-display text-xl font-bold text-ink tabular-nums">{money(caja.total)}</b>
+      </div>
+      <p className="mt-1.5 mb-3 text-[12px] leading-snug text-ink-soft">
+        Es la suma de cada color por su valor. Más de eso no se puede poner sobre la mesa,
+        aunque entre más gente.
+      </p>
+
+      {!soloLectura && (
+        <button
+          type="button"
+          className="btn-dashed flex items-center justify-center gap-1.5"
+          onClick={agregar}
+        >
+          <Plus size={16} strokeWidth={2.5} />
+          Agregar color de ficha
+        </button>
+      )}
     </>
   )
 }

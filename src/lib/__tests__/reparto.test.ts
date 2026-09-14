@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { repartirRedondeado } from '../reparto'
+import { computeDistribution, dineroDeLaCaja } from '../distribution'
+import type { ChipColor } from '../../store/types'
 
 const suma = (n: number[]) => n.reduce((a, b) => a + b, 0)
 
@@ -68,5 +70,44 @@ describe('repartir el dinero sin morralla', () => {
 
   it('sin jugadores, todo el dinero se queda en la mesa', () => {
     expect(repartirRedondeado([], 500, 50)).toEqual({ pagos: [], sobra: 500 })
+  })
+})
+
+describe('lo que vale la caja en dinero', () => {
+  const CAJA: ChipColor[] = [
+    { key: 'green', label: 'Verdes', color: '#1f8f4e', value: 25, inventory: 100 },
+    { key: 'white', label: 'Blancas', color: '#f2f2ea', value: 1, inventory: 200 },
+  ]
+
+  it('suma cada color por su valor', () => {
+    // 100 × $25 más 200 × $1.
+    expect(dineroDeLaCaja(CAJA).total).toBe(2700)
+  })
+
+  it('sin nada repartido, queda toda', () => {
+    const caja = dineroDeLaCaja(CAJA)
+    expect(caja.repartido).toBe(0)
+    expect(caja.queda).toBe(caja.total)
+  })
+
+  it('descuenta lo que ya está en la mesa', () => {
+    const d = computeDistribution(
+      [{ id: '1', name: 'Ana', buyIn: 500, deal: null }],
+      CAJA,
+    )
+    const caja = dineroDeLaCaja(CAJA, d)
+    expect(caja.repartido).toBe(500)
+    expect(caja.queda).toBe(2200)
+  })
+
+  it('avisa en negativo cuando se repartió de más', () => {
+    /* Con el inventario ignorado se puede repartir más de lo que hay; el número tiene
+       que decirlo en vez de quedarse en cero. */
+    const d = computeDistribution(
+      [{ id: '1', name: 'Ana', buyIn: 5000, deal: null }],
+      CAJA,
+      true,
+    )
+    expect(dineroDeLaCaja(CAJA, d).queda).toBeLessThan(0)
   })
 })
