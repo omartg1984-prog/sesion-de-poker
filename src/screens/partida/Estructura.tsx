@@ -30,6 +30,8 @@ interface Props {
   puedeEditar: boolean
   /** Hora a la que se quedó de arrancar, para poner la tabla en hora de reloj. */
   horaInicio?: string
+  /** Segundos corridos del reloj, si ya arrancó: con eso las horas son las de verdad. */
+  corridosSeg?: number | null
   onGuardar: (e: Tabla) => void
 }
 
@@ -40,6 +42,7 @@ export default function Estructura({
   estructura,
   puedeEditar,
   horaInicio,
+  corridosSeg,
   onGuardar,
 }: Props) {
   const [duracion, setDuracion] = useState(estructura?.duracionMinutos ?? 180)
@@ -185,6 +188,7 @@ export default function Estructura({
         <TablaCiegas
           estructura={mostrada}
           horaInicio={horaInicio ?? null}
+          corridosSeg={corridosSeg}
           onCambiar={puedeEditar && estructura ? onGuardar : undefined}
         />
       </div>

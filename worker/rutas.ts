@@ -37,6 +37,15 @@ const ENTRADA_POR_DEFECTO = 500
 const registroAbierto = (p: { registro_cerrado: number; registro_hasta: string | null }) =>
   !p.registro_cerrado && (!p.registro_hasta || Date.now() < Date.parse(p.registro_hasta))
 
+/** Cuándo arrancó el torneo de verdad, visto el reloj que acaba de llegar. */
+function arranqueReal(guardado: string | null, reloj: unknown): string | null {
+  if (reloj === undefined) return guardado
+  const r = reloj as { corriendo?: boolean; acumuladoSeg?: number } | null
+  /* Reloj en cero y parado = lo reiniciaron: el torneo no ha empezado. */
+  if (!r || (!r.corriendo && !num(r.acumuladoSeg))) return null
+  return guardado ?? ahora()
+}
+
 /** Una partida como sale de la lista del lobby. */
 interface FilaPartidaLista {
   id: string
@@ -630,6 +639,7 @@ export async function rutas(
         jefe_id: string | null
         registro_cerrado: number
         registro_hasta: string | null
+        arrancado_en: string | null
       }>()
     if (!partida) return json({ error: 'Partida no encontrada' }, 404)
 
@@ -728,7 +738,8 @@ export async function rutas(
            estructura = COALESCE(?, estructura),
            reloj = COALESCE(?, reloj),
            registro_cerrado = COALESCE(?, registro_cerrado),
-           registro_hasta = ?
+           registro_hasta = ?,
+           arrancado_en = ?
          WHERE id = ?`,
       )
         .bind(
@@ -747,6 +758,14 @@ export async function rutas(
             : registroHasta
               ? String(registroHasta)
               : null,
+          /*
+           * La hora de arranque de verdad se apunta sola, en el servidor: es el primer
+           * play del reloj, lo dé el teléfono que lo dé. Hacerlo aquí y no en la
+           * pantalla evita que dependa de quién apretó y de si su reloj anda bien.
+           *
+           * Reiniciar el reloj lo borra: ahí el torneo vuelve a no haber empezado.
+           */
+          arranqueReal(partida.arrancado_en, reloj),
           partidaId,
         )
         .run()

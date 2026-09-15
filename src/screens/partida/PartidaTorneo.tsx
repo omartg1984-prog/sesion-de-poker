@@ -11,7 +11,12 @@ import Estructura from './Estructura'
 import PasosTorneo from '../liga/PasosTorneo'
 import Reloj from './Reloj'
 import { leerJson } from '../../lib/api'
-import { RELOJ_PARADO, type Estructura as Tabla, type RelojTorneo } from '../../lib/torneo'
+import {
+  RELOJ_PARADO,
+  segundosCorridos,
+  type Estructura as Tabla,
+  type RelojTorneo,
+} from '../../lib/torneo'
 import {
   CompartirReparto,
   FichasDelJugador,
@@ -49,6 +54,21 @@ const sumaPct = (t: ConfigTorneo) => t.payouts.reduce((s, x) => s + num(x.pct), 
 
 /* Las fichas del torneo son puntos, no pesos: nada de signo de dólares. */
 const enFichas = (n: number) => Math.round(n).toLocaleString('es-MX')
+
+/**
+ * Cuántos minutos tarde arrancó, comparado con la hora a la que se quedó.
+ *
+ * La hora planeada es texto suelto ("20:00") y la real es un instante, así que hay que
+ * plantar la primera en el día de la partida antes de restarlas.
+ */
+function minutosDeRetraso(fecha: string, planeada: string | undefined, real: string): number {
+  if (!planeada) return 0
+  const [a, m, d] = fecha.split('-').map(Number)
+  const [h, min] = planeada.split(':').map(Number)
+  if (![a, m, d, h, min].every(Number.isFinite)) return 0
+  const prometida = new Date(a, m - 1, d, h, min).getTime()
+  return Math.max(0, Math.round((Date.parse(real) - prometida) / 60000))
+}
 
 /* La ficha más chica que va a haber en la mesa. Los torneos viejos no traen valores de
    torneo, y ahí manda el valor en dinero de la liga. */
@@ -100,6 +120,35 @@ export default function PartidaTorneo({
     const relojGuardado = leerJson<RelojTorneo>(datos.partida.reloj, RELOJ_PARADO)
     return (
       <>
+        {/* A qué hora se quedó y a qué hora arrancó de verdad. Nunca son la misma, y
+            saberlo es lo que hace que las horas de la tabla sean ciertas. */}
+        {(torneo.horaInicio || datos.partida.arrancado_en) && (
+          <p className="mt-0 mb-3 px-1 text-center text-[12px] text-tiza-suave">
+            {torneo.horaInicio && <>Se quedó a las {torneo.horaInicio}</>}
+            {datos.partida.arrancado_en && (
+              <>
+                {torneo.horaInicio && ' · '}
+                arrancó a las{' '}
+                <b className="text-white">
+                  {new Date(datos.partida.arrancado_en).toLocaleTimeString('es-MX', {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    hour12: false,
+                  })}
+                </b>
+                {(() => {
+                  const tarde = minutosDeRetraso(
+                    datos.partida.fecha,
+                    torneo.horaInicio,
+                    datos.partida.arrancado_en,
+                  )
+                  return tarde > 0 ? ` (${tarde} min tarde)` : ''
+                })()}
+              </>
+            )}
+          </p>
+        )}
+
         {estructura && (
           <Reloj
             estructura={estructura}
@@ -117,6 +166,10 @@ export default function PartidaTorneo({
           estructura={estructura}
           puedeEditar={puedeEditar}
           horaInicio={torneo.horaInicio}
+          /* Ya arrancado, las horas se cuentan desde el reloj y no desde el plan. */
+          corridosSeg={
+            datos.partida.arrancado_en ? segundosCorridos(relojGuardado) : null
+          }
           onGuardar={onEstructura}
         />
 

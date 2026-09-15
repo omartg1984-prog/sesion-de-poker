@@ -1,0 +1,11 @@
+-- A qué hora arrancó de verdad el torneo.
+--
+-- La hora que se pone al armarlo es a la que se quedó; la de verdad es cuando alguien le
+-- da play al reloj, y nunca son la misma. Se guarda el instante del primer play.
+--
+-- Sin esto, la tabla de ciegas anuncia las horas contando desde la hora planeada: si
+-- empezaron media hora tarde, esa columna miente toda la noche y el que llega a las 22:00
+-- creyendo que va en el nivel 8 se encuentra el 5.
+--
+-- Se borra si alguien reinicia el reloj: ahí el torneo vuelve a no haber empezado.
+ALTER TABLE partidas ADD COLUMN arrancado_en TEXT;

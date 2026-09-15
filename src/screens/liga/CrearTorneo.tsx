@@ -46,6 +46,19 @@ const DURACION_DESCANSO = [10, 15, 20, 30]
 
 const hoy = () => new Date().toISOString().slice(0, 10)
 
+/**
+ * El instante exacto de una fecha más una hora del reloj de aquí.
+ *
+ * Se resuelve en el teléfono porque es donde se sabe la zona horaria; el servidor sólo
+ * compara instantes. Guardar un "20:00" suelto cerraría el registro seis horas antes.
+ */
+function instanteDe(fecha: string, hora: string): string | null {
+  const [a, m, d] = fecha.split('-').map(Number)
+  const [h, min] = hora.split(':').map(Number)
+  if (![a, m, d, h, min].every(Number.isFinite)) return null
+  return new Date(a, m - 1, d, h, min).toISOString()
+}
+
 /** "dom 13 de sep", que es como se habla de una fecha, no "2026-09-13". */
 function fechaLarga(iso: string): string {
   const [a, m, d] = iso.split('-').map(Number)
@@ -229,6 +242,8 @@ export default function CrearTorneo({
         tipo: 'torneo',
         torneo,
         jefeId: jefe,
+        /* La hora a la que se quedó es también hasta cuándo se apunta uno solo. */
+        registroHasta: instanteDe(fecha, horaInicio),
       }),
     )
     if (!r) {

@@ -21,17 +21,36 @@ export function conNivelCambiado(e: Tabla, indice: number, chica: number): Tabla
 
 interface Props {
   estructura: Tabla
-  /** Hora a la que se arranca. Sin ella se muestran los minutos corridos del torneo. */
+  /** Hora a la que se quedó de arrancar. Sin ella se muestran los minutos corridos. */
   horaInicio?: string | null
+  /*
+   * Segundos que lleva el reloj, si ya arrancó.
+   *
+   * Con esto las horas se cuentan desde ahora y no desde la hora planeada, que es lo
+   * único que las hace ciertas: nadie empieza a la hora, y una tabla que promete el
+   * nivel 5 a las 21:20 cuando arrancaron media hora tarde miente toda la noche.
+   */
+  corridosSeg?: number | null
   /** Sin esto la tabla sólo se lee. */
   onCambiar?: (e: Tabla) => void
 }
 
-export default function TablaCiegas({ estructura, horaInicio, onCambiar }: Props) {
-  const cuando = (minuto: number) =>
-    horaInicio
+export default function TablaCiegas({ estructura, horaInicio, corridosSeg, onCambiar }: Props) {
+  const enCurso = corridosSeg !== null && corridosSeg !== undefined
+
+  const cuando = (minuto: number) => {
+    if (enCurso) {
+      const faltan = minuto * 60 - corridosSeg
+      return new Date(Date.now() + faltan * 1000).toLocaleTimeString('es-MX', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      })
+    }
+    return horaInicio
       ? horaMas(horaInicio, minuto)
       : `${Math.floor(minuto / 60)}:${String(minuto % 60).padStart(2, '0')}`
+  }
 
   return (
     <div className="no-scrollbar -mx-1 overflow-x-auto">
@@ -41,7 +60,7 @@ export default function TablaCiegas({ estructura, horaInicio, onCambiar }: Props
             <th className="px-1 pb-2 font-semibold">Nivel</th>
             <th className="px-1 pb-2 text-right font-semibold">Ciegas</th>
             <th className="px-1 pb-2 text-right font-semibold">
-              {horaInicio ? 'A las' : 'Entra a las'}
+              {enCurso || horaInicio ? 'A las' : 'Entra a las'}
             </th>
           </tr>
         </thead>

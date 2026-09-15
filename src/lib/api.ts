@@ -156,6 +156,8 @@ export interface PartidaResumen {
   registro_cerrado?: number
   /** Instante ISO en que el registro se cierra solo. null = sólo se cierra a mano. */
   registro_hasta?: string | null
+  /** Instante ISO del primer play del reloj. null = todavía no empieza. */
+  arrancado_en?: string | null
 }
 
 /** Cómo quedó una noche, ya ordenada por el servidor. */
