@@ -1,4 +1,4 @@
-import { moneyShort, signed } from './money'
+import { moneyShort, signed, textOn } from './money'
 import {
   CREAM,
   cargarImagenes,
@@ -408,6 +408,143 @@ export async function dibujarNumeros(d: DatosNumeros): Promise<HTMLCanvasElement
   ctx.fillStyle = 'rgba(255,255,255,.5)'
   ctx.font = "400 18px 'Inter',Arial,sans-serif"
   ctx.fillText('♠ OnlyCards', W - pad, ry + 44)
+
+  return cv
+}
+
+/* ---------- cuánto vale cada ficha ---------- */
+
+/*
+ * En torneo las fichas no valen lo que dice la liga: valen los puntos que se les
+ * asignaron esa noche, y cambian de un torneo a otro según los montos. En la mesa eso
+ * se pregunta cada quince minutos.
+ *
+ * Por eso esta imagen dibuja la ficha de verdad con su valor en el centro, en vez de
+ * una tabla de texto: lo que se busca es el color, no el renglón.
+ */
+export interface DatosFichas {
+  tipo: 'fichas'
+  titulo: string
+  subtitulo: string
+  gorro: string
+  fichas: { label: string; color: string; valor: number }[]
+  pie: string
+}
+
+/** La misma ficha que dibuja el componente Chip, pero en canvas y con su valor dentro. */
+function pintarFicha(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  radio: number,
+  color: string,
+  valor: string,
+  /* El mismo cuerpo para todas: si cada una se ajusta a sus propios dígitos, el "50"
+     sale enorme junto a un "10,000" diminuto y dejan de leerse como un juego. */
+  cuerpo: number,
+) {
+  const e = radio / 48
+  /* Sobre fichas claras las muescas blancas desaparecerían; ahí van oscuras. */
+  const muesca = textOn(color) === '#ffffff' ? 'rgba(255,255,255,.92)' : 'rgba(0,0,0,.35)'
+
+  ctx.save()
+  ctx.translate(cx, cy)
+
+  ctx.beginPath()
+  ctx.arc(0, 0, 48 * e, 0, Math.PI * 2)
+  ctx.fillStyle = color
+  ctx.fill()
+  ctx.strokeStyle = 'rgba(0,0,0,.22)'
+  ctx.lineWidth = 2 * e
+  ctx.stroke()
+
+  /* Seis muescas en el canto: mismo reparto que el SVG de la app. */
+  const paso = (2 * Math.PI * 44 * e) / 6
+  ctx.beginPath()
+  ctx.arc(0, 0, 44 * e, 0, Math.PI * 2)
+  ctx.strokeStyle = muesca
+  ctx.lineWidth = 12 * e
+  ctx.setLineDash([paso * 0.46, paso * 0.54])
+  ctx.stroke()
+  ctx.setLineDash([])
+
+  ctx.beginPath()
+  ctx.arc(0, 0, 31 * e, 0, Math.PI * 2)
+  ctx.fillStyle = '#f6f2e8'
+  ctx.fill()
+  ctx.strokeStyle = 'rgba(0,0,0,.15)'
+  ctx.lineWidth = 1.5 * e
+  ctx.stroke()
+
+  ctx.beginPath()
+  ctx.arc(0, 0, 36 * e, 0, Math.PI * 2)
+  ctx.strokeStyle = muesca
+  ctx.lineWidth = 2 * e
+  ctx.setLineDash([3 * e, 4 * e])
+  ctx.stroke()
+  ctx.setLineDash([])
+
+  /* El valor va en el disco central, que es lo que esta imagen viene a contestar. */
+  ctx.fillStyle = '#17171b'
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.font = `700 ${Math.round(cuerpo)}px 'Khand',Arial,sans-serif`
+  ctx.fillText(valor, 0, 2 * e)
+  ctx.textBaseline = 'alphabetic'
+  ctx.restore()
+}
+
+export function dibujarFichas(d: DatosFichas): HTMLCanvasElement {
+  const W = 1000
+  const pad = 44
+  const headerH = 176
+  const footerH = 96
+
+  /* Cuatro por renglón como mucho: más chicas ya no se distinguen los colores. */
+  const columnas = Math.min(Math.max(d.fichas.length, 1), 4)
+  const renglones = Math.ceil(d.fichas.length / columnas)
+  const celda = (W - 2 * pad) / columnas
+  const radio = Math.min(celda * 0.33, 82)
+  const altoCelda = radio * 2 + 78
+  const H = headerH + renglones * altoCelda + footerH + pad
+
+  const { cv, ctx } = makeCanvas(W, H)
+  pintarMesa(ctx, W, H, d.titulo, d.subtitulo, d.gorro)
+
+  /* Un solo cuerpo de letra, el que le sirve al valor más largo. */
+  const textos = d.fichas.map((f) => moneyShort(f.valor).replace('$', ''))
+  const masLargo = Math.max(2, ...textos.map((t) => t.length))
+  const escala = radio / 48
+  const cuerpo = Math.min(30 * escala, ((50 * escala) / masLargo) * 1.7)
+
+  d.fichas.forEach((f, i) => {
+    const col = i % columnas
+    const ren = Math.floor(i / columnas)
+    const cx = pad + celda * col + celda / 2
+    const cy = headerH + ren * altoCelda + radio + 10
+
+    pintarFicha(ctx, cx, cy, radio, f.color, textos[i], cuerpo)
+
+    ctx.textAlign = 'center'
+    ctx.fillStyle = CREAM
+    ctx.font = "600 24px 'Khand',Arial,sans-serif"
+    ctx.fillText(ellipsis(f.label, 12), cx, cy + radio + 36)
+
+    ctx.fillStyle = 'rgba(255,255,255,.55)'
+    ctx.font = "500 17px 'Inter',Arial,sans-serif"
+    ctx.fillText(`vale ${f.valor.toLocaleString('es-MX')}`, cx, cy + radio + 60)
+  })
+
+  const pieY = headerH + renglones * altoCelda + 46
+  lineaTenue(ctx, pad, W - pad, pieY - 24)
+  ctx.textAlign = 'left'
+  ctx.fillStyle = MARCA
+  ctx.font = "600 20px 'Inter',Arial,sans-serif"
+  ctx.fillText(d.pie, pad + 26, pieY)
+  ctx.textAlign = 'right'
+  ctx.fillStyle = 'rgba(255,255,255,.5)'
+  ctx.font = "400 18px 'Inter',Arial,sans-serif"
+  ctx.fillText('♠ OnlyCards', W - pad, pieY)
 
   return cv
 }

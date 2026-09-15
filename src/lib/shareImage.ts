@@ -1,9 +1,11 @@
 import { moneyShort, signed } from './money'
 import { compartirArchivoNativo, esNativo, guardarArchivoNativo } from './nativo'
 import {
+  dibujarFichas,
   dibujarLiga,
   dibujarNumeros,
   dibujarTabla,
+  type DatosFichas,
   type DatosLiga,
   type DatosNumeros,
   type DatosTabla,
@@ -73,7 +75,13 @@ export interface DatosTorneo {
   lugares: LugarTorneo[]
 }
 
-export type DatosImagen = DatosCash | DatosTorneo | DatosLiga | DatosNumeros | DatosTabla
+export type DatosImagen =
+  | DatosCash
+  | DatosTorneo
+  | DatosLiga
+  | DatosNumeros
+  | DatosTabla
+  | DatosFichas
 
 /*
  * La caja de la bolsa: el número que todos buscan primero cuando les llega la imagen al
@@ -311,6 +319,7 @@ export async function construirLienzo(d: DatosImagen): Promise<HTMLCanvasElement
   } catch {
     /* si el navegador no expone document.fonts, se dibuja con los fallbacks */
   }
+  if (d.tipo === 'fichas') return dibujarFichas(d)
   if (d.tipo === 'tabla') return await dibujarTabla(d)
   if (d.tipo === 'liga') return await dibujarLiga(d)
   if (d.tipo === 'numeros') return await dibujarNumeros(d)

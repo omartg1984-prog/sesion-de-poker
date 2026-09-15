@@ -5,6 +5,7 @@ import ShareBlock from '../../components/ShareBlock'
 import Stepper from '../../components/Stepper'
 import { EPS, money, num, signed } from '../../lib/money'
 import type { DatosTorneo } from '../../lib/shareImage'
+import type { DatosFichas } from '../../lib/imagenTablas'
 import type { ConfigTorneo, Participacion } from '../../lib/api'
 import { coloresDelTorneo } from '../../lib/torneo'
 import Estructura from './Estructura'
@@ -118,6 +119,31 @@ export default function PartidaTorneo({
   if (pestana === 'torneo') {
     const estructura = leerJson<Tabla | null>(datos.partida.estructura, null)
     const relojGuardado = leerJson<RelojTorneo>(datos.partida.reloj, RELOJ_PARADO)
+
+    const stackDelTorneo = num(torneo.stack) || num(torneo.buyIn)
+    const fichasDeLaNoche: DatosFichas = {
+      tipo: 'fichas',
+      titulo: 'Cuánto vale cada ficha',
+      subtitulo: datos.partida.nombre || datos.partida.fecha,
+      gorro: datos.liga.nombre,
+      fichas: colores.map((c) => ({
+        label: c.label,
+        color: c.color,
+        valor: torneo.valores?.[c.key] ?? num(c.value),
+      })),
+      pie: `Arrancas con ${enFichas(stackDelTorneo)}`,
+    }
+
+    const textoFichas = () => {
+      const lineas = [
+        `🃏 ${datos.liga.nombre} — ${datos.partida.nombre || datos.partida.fecha}`,
+        'Cuánto vale cada ficha:',
+        '',
+      ]
+      for (const f of fichasDeLaNoche.fichas) lineas.push(`• ${f.label}: ${enFichas(f.valor)}`)
+      lineas.push('', `Arrancas con ${enFichas(stackDelTorneo)}`)
+      return lineas.join('\n')
+    }
     return (
       <>
         {/* A qué hora se quedó y a qué hora arrancó de verdad. Nunca son la misma, y
@@ -158,6 +184,24 @@ export default function PartidaTorneo({
             recargar={recargar}
           />
         )}
+
+        {/*
+         * Cuánto vale cada ficha esa noche, para mandar al grupo.
+         *
+         * Es la pregunta que más se repite en la mesa de un torneo: los mismos plásticos
+         * valen otra cosa cada vez, porque los puntos salen de los montos de esa noche.
+         * Con la imagen pegada en el chat se contesta sola.
+         */}
+        <section className="panel">
+          <p className="panel-title">
+            <span>Cuánto vale cada ficha</span>
+          </p>
+          <ShareBlock
+            datos={fichasDeLaNoche}
+            texto={textoFichas}
+            alt="Valor de cada ficha en el torneo"
+          />
+        </section>
 
         <Estructura
           jugadores={ps.length}
