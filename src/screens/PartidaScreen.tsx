@@ -265,14 +265,44 @@ export default function PartidaScreen() {
    * nadie para saber quién va.
    */
   const estoyApuntado = datos.participaciones.some((p) => p.usuario_id === yo?.id)
-  const registroCerrado = datos.partida.registro_cerrado === 1
+  /*
+   * El registro se cierra por dos vías y basta una: a mano, o al llegar la hora a la que
+   * se quedó de empezar. La segunda no necesita que nadie apriete nada: se compara con
+   * el reloj al pintar, igual que hace el servidor al recibir a alguien.
+   */
+  const cierraA = datos.partida.registro_hasta ?? null
+  const yaDioLaHora = !!cierraA && Date.now() >= Date.parse(cierraA)
+  const registroCerrado = datos.partida.registro_cerrado === 1 || yaDioLaHora
 
-  /* Cerrar el registro es "ya estamos todos", no "ya se acabó la noche". */
+  const horaDelCierre = cierraA
+    ? new Date(cierraA).toLocaleTimeString('es-MX', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      })
+    : null
+
+  /* Cerrar el registro es "ya estamos todos", no "ya se acabó la noche". Al reabrirlo
+     hay que borrar también la hora: si no, se volvería a cerrar solo al instante. */
   const cambiarRegistro = (cerrar: boolean) => {
     setDatos((d) =>
-      d ? { ...d, partida: { ...d.partida, registro_cerrado: cerrar ? 1 : 0 } } : d,
+      d
+        ? {
+            ...d,
+            partida: {
+              ...d.partida,
+              registro_cerrado: cerrar ? 1 : 0,
+              registro_hasta: cerrar ? d.partida.registro_hasta : null,
+            },
+          }
+        : d,
     )
-    void conAviso(() => api.guardarPartida(partidaId, { registroCerrado: cerrar }))
+    void conAviso(() =>
+      api.guardarPartida(partidaId, {
+        registroCerrado: cerrar,
+        ...(cerrar ? {} : { registroHasta: null }),
+      }),
+    )
     avisar(cerrar ? 'Registro cerrado' : 'Registro abierto otra vez')
   }
 
@@ -381,10 +411,14 @@ export default function PartidaScreen() {
           <p className="m-0 mb-1 font-display text-lg font-semibold text-ink">Nadie cargado aún</p>
           <p className="mx-auto mb-3 max-w-[300px] text-[13px] leading-snug text-ink-soft">
             {datos.soyAdmin
-              ? esTorneo
-                ? 'Elige quiénes llegaron, o manda el link para que se apunten solos. Todos entran con el costo que definiste al crear el torneo.'
-                : 'Elige quiénes llegaron, o manda el link para que se apunten solos.'
-              : 'Todavía no se apunta nadie. Puedes ser el primero.'}
+              ? registroCerrado
+                ? 'El registro ya cerró, pero tú puedes cargar a quien llegue.'
+                : esTorneo
+                  ? 'Elige quiénes llegaron, o manda el link para que se apunten solos. Todos entran con el costo que definiste al crear el torneo.'
+                  : 'Elige quiénes llegaron, o manda el link para que se apunten solos.'
+              : registroCerrado
+                ? 'El registro ya cerró. Pídele a un admin que te meta.'
+                : 'Todavía no se apunta nadie. Puedes ser el primero.'}
           </p>
           {puedeEditar && (
             <button type="button" className="btn btn-marca" onClick={abrirSelector}>
@@ -413,7 +447,9 @@ export default function PartidaScreen() {
           abierto. */}
       {pestana === 'jugadores' && !cerrada && (
         <>
-          {puedeEditar && (
+          {/* Con la mesa vacía el botón ya está arriba, en el hueco; repetirlo aquí
+              dejaba dos botones seguidos para lo mismo. */}
+          {puedeEditar && !sinJugadores && (
             <button type="button" className="btn btn-marca mb-2" onClick={abrirSelector}>
               <UserPlus size={17} strokeWidth={2.4} />
               Agregar o quitar jugadores
@@ -424,11 +460,18 @@ export default function PartidaScreen() {
             <div className="balance balance-ok mb-2">
               <Lock size={16} strokeWidth={2.4} />
               <span>
-                Registro cerrado. {puedeEditar ? 'Sólo tú puedes mover la lista.' : 'Pídele a un admin que te meta.'}
+                {yaDioLaHora ? `Registro cerrado a las ${horaDelCierre}.` : 'Registro cerrado.'}{' '}
+                {puedeEditar ? 'Sólo tú puedes mover la lista.' : 'Pídele a un admin que te meta.'}
               </span>
             </div>
           ) : (
             <>
+              {horaDelCierre && (
+                <p className="mt-0 mb-2 text-center text-[12px] text-ink-soft">
+                  El registro se cierra solo a las <b className="text-ink">{horaDelCierre}</b>.
+                </p>
+              )}
+
               <button
                 type="button"
                 className="btn btn-share mb-2"

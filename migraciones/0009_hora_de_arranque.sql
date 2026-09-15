@@ -1,0 +1,11 @@
+-- A qué hora arranca la noche, y hasta cuándo se puede apuntar uno solo.
+--
+-- Se guarda como el instante exacto en ISO, no como "20:00": la hora que se teclea es la
+-- del teléfono de quien crea la partida, y el servidor corre en UTC. Convertir allá
+-- donde sí se sabe la zona horaria y guardar el instante evita que el registro se cierre
+-- seis horas antes o después.
+--
+-- En NULL quiere decir que no se puso hora: el registro entonces sólo se cierra a mano.
+-- El cierre por hora no le quita nada al admin, que puede seguir metiendo gente: es para
+-- que los que van sepan hasta cuándo avisan, no para dejar fuera al que llega tarde.
+ALTER TABLE partidas ADD COLUMN registro_hasta TEXT;

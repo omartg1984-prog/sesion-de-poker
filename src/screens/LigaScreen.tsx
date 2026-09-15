@@ -47,6 +47,20 @@ import type { ChipColor } from '../store/types'
 
 const hoy = () => new Date().toISOString().slice(0, 10)
 
+/**
+ * El instante exacto que corresponde a una fecha y una hora del reloj de aquí.
+ *
+ * Se resuelve en el teléfono porque es donde se sabe la zona horaria; el servidor sólo
+ * compara instantes. Sin esto, un "20:00" guardado tal cual cerraría el registro seis
+ * horas antes o después según dónde corra el código.
+ */
+function instanteDe(fecha: string, hora: string): string | null {
+  const [a, m, d] = fecha.split('-').map(Number)
+  const [h, min] = hora.split(':').map(Number)
+  if (![a, m, d, h, min].every(Number.isFinite)) return null
+  return new Date(a, m - 1, d, h, min).toISOString()
+}
+
 function fechaLarga(iso: string) {
   const [a, m, d] = iso.split('-').map(Number)
   return new Date(a, m - 1, d).toLocaleDateString('es-MX', {
@@ -90,6 +104,8 @@ export default function LigaScreen() {
   const [tipo, setTipo] = useState<TipoPartida>('cash')
   /* Quién funge de banco esa noche. Por defecto, quien está creando la partida. */
   const [jefe, setJefe] = useState<string>(yo.id)
+  /* A qué hora se queda de empezar. Es cuando deja de apuntarse gente sola. */
+  const [horaInicio, setHoraInicio] = useState('20:00')
   const [colores, setColores] = useState<ChipColor[]>([])
 
   const cargar = async () => {
@@ -130,6 +146,9 @@ export default function LigaScreen() {
         nombre: nombrePartida.trim() || undefined,
         tipo: 'cash',
         jefeId: jefe,
+        /* Se manda el instante, no la hora suelta: aquí sí se sabe en qué zona horaria
+           está quien la crea, y el servidor corre en UTC. */
+        registroHasta: instanteDe(fecha, horaInicio),
       }),
     )
     setOcupado(false)
@@ -316,6 +335,19 @@ ${link}`
         </div>
         <Share2 size={18} className="shrink-0 text-marca-alta" />
       </button>
+
+      {/* Los dos cuartos de atrás de la liga: quién juega aquí y qué fichas hay. Arriba,
+          porque son lo que se consulta al armar la noche, no al final de todo. */}
+      <div className="mb-3.5 flex gap-2.5">
+        <button type="button" className="btn btn-ghost" onClick={() => setGente(true)}>
+          <Users size={17} strokeWidth={2.4} />
+          Jugadores en la liga
+        </button>
+        <button type="button" className="btn btn-ghost" onClick={() => setFichas(true)}>
+          <Coins size={17} strokeWidth={2.4} />
+          Inventario de fichas
+        </button>
+      </div>
 
       {/* El que ganó la última noche tiene la palabra. Va sobre el fondo oscuro de la
           liga y no sobre una tarjeta crema, por eso el texto es claro: con tinta oscura
@@ -581,6 +613,20 @@ ${link}`
               />
             </label>
 
+            <label className="mb-4 block">
+              <span className="field-label">Empieza a las</span>
+              <p className="mt-0.5 mb-1 text-[12px] leading-snug text-ink-soft">
+                A esa hora se cierra el registro solo. Tú puedes seguir metiendo a los que
+                lleguen tarde.
+              </p>
+              <input
+                type="time"
+                value={horaInicio}
+                onChange={(e) => setHoraInicio(e.target.value)}
+                className="w-full rounded-xl border border-paper-line bg-white px-3 py-3 text-base font-semibold text-ink outline-none focus:border-marca"
+              />
+            </label>
+
             <div className="mb-4">
               <span className="field-label">Quién lleva el banco</span>
               <p className="mt-0.5 mb-1.5 text-[12px] leading-snug text-ink-soft">
@@ -619,7 +665,7 @@ ${link}`
       />
 
       {/* ---- jugadores de la liga ---- */}
-      <Sheet abierta={gente} onCerrar={() => setGente(false)} titulo="Jugadores de la liga">
+      <Sheet abierta={gente} onCerrar={() => setGente(false)} titulo="Jugadores en la liga">
         <p className="mt-0 mb-3 text-[13px] leading-snug text-ink-soft">
           Se unen con el código de la liga.{' '}
           {soyAdmin && 'Toca el escudo para dar o quitar permisos de admin.'}
@@ -681,7 +727,7 @@ ${link}`
       </Sheet>
 
       {/* ---- fichas de la casa ---- */}
-      <Sheet abierta={fichas} onCerrar={() => setFichas(false)} titulo="Fichas de la casa">
+      <Sheet abierta={fichas} onCerrar={() => setFichas(false)} titulo="Inventario de fichas">
         <p className="mt-0 mb-3 text-[13px] leading-snug text-ink-soft">
           Con esto la app calcula cuántas fichas darle a cada quien según el dinero con el que
           entra.

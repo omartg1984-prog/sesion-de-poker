@@ -154,6 +154,8 @@ export interface PartidaResumen {
   presume?: string | null
   /** 1 = ya no se apunta nadie solo. El admin sí puede seguir moviendo la lista. */
   registro_cerrado?: number
+  /** Instante ISO en que el registro se cierra solo. null = sólo se cierra a mano. */
+  registro_hasta?: string | null
 }
 
 /** Cómo quedó una noche, ya ordenada por el servidor. */
@@ -191,6 +193,7 @@ export interface InvitacionPartida {
     tipo: TipoPartida
     estado: 'abierta' | 'cerrada'
     registroCerrado: boolean
+    registroHasta: string | null
   }
   liga: { id: string; nombre: string }
   /** Con cuánto entraría. */
@@ -394,6 +397,8 @@ export const api = {
       torneo?: ConfigTorneo
       /** Quién funge de banco. Sin esto, queda quien la creó. */
       jefeId?: string
+      /** Instante ISO en que se deja de admitir gente sola. */
+      registroHasta?: string | null
     },
   ) => post<{ partida: PartidaResumen }>(`ligas/${ligaId}/partidas`, datos),
   /** El mensaje del que ganó la noche. Texto vacío lo borra. */
@@ -419,6 +424,8 @@ export const api = {
       reloj?: RelojTorneo
       /** Cerrar el registro deja la lista como está para todos menos el admin. */
       registroCerrado?: boolean
+      /** null borra la hora de cierre; no mandarla la deja como estaba. */
+      registroHasta?: string | null
     },
   ) => patch<{ ok: true }>(`partidas/${id}`, cambios),
   cargarJugadores: (partidaId: string, jugadores: { usuarioId: string; entrada: number }[]) =>

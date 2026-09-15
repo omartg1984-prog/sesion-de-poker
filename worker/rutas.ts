@@ -26,6 +26,17 @@ const COOKIE = 'sesion'
  */
 const ENTRADA_POR_DEFECTO = 500
 
+/*
+ * Si todavía se puede apuntar uno solo.
+ *
+ * Son dos candados y basta uno: el que el admin cierra a mano, y la hora a la que se
+ * quedó de empezar. El segundo no necesita que nadie apriete nada a las ocho —se compara
+ * contra el reloj cada vez que alguien pregunta— y por eso se guarda el instante exacto
+ * y no un "20:00" suelto.
+ */
+const registroAbierto = (p: { registro_cerrado: number; registro_hasta: string | null }) =>
+  !p.registro_cerrado && (!p.registro_hasta || Date.now() < Date.parse(p.registro_hasta))
+
 /** Una partida como sale de la lista del lobby. */
 interface FilaPartidaLista {
   id: string
@@ -558,7 +569,8 @@ export async function rutas(
 
         if (metodo === 'POST') {
           if (!esAdminLiga) return json({ error: 'Solo un admin de la liga puede crear partidas' }, 403)
-          const { fecha, nombre, tipo, torneo, jefeId } = await cuerpo<Record<string, unknown>>()
+          const { fecha, nombre, tipo, torneo, jefeId, registroHasta } =
+            await cuerpo<Record<string, unknown>>()
 
           /* El jefe de la noche: quien funge de banco. Si no dicen quién, es quien la
              creó, que es el que está con el teléfono en la mano. */
@@ -580,9 +592,21 @@ export async function rutas(
 
           const id = nuevoId()
           await env.DB.prepare(
-            'INSERT INTO partidas (id, liga_id, fecha, nombre, tipo, torneo, estado, jefe_id, creada_por, creada_en) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            'INSERT INTO partidas (id, liga_id, fecha, nombre, tipo, torneo, estado, jefe_id, registro_hasta, creada_por, creada_en) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
           )
-            .bind(id, ligaId, f, String(nombre ?? '').trim() || null, t, configTorneo, 'abierta', jefe, yo.id, ahora())
+            .bind(
+              id,
+              ligaId,
+              f,
+              String(nombre ?? '').trim() || null,
+              t,
+              configTorneo,
+              'abierta',
+              jefe,
+              registroHasta ? String(registroHasta) : null,
+              yo.id,
+              ahora(),
+            )
             .run()
           return json(
             { partida: { id, liga_id: ligaId, fecha: f, tipo: t, estado: 'abierta', jefe_id: jefe } },
@@ -605,6 +629,7 @@ export async function rutas(
         estado: string
         jefe_id: string | null
         registro_cerrado: number
+        registro_hasta: string | null
       }>()
     if (!partida) return json({ error: 'Partida no encontrada' }, 404)
 
@@ -655,7 +680,7 @@ export async function rutas(
     }
 
     if (partes.length === 2 && metodo === 'PATCH') {
-      const { estado, nombre, fecha, torneo, redondeo, estructura, reloj, registroCerrado } =
+      const { estado, nombre, fecha, torneo, redondeo, estructura, reloj, registroCerrado, registroHasta } =
         await cuerpo<Record<string, unknown>>()
       if (estado !== undefined && estado !== 'abierta' && estado !== 'cerrada')
         return json({ error: 'Estado inválido' }, 400)
@@ -689,6 +714,7 @@ export async function rutas(
         estructura,
         reloj,
         registroCerrado,
+        registroHasta,
       ].some((v) => v !== undefined)
       if (tocaAlgoMas && !esAdminLiga)
         return json({ error: 'Solo un admin de la liga puede cambiar la partida' }, 403)
@@ -701,7 +727,8 @@ export async function rutas(
            redondeo = COALESCE(?, redondeo),
            estructura = COALESCE(?, estructura),
            reloj = COALESCE(?, reloj),
-           registro_cerrado = COALESCE(?, registro_cerrado)
+           registro_cerrado = COALESCE(?, registro_cerrado),
+           registro_hasta = ?
          WHERE id = ?`,
       )
         .bind(
@@ -713,6 +740,13 @@ export async function rutas(
           estructura === undefined ? null : JSON.stringify(estructura),
           reloj === undefined ? null : JSON.stringify(reloj),
           registroCerrado === undefined ? null : registroCerrado ? 1 : 0,
+          /* Sin COALESCE a propósito: mandar null borra la hora, que es lo que hace
+             falta al reabrir el registro de una partida cuya hora ya pasó. */
+          registroHasta === undefined
+            ? partida.registro_hasta
+            : registroHasta
+              ? String(registroHasta)
+              : null,
           partidaId,
         )
         .run()
@@ -757,7 +791,8 @@ export async function rutas(
           nombre: completa!.nombre,
           tipo: completa!.tipo,
           estado: completa!.estado,
-          registroCerrado: partida.registro_cerrado === 1,
+          registroCerrado: !registroAbierto(partida),
+          registroHasta: partida.registro_hasta,
         },
         liga: { id: partida.liga_id, nombre: liga?.nombre ?? '' },
         cuesta: completa!.tipo === 'torneo' ? num(t.buyIn) : ENTRADA_POR_DEFECTO,
@@ -769,7 +804,7 @@ export async function rutas(
     if (partes[2] === 'apuntarme' && metodo === 'POST') {
       if (partida.estado === 'cerrada')
         return json({ error: 'Esa partida ya se cerró' }, 409)
-      if (partida.registro_cerrado)
+      if (!registroAbierto(partida))
         return json({ error: 'El registro ya se cerró. Pídele a un admin que te meta.' }, 409)
 
       const ya = await env.DB.prepare(
@@ -798,7 +833,7 @@ export async function rutas(
     if (partes[2] === 'apuntarme' && metodo === 'DELETE') {
       if (partida.estado === 'cerrada')
         return json({ error: 'Esa partida ya se cerró' }, 409)
-      if (partida.registro_cerrado)
+      if (!registroAbierto(partida))
         return json({ error: 'El registro ya se cerró. Pídele a un admin que te saque.' }, 409)
 
       const mio = await env.DB.prepare(
