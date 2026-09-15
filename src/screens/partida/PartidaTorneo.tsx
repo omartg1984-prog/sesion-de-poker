@@ -227,6 +227,22 @@ export default function PartidaTorneo({
               {p.nombre}
             </b>
 
+            {/* Las fichas van arriba de las recompras, igual que en cash. */}
+            {(() => {
+              const fila = reparto.rows.find((r) => r.id === p.id)
+              return fila ? (
+                <div className="mb-3">
+                  <FichasDelJugador
+                    fila={fila}
+                    colores={coloresTorneo}
+                    puedeEditar={puedeEditar}
+                    tocar={tocar}
+                    formato={enFichas}
+                  />
+                </div>
+              ) : null
+            })()}
+
             <div className="mb-3 flex items-center justify-between gap-2.5">
               <span className="text-sm font-semibold text-ink-soft">Recompras</span>
               <Stepper
@@ -249,18 +265,6 @@ export default function PartidaTorneo({
               Pagó: <b className="text-ink">{money(pagadoPor(p, torneo))}</b>
             </p>
 
-            {(() => {
-              const fila = reparto.rows.find((r) => r.id === p.id)
-              return fila ? (
-                <FichasDelJugador
-                  fila={fila}
-                  colores={coloresTorneo}
-                  puedeEditar={puedeEditar}
-                  tocar={tocar}
-                  formato={enFichas}
-                />
-              ) : null
-            })()}
           </section>
         ))}
 

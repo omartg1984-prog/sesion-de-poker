@@ -95,6 +95,19 @@ export default function PartidaCash({
                 </p>
               )}
 
+              {/* Las fichas van arriba de las recompras: lo primero que se hace al
+                  registrar a alguien es entregarle su pila. */}
+              {fila && (
+                <FichasDelJugador
+                  fila={fila}
+                  colores={colores}
+                  puedeEditar={puedeEditar}
+                  tocar={tocar}
+                />
+              )}
+
+              <div className="mt-3" />
+
               {recompras.map((r, ri) => (
                 <div
                   key={ri}
@@ -154,15 +167,6 @@ export default function PartidaCash({
                 <p className="mt-2.5 mb-0 text-right text-xs text-ink-soft">
                   Lleva puesto: <b className="text-ink">{money(p.invertido)}</b>
                 </p>
-              )}
-
-              {fila && (
-                <FichasDelJugador
-                  fila={fila}
-                  colores={colores}
-                  puedeEditar={puedeEditar}
-                  tocar={tocar}
-                />
               )}
             </section>
           )

@@ -123,13 +123,24 @@ export function FichasDelJugador({
       >
         <span className="field-label shrink-0">Fichas</span>
 
-        {/* Plegado: la fila de fichas con su cantidad, que es lo que se mira al
-            repartirlas sobre la mesa. */}
-        <span className="no-scrollbar flex min-w-0 flex-1 items-center gap-2 overflow-x-auto">
+        {/*
+         * Plegado: la fila de fichas con su cantidad, que es lo que se mira al
+         * repartirlas sobre la mesa.
+         *
+         * Va en rejilla de tantas columnas como colores haya, no en fila con huecos:
+         * así se reparten a todo lo ancho y, si algún día la liga mete más colores,
+         * siguen cabiendo en el mismo renglón en vez de salirse o irse abajo.
+         */}
+        <span
+          className="grid min-w-0 flex-1 items-center gap-1"
+          style={{ gridTemplateColumns: `repeat(${colores.length}, minmax(0, 1fr))` }}
+        >
+          {/* La ficha arriba y el número abajo, no lado a lado: así el número se queda
+              con todo el ancho de su celda y no se corta cuando hay muchos colores. */}
           {colores.map((c) => (
-            <span key={c.key} className="flex shrink-0 items-center gap-0.5">
-              <Chip color={c} size={17} />
-              <b className="font-display text-[13px] tabular-nums text-ink">
+            <span key={c.key} className="flex min-w-0 flex-col items-center">
+              <Chip color={c} size={colores.length > 7 ? 15 : 18} />
+              <b className="font-display text-[12px] leading-tight tabular-nums text-ink">
                 {fila.counts[c.key] ?? 0}
               </b>
             </span>
