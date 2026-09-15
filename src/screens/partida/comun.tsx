@@ -1,4 +1,5 @@
-import { AlertTriangle, Check, RotateCcw } from 'lucide-react'
+import { AlertTriangle, Check, ChevronRight, RotateCcw } from 'lucide-react'
+import { useState } from 'react'
 import Chip from '../../components/Chip'
 import NumInput from '../../components/NumInput'
 import ShareBlock from '../../components/ShareBlock'
@@ -84,10 +85,15 @@ export function calcularReparto(
 }
 
 /**
- * Las fichas de un jugador, para meter dentro de su tarjeta del registro.
+ * Las fichas de un jugador, dentro de su tarjeta del registro.
  *
  * No es una pestaña aparte: el reparto se recalcula solo cuando cambian los montos o
  * quién juega, así que verlo junto al dinero que puso es donde tiene sentido.
+ *
+ * Llega plegado. Cinco casillas por jugador convierten el registro en un formulario
+ * larguísimo, y casi nunca se tocan: el reparto sale bien solo. Plegado se ven las
+ * fichas y sus cantidades en chiquito —que es lo que se mira para repartirlas— y al
+ * abrirlo aparecen las casillas para corregir a mano.
  */
 export function FichasDelJugador({
   fila,
@@ -104,49 +110,87 @@ export function FichasDelJugador({
   tocar: PropsPestana['tocar']
   formato?: (n: number) => string
 }) {
+  const [abierto, setAbierto] = useState(false)
+  const cuadra = Math.abs(fila.leftover) < EPS
+
   return (
     <div className="mt-3 border-t border-dashed border-paper-line pt-2.5">
-      <div className="mb-1.5 flex items-center gap-2">
-        <span className="field-label flex-1">Fichas que le tocan</span>
-        {fila.manual && puedeEditar && (
-          <button
-            type="button"
-            onClick={() => tocar(fila.id, { fichas_manual: null }, { fichasManual: null })}
-            className="flex cursor-pointer items-center gap-1 rounded-full border-none bg-marca/20 px-2 py-0.5 text-[10px] font-bold text-marca-tinta active:scale-95"
-          >
-            <RotateCcw size={10} strokeWidth={3} />
-            Auto
-          </button>
-        )}
-      </div>
+      <button
+        type="button"
+        aria-expanded={abierto}
+        onClick={() => setAbierto((a) => !a)}
+        className="flex w-full cursor-pointer items-center gap-2 border-none bg-transparent p-0 text-left"
+      >
+        <span className="field-label shrink-0">Fichas</span>
 
-      <div className="grid grid-cols-[repeat(auto-fit,minmax(54px,1fr))] gap-1.5">
-        {colores.map((c) => (
-          <label key={c.key} className="flex flex-col items-center gap-1">
-            <Chip color={c} size={26} />
-            {/* Sin el valor dentro de la ficha, el nombre es lo único que
-                distingue una columna de otra. */}
-            <span className="w-full truncate text-center text-[10px] font-semibold text-ink-soft">
-              {c.label}
+        {/* Plegado: la fila de fichas con su cantidad, que es lo que se mira al
+            repartirlas sobre la mesa. */}
+        <span className="no-scrollbar flex min-w-0 flex-1 items-center gap-2 overflow-x-auto">
+          {colores.map((c) => (
+            <span key={c.key} className="flex shrink-0 items-center gap-0.5">
+              <Chip color={c} size={17} />
+              <b className="font-display text-[13px] tabular-nums text-ink">
+                {fila.counts[c.key] ?? 0}
+              </b>
             </span>
-            <NumInput
-              value={fila.counts[c.key] ?? 0}
-              showZero
-              aria-label={`Fichas ${c.label} para ${fila.name}`}
-              className="w-full rounded-lg border border-paper-line bg-white px-0.5 py-1.5 text-center text-[14px] font-semibold outline-none focus:border-marca"
-              onChange={(v) => {
-                if (!puedeEditar) return
-                const nuevas = { ...fila.counts, [c.key]: v }
-                tocar(fila.id, { fichas_manual: JSON.stringify(nuevas) }, { fichasManual: nuevas })
-              }}
-            />
-          </label>
-        ))}
-      </div>
+          ))}
+        </span>
 
+        <ChevronRight
+          size={15}
+          strokeWidth={2.6}
+          className={`shrink-0 text-ink-soft/50 transition-transform ${abierto ? 'rotate-90' : ''}`}
+        />
+      </button>
+
+      {abierto && (
+        <>
+          {fila.manual && puedeEditar && (
+            <button
+              type="button"
+              onClick={() => tocar(fila.id, { fichas_manual: null }, { fichasManual: null })}
+              className="mt-2 flex cursor-pointer items-center gap-1 rounded-full border-none bg-marca/20 px-2 py-0.5 text-[10px] font-bold text-marca-tinta active:scale-95"
+            >
+              <RotateCcw size={10} strokeWidth={3} />
+              Volver al reparto automático
+            </button>
+          )}
+
+          <div className="mt-2 grid grid-cols-[repeat(auto-fit,minmax(54px,1fr))] gap-1.5">
+            {colores.map((c) => (
+              <label key={c.key} className="flex flex-col items-center gap-1">
+                <Chip color={c} size={26} />
+                {/* Sin el valor dentro de la ficha, el nombre es lo único que
+                    distingue una columna de otra. */}
+                <span className="w-full truncate text-center text-[10px] font-semibold text-ink-soft">
+                  {c.label}
+                </span>
+                <NumInput
+                  value={fila.counts[c.key] ?? 0}
+                  showZero
+                  aria-label={`Fichas ${c.label} para ${fila.name}`}
+                  className="w-full rounded-lg border border-paper-line bg-white px-0.5 py-1.5 text-center text-[14px] font-semibold outline-none focus:border-marca"
+                  onChange={(v) => {
+                    if (!puedeEditar) return
+                    const nuevas = { ...fila.counts, [c.key]: v }
+                    tocar(
+                      fila.id,
+                      { fichas_manual: JSON.stringify(nuevas) },
+                      { fichasManual: nuevas },
+                    )
+                  }}
+                />
+              </label>
+            ))}
+          </div>
+        </>
+      )}
+
+      {/* El total se queda siempre a la vista, abierto o cerrado: es lo que dice si
+          las fichas cubren lo que puso. */}
       <p className="mt-2 mb-0 flex items-center gap-1.5 text-xs text-ink-soft">
         En fichas: <b className="text-ink">{formato(fila.total)}</b>
-        {Math.abs(fila.leftover) < EPS ? (
+        {cuadra ? (
           <Check size={13} strokeWidth={3} className="text-win" />
         ) : (
           <>

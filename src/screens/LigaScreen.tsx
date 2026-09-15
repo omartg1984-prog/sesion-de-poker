@@ -481,18 +481,6 @@ ${link}`
         </section>
       )}
 
-      {/* accesos a jugadores y fichas */}
-      <div className="flex gap-2.5">
-        <button type="button" className="btn btn-ghost" onClick={() => setGente(true)}>
-          <Users size={17} strokeWidth={2.4} />
-          {miembros.length} {miembros.length === 1 ? 'jugador' : 'jugadores'}
-        </button>
-        <button type="button" className="btn btn-ghost" onClick={() => setFichas(true)}>
-          <Coins size={17} strokeWidth={2.4} />
-          Fichas
-        </button>
-      </div>
-
       {liga.creada_por === yo.id && (
         <button
           type="button"
