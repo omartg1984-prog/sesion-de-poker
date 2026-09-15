@@ -180,6 +180,22 @@ export interface ResultadoNoche {
   }[]
 }
 
+/** Lo que se ve al abrir el link de una partida, antes de apuntarse. */
+export interface InvitacionPartida {
+  partida: {
+    id: string
+    fecha: string
+    nombre: string | null
+    tipo: TipoPartida
+    estado: 'abierta' | 'cerrada'
+  }
+  liga: { id: string; nombre: string }
+  /** Con cuánto entraría. */
+  cuesta: number
+  jugadores: number
+  yaApuntado: boolean
+}
+
 /** El mensaje del ganador de la última noche cerrada, que es el que se ve en la liga. */
 export interface Presume {
   texto: string
@@ -295,7 +311,7 @@ export interface DetallePartida {
     /** JSON con desde cuándo corre el reloj y cuánto llevaba antes de la pausa. */
     reloj: string | null
   }
-  liga: { id: string; nombre: string; colores: ChipColor[] }
+  liga: { id: string; nombre: string; codigo: string; colores: ChipColor[] }
   participaciones: Participacion[]
   soyAdmin: boolean
   /** Llevé el banco esa noche: soy el único que puede cerrarla. */
@@ -383,6 +399,10 @@ export const api = {
   partida: (id: string) => pedir<DetallePartida>(`partidas/${id}`),
   /** Cómo quedó una noche, para verla dentro de la tabla de la liga. */
   resultado: (id: string) => pedir<ResultadoNoche>(`partidas/${id}/resultado`),
+  /* Apuntarse uno mismo. Nadie puede apuntar ni sacar a otro por aquí. */
+  invitacionPartida: (id: string) => pedir<InvitacionPartida>(`partidas/${id}/invitacion`),
+  apuntarme: (id: string) => post<{ ok: true; yaEstaba: boolean }>(`partidas/${id}/apuntarme`, {}),
+  desapuntarme: (id: string) => borrar<{ ok: true }>(`partidas/${id}/apuntarme`),
   borrarPartida: (id: string) => borrar<{ ok: true }>(`partidas/${id}`),
   guardarPartida: (
     id: string,

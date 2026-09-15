@@ -4,8 +4,10 @@ import {
   ArrowLeft,
   Coins,
   Lock,
+  Share2,
   Trash2,
   Trophy,
+  UserMinus,
   UserPlus,
   Users,
 } from 'lucide-react'
@@ -23,6 +25,9 @@ import {
 import { useRecargarAlVolver } from '../lib/recargar'
 import { conAviso, useApp } from '../store/app'
 import { ENTRADA_POR_DEFECTO } from './partida/comun'
+import { linkDePartida } from '../components/Invitacion'
+import { compartirTextoNativo, esNativo } from '../lib/nativo'
+import { copyText } from '../lib/portapapeles'
 import BannerCaja from './partida/BannerCaja'
 import BannerFichas from './partida/BannerFichas'
 import Numeros from './partida/Numeros'
@@ -253,6 +258,44 @@ export default function PartidaScreen() {
 
   const comunes = { datos, colores, puedeEditar, puedeContar, tocar, recargar: cargar }
 
+  /*
+   * Apuntarse es cosa de cada quien: se manda el link al grupo y cada uno se anota. El
+   * admin sigue pudiendo cargar y quitar a quien sea, pero ya no tiene que perseguir a
+   * nadie para saber quién va.
+   */
+  const estoyApuntado = datos.participaciones.some((p) => p.usuario_id === yo?.id)
+
+  const compartirPartida = async () => {
+    const link = linkDePartida(partidaId, datos.liga.codigo)
+    const cuando = datos.partida.nombre || datos.partida.fecha
+    const texto = `🃏 ${esTorneo ? 'Torneo' : 'Cash'} en ${datos.liga.nombre} — ${cuando}\nApúntate aquí:\n${link}`
+    try {
+      if (esNativo()) {
+        await compartirTextoNativo(texto, 'Invitación a la partida')
+        return
+      }
+      if (navigator.share) {
+        await navigator.share({ title: cuando, text: texto })
+        return
+      }
+    } catch {
+      /* si cancela o el teléfono no deja, queda el portapapeles */
+    }
+    avisar((await copyText(texto)) ? 'Link copiado' : 'No se pudo copiar')
+  }
+
+  const apuntarme = async () => {
+    if (ocupado) return
+    setOcupado(true)
+    const r = await conAviso(() =>
+      estoyApuntado ? api.desapuntarme(partidaId) : api.apuntarme(partidaId),
+    )
+    setOcupado(false)
+    if (!r) return
+    avisar(estoyApuntado ? 'Te borraste de la partida' : 'Quedaste apuntado')
+    void cargar()
+  }
+
   /* El cuadre de la noche. En torneo no aplica: ahí no se cuentan fichas al final, el
      resultado sale de los premios por lugar. */
   const repartoCash = esTorneo
@@ -328,9 +371,9 @@ export default function PartidaScreen() {
           <p className="mx-auto mb-3 max-w-[300px] text-[13px] leading-snug text-ink-soft">
             {datos.soyAdmin
               ? esTorneo
-                ? 'Elige quiénes llegaron. Todos entran con el costo que definiste al crear el torneo.'
-                : 'Elige quiénes llegaron y con cuánto entra cada uno.'
-              : 'Un admin de la liga tiene que cargar a los jugadores.'}
+                ? 'Elige quiénes llegaron, o manda el link para que se apunten solos. Todos entran con el costo que definiste al crear el torneo.'
+                : 'Elige quiénes llegaron, o manda el link para que se apunten solos.'
+              : 'Todavía no se apunta nadie. Puedes ser el primero.'}
           </p>
           {puedeEditar && (
             <button type="button" className="btn btn-marca" onClick={abrirSelector}>
@@ -352,6 +395,36 @@ export default function PartidaScreen() {
         />
       ) : (
         <PartidaCash {...comunes} pestana={pestana as PestanaCash} onRedondeo={cambiarRedondeo} />
+      )}
+
+      {/* Compartir la partida y apuntarse. Va en el registro, que es donde se ve
+          quiénes van, y le sale a todos: apuntarse no necesita ser admin. */}
+      {pestana === 'jugadores' && !cerrada && (
+        <>
+          <button type="button" className="btn btn-share mb-2" onClick={() => void compartirPartida()}>
+            <Share2 size={17} strokeWidth={2.4} />
+            Compartir para que se apunten
+          </button>
+
+          <button
+            type="button"
+            className="btn btn-ghost mb-2 disabled:opacity-45"
+            disabled={ocupado}
+            onClick={() => void apuntarme()}
+          >
+            {estoyApuntado ? (
+              <>
+                <UserMinus size={17} strokeWidth={2.4} />
+                Ya no voy
+              </>
+            ) : (
+              <>
+                <UserPlus size={17} strokeWidth={2.4} />
+                Apuntarme
+              </>
+            )}
+          </button>
+        </>
       )}
 
       {!sinJugadores && puedeEditar && pestana === 'jugadores' && (

@@ -1,5 +1,5 @@
 import { json } from './index'
-import { ganadorDe, leerJson, podioDe } from './podio'
+import { ganadorDe, leerJson, num, podioDe } from './podio'
 import { calcularPosiciones } from './posiciones'
 import {
   DIAS_SESION,
@@ -19,6 +19,12 @@ import {
 import { aPublico, type ColorFicha, type Env, type FilaUsuario } from './tipos'
 
 const COOKIE = 'sesion'
+
+/*
+ * Con cuánto entra a una cash quien se apunta solo. Es el mismo número que propone la
+ * pantalla al cargar jugadores; si trajo otra cosa, el admin lo corrige.
+ */
+const ENTRADA_POR_DEFECTO = 500
 
 /** Una partida como sale de la lista del lobby. */
 interface FilaPartidaLista {
@@ -601,9 +607,11 @@ export async function rutas(
     const esAdminLiga = mia?.es_admin === 1 || yo.es_admin_app === 1
 
     if (partes.length === 2 && metodo === 'GET') {
-      const liga = await env.DB.prepare('SELECT id, nombre, colores FROM ligas WHERE id = ?')
+      const liga = await env.DB.prepare(
+        'SELECT id, nombre, codigo, colores FROM ligas WHERE id = ?',
+      )
         .bind(partida.liga_id)
-        .first<{ id: string; nombre: string; colores: string }>()
+        .first<{ id: string; nombre: string; codigo: string; colores: string }>()
       const { results: participaciones } = await env.DB.prepare(
         `SELECT p.*, u.nombre, u.usuario, u.foto,
                 (SELECT c.nombre FROM usuarios c WHERE c.id = p.contadas_por) AS contadas_por_nombre
@@ -693,6 +701,117 @@ export async function rutas(
           reloj === undefined ? null : JSON.stringify(reloj),
           partidaId,
         )
+        .run()
+      return json({ ok: true })
+    }
+
+    /*
+     * Apuntarse uno mismo a una partida.
+     *
+     * Cargar jugadores sigue siendo del admin, pero eso obliga a que alguien pregunte
+     * uno por uno quién va. Con esto se manda el link al grupo y cada quien se apunta,
+     * que es como se organiza de verdad una noche de póquer.
+     *
+     * Nadie puede apuntar ni desapuntar a otro: la ruta trabaja siempre sobre quien la
+     * llama. Para mover a alguien más sigue estando el admin.
+     */
+    if (partes[2] === 'invitacion' && metodo === 'GET') {
+      const liga = await env.DB.prepare('SELECT nombre FROM ligas WHERE id = ?')
+        .bind(partida.liga_id)
+        .first<{ nombre: string }>()
+      const completa = await env.DB.prepare(
+        'SELECT fecha, nombre, tipo, estado, torneo FROM partidas WHERE id = ?',
+      )
+        .bind(partidaId)
+        .first<{ fecha: string; nombre: string | null; tipo: string; estado: string; torneo: string | null }>()
+      const mia2 = await env.DB.prepare(
+        'SELECT id FROM participaciones WHERE partida_id = ? AND usuario_id = ?',
+      )
+        .bind(partidaId, yo.id)
+        .first<{ id: string }>()
+      const { n } = (await env.DB.prepare(
+        'SELECT COUNT(*) AS n FROM participaciones WHERE partida_id = ?',
+      )
+        .bind(partidaId)
+        .first<{ n: number }>())!
+
+      const t = leerJson<{ buyIn?: number }>(completa!.torneo, {})
+      return json({
+        partida: {
+          id: partidaId,
+          fecha: completa!.fecha,
+          nombre: completa!.nombre,
+          tipo: completa!.tipo,
+          estado: completa!.estado,
+        },
+        liga: { id: partida.liga_id, nombre: liga?.nombre ?? '' },
+        cuesta: completa!.tipo === 'torneo' ? num(t.buyIn) : ENTRADA_POR_DEFECTO,
+        jugadores: n,
+        yaApuntado: !!mia2,
+      })
+    }
+
+    if (partes[2] === 'apuntarme' && metodo === 'POST') {
+      if (partida.estado === 'cerrada')
+        return json({ error: 'Esa partida ya se cerró' }, 409)
+
+      const ya = await env.DB.prepare(
+        'SELECT id FROM participaciones WHERE partida_id = ? AND usuario_id = ?',
+      )
+        .bind(partidaId, yo.id)
+        .first<{ id: string }>()
+      if (ya) return json({ ok: true, yaEstaba: true })
+
+      /* Con cuánto entra: en torneo lo dice el costo de entrada; en cash, lo de siempre,
+         que el admin corrige si trajo otra cosa. */
+      const completa = await env.DB.prepare('SELECT tipo, torneo FROM partidas WHERE id = ?')
+        .bind(partidaId)
+        .first<{ tipo: string; torneo: string | null }>()
+      const t = leerJson<{ buyIn?: number }>(completa!.torneo, {})
+      const entrada = completa!.tipo === 'torneo' ? num(t.buyIn) : ENTRADA_POR_DEFECTO
+
+      await env.DB.prepare(
+        'INSERT INTO participaciones (id, partida_id, usuario_id, entrada) VALUES (?, ?, ?, ?)',
+      )
+        .bind(nuevoId(), partidaId, yo.id, entrada)
+        .run()
+      return json({ ok: true, yaEstaba: false })
+    }
+
+    if (partes[2] === 'apuntarme' && metodo === 'DELETE') {
+      if (partida.estado === 'cerrada')
+        return json({ error: 'Esa partida ya se cerró' }, 409)
+
+      const mio = await env.DB.prepare(
+        'SELECT recompras, fichas_final, rebuys, addons, pagado FROM participaciones WHERE partida_id = ? AND usuario_id = ?',
+      )
+        .bind(partidaId, yo.id)
+        .first<{
+          recompras: string
+          fichas_final: string
+          rebuys: number
+          addons: number
+          pagado: number | null
+        }>()
+      if (!mio) return json({ ok: true })
+
+      /* Si ya hay algo capturado, borrarse se llevaría esos datos por delante. Eso lo
+         decide un admin, no el que se arrepiente. */
+      const conteo = leerJson<Record<string, number>>(mio.fichas_final, {})
+      const tocado =
+        leerJson<unknown[]>(mio.recompras, []).length > 0 ||
+        Object.values(conteo).some((n) => num(n) > 0) ||
+        num(mio.rebuys) > 0 ||
+        num(mio.addons) > 0 ||
+        mio.pagado !== null
+      if (tocado)
+        return json(
+          { error: 'Ya tienes movimientos apuntados en esa partida. Pídele a un admin que te saque.' },
+          409,
+        )
+
+      await env.DB.prepare('DELETE FROM participaciones WHERE partida_id = ? AND usuario_id = ?')
+        .bind(partidaId, yo.id)
         .run()
       return json({ ok: true })
     }
