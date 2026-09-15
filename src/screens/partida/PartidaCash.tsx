@@ -15,6 +15,7 @@ import {
   CompartirReparto,
   FichasDelJugador,
   InventarioUsado,
+  ListaDeLaMesa,
   calcularReparto,
   claseClara,
   finalDe,
@@ -64,6 +65,10 @@ export default function PartidaCash({
 
     return (
       <>
+        <ListaDeLaMesa
+          filas={conTotales.map((p) => ({ id: p.id, nombre: p.nombre, monto: p.invertido }))}
+        />
+
         {conTotales.map((p, i) => {
           const recompras = recomprasDe(p)
           const fila = reparto.rows.find((r) => r.id === p.id)

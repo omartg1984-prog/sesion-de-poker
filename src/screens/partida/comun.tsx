@@ -165,6 +165,52 @@ export function FichasDelJugador({
 }
 
 /** Cuántas fichas de cada color se están usando contra las que tiene la casa. */
+/**
+ * Quiénes van y con cuánto, de un vistazo y antes de la lista larga.
+ *
+ * Mientras se registra hay que bajar por las tarjetas de cada quien para saber quién
+ * está y cuánto lleva puesto; con veinte jugadores eso es todo el scroll. Aquí arriba
+ * cabe la mesa entera en dos columnas.
+ */
+export function ListaDeLaMesa({
+  filas,
+  rotulo = 'Quiénes van',
+}: {
+  filas: { id: string; nombre: string; monto: number }[]
+  rotulo?: string
+}) {
+  if (filas.length === 0) return null
+  const total = filas.reduce((t, f) => t + f.monto, 0)
+
+  return (
+    <section className="panel">
+      <p className="panel-title">
+        <span>{rotulo}</span>
+      </p>
+
+      {/* Sin rayitas entre renglones: en dos columnas, una mesa impar deja al último
+          solo en su fila y la línea queda cortada a la mitad. El espacio separa igual. */}
+      <ul className="m-0 grid list-none grid-cols-2 gap-x-4 gap-y-0.5 p-0">
+        {filas.map((f) => (
+          <li key={f.id} className="flex items-baseline justify-between gap-1.5 text-[13px]">
+            <span className="min-w-0 flex-1 truncate text-ink">{f.nombre}</span>
+            <b className="shrink-0 font-display text-[15px] tabular-nums text-ink">
+              {money(f.monto)}
+            </b>
+          </li>
+        ))}
+      </ul>
+
+      <p className="mt-2.5 mb-0 flex items-baseline justify-between border-t border-paper-line pt-2 text-[12px] text-ink-soft">
+        <span>
+          {filas.length} {filas.length === 1 ? 'jugador' : 'jugadores'}
+        </span>
+        <b className="font-display text-[17px] tabular-nums text-ink">{money(total)}</b>
+      </p>
+    </section>
+  )
+}
+
 export function InventarioUsado({
   reparto,
   colores,

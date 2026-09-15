@@ -16,6 +16,7 @@ import {
   CompartirReparto,
   FichasDelJugador,
   InventarioUsado,
+  ListaDeLaMesa,
   calcularReparto,
   claseClara,
   type PropsPestana,
@@ -162,6 +163,11 @@ export default function PartidaTorneo({
     return (
       <>
         <Banner titulo="Bolsa acumulada" />
+
+        <ListaDeLaMesa
+          filas={ps.map((p) => ({ id: p.id, nombre: p.nombre, monto: pagadoPor(p, torneo) }))}
+        />
+
         {ps.map((p) => (
           <section key={p.id} className="panel">
             <b className="mb-3 block truncate font-display text-lg font-semibold text-ink">
