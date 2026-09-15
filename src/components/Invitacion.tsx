@@ -179,6 +179,7 @@ export default function Invitacion() {
   if (!liga) return null
 
   const cerrada = noche?.partida.estado === 'cerrada'
+  const registroCerrado = !!noche?.partida.registroCerrado && !noche.yaApuntado
   const esTorneo = noche?.partida.tipo === 'torneo'
 
   return (
@@ -209,33 +210,37 @@ export default function Invitacion() {
       <p className="mt-0 mb-4 text-[13px] leading-snug text-ink-soft">
         {cerrada
           ? 'Esa partida ya se cerró, así que ya no se puede apuntar nadie.'
-          : noche?.yaApuntado
-            ? 'Ya estabas apuntado a esta partida. Te llevo a verla.'
-            : pendiente?.partida && !yaEnLaLiga
-              ? 'Entras a la liga y te apunto a la partida de una vez.'
-              : pendiente?.partida
-                ? 'Te apunto a la lista. Si al final no puedes, te puedes borrar desde ahí mismo.'
-                : yaEnLaLiga
-                  ? 'Ya eres parte de esta liga. Te llevo directo.'
-                  : 'Vas a entrar como jugador. Vas a ver las partidas, la tabla y las reglas de la casa.'}
+          : registroCerrado
+            ? 'El registro de esa partida ya se cerró. Pídele a un admin que te meta.'
+            : noche?.yaApuntado
+              ? 'Ya estabas apuntado a esta partida. Te llevo a verla.'
+              : pendiente?.partida && !yaEnLaLiga
+                ? 'Entras a la liga y te apunto a la partida de una vez.'
+                : pendiente?.partida
+                  ? 'Te apunto a la lista. Si al final no puedes, te puedes borrar desde ahí mismo.'
+                  : yaEnLaLiga
+                    ? 'Ya eres parte de esta liga. Te llevo directo.'
+                    : 'Vas a entrar como jugador. Vas a ver las partidas, la tabla y las reglas de la casa.'}
       </p>
 
       <button
         type="button"
         className="btn btn-marca mb-2 disabled:opacity-45"
-        disabled={ocupado || cerrada}
+        disabled={ocupado || cerrada || registroCerrado}
         onClick={() => void aceptar()}
       >
         <LogIn size={17} strokeWidth={2.4} />
         {cerrada
           ? 'Ya se cerró'
-          : noche?.yaApuntado
-            ? 'Ver la partida'
-            : pendiente?.partida
-              ? 'Apuntarme'
-              : yaEnLaLiga
-                ? 'Ir a la liga'
-                : 'Entrar a la liga'}
+          : registroCerrado
+            ? 'Registro cerrado'
+            : noche?.yaApuntado
+              ? 'Ver la partida'
+              : pendiente?.partida
+                ? 'Apuntarme'
+                : yaEnLaLiga
+                  ? 'Ir a la liga'
+                  : 'Entrar a la liga'}
       </button>
       <button type="button" className="btn btn-ghost mb-2" onClick={olvidar}>
         Ahora no

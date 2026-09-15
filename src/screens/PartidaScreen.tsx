@@ -4,6 +4,7 @@ import {
   ArrowLeft,
   Coins,
   Lock,
+  LockOpen,
   Share2,
   Trash2,
   Trophy,
@@ -264,6 +265,16 @@ export default function PartidaScreen() {
    * nadie para saber quién va.
    */
   const estoyApuntado = datos.participaciones.some((p) => p.usuario_id === yo?.id)
+  const registroCerrado = datos.partida.registro_cerrado === 1
+
+  /* Cerrar el registro es "ya estamos todos", no "ya se acabó la noche". */
+  const cambiarRegistro = (cerrar: boolean) => {
+    setDatos((d) =>
+      d ? { ...d, partida: { ...d.partida, registro_cerrado: cerrar ? 1 : 0 } } : d,
+    )
+    void conAviso(() => api.guardarPartida(partidaId, { registroCerrado: cerrar }))
+    avisar(cerrar ? 'Registro cerrado' : 'Registro abierto otra vez')
+  }
 
   const compartirPartida = async () => {
     const link = linkDePartida(partidaId, datos.liga.codigo)
@@ -397,41 +408,79 @@ export default function PartidaScreen() {
         <PartidaCash {...comunes} pestana={pestana as PestanaCash} onRedondeo={cambiarRedondeo} />
       )}
 
-      {/* Compartir la partida y apuntarse. Va en el registro, que es donde se ve
-          quiénes van, y le sale a todos: apuntarse no necesita ser admin. */}
+      {/* Quiénes van. Todo junto y en el registro, que es donde se mira la lista: el
+          admin mete y saca, y cualquiera se apunta solo mientras el registro esté
+          abierto. */}
       {pestana === 'jugadores' && !cerrada && (
         <>
-          <button type="button" className="btn btn-share mb-2" onClick={() => void compartirPartida()}>
-            <Share2 size={17} strokeWidth={2.4} />
-            Compartir para que se apunten
-          </button>
+          {puedeEditar && (
+            <button type="button" className="btn btn-marca mb-2" onClick={abrirSelector}>
+              <UserPlus size={17} strokeWidth={2.4} />
+              Agregar o quitar jugadores
+            </button>
+          )}
 
-          <button
-            type="button"
-            className="btn btn-ghost mb-2 disabled:opacity-45"
-            disabled={ocupado}
-            onClick={() => void apuntarme()}
-          >
-            {estoyApuntado ? (
-              <>
-                <UserMinus size={17} strokeWidth={2.4} />
-                Ya no voy
-              </>
-            ) : (
-              <>
-                <UserPlus size={17} strokeWidth={2.4} />
-                Apuntarme
-              </>
-            )}
-          </button>
+          {registroCerrado ? (
+            <div className="balance balance-ok mb-2">
+              <Lock size={16} strokeWidth={2.4} />
+              <span>
+                Registro cerrado. {puedeEditar ? 'Sólo tú puedes mover la lista.' : 'Pídele a un admin que te meta.'}
+              </span>
+            </div>
+          ) : (
+            <>
+              <button
+                type="button"
+                className="btn btn-share mb-2"
+                onClick={() => void compartirPartida()}
+              >
+                <Share2 size={17} strokeWidth={2.4} />
+                Compartir para que se apunten
+              </button>
+
+              <button
+                type="button"
+                className="btn btn-ghost mb-2 disabled:opacity-45"
+                disabled={ocupado}
+                onClick={() => void apuntarme()}
+              >
+                {estoyApuntado ? (
+                  <>
+                    <UserMinus size={17} strokeWidth={2.4} />
+                    Ya no voy
+                  </>
+                ) : (
+                  <>
+                    <UserPlus size={17} strokeWidth={2.4} />
+                    Apuntarme
+                  </>
+                )}
+              </button>
+            </>
+          )}
+
+          {/* Cerrar el registro es la señal de "ya estamos todos". No cierra la
+              partida: eso pasa mucho después, cuando ya se contaron las fichas. */}
+          {puedeEditar && (
+            <button
+              type="button"
+              className="btn btn-ghost mb-2"
+              onClick={() => cambiarRegistro(!registroCerrado)}
+            >
+              {registroCerrado ? (
+                <>
+                  <LockOpen size={17} strokeWidth={2.4} />
+                  Volver a abrir el registro
+                </>
+              ) : (
+                <>
+                  <Lock size={17} strokeWidth={2.4} />
+                  Cerrar el registro
+                </>
+              )}
+            </button>
+          )}
         </>
-      )}
-
-      {!sinJugadores && puedeEditar && pestana === 'jugadores' && (
-        <button type="button" className="btn btn-ghost" onClick={abrirSelector}>
-          <UserPlus size={17} strokeWidth={2.4} />
-          Cambiar quiénes juegan
-        </button>
       )}
 
       {/* Es la acción que cierra la noche, así que va en rojo y no escondida al final. */}

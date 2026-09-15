@@ -599,7 +599,13 @@ export async function rutas(
     const partidaId = partes[1]
     const partida = await env.DB.prepare('SELECT * FROM partidas WHERE id = ?')
       .bind(partidaId)
-      .first<{ id: string; liga_id: string; estado: string; jefe_id: string | null }>()
+      .first<{
+        id: string
+        liga_id: string
+        estado: string
+        jefe_id: string | null
+        registro_cerrado: number
+      }>()
     if (!partida) return json({ error: 'Partida no encontrada' }, 404)
 
     const mia = await membresia(env, partida.liga_id, yo.id)
@@ -649,7 +655,7 @@ export async function rutas(
     }
 
     if (partes.length === 2 && metodo === 'PATCH') {
-      const { estado, nombre, fecha, torneo, redondeo, estructura, reloj } =
+      const { estado, nombre, fecha, torneo, redondeo, estructura, reloj, registroCerrado } =
         await cuerpo<Record<string, unknown>>()
       if (estado !== undefined && estado !== 'abierta' && estado !== 'cerrada')
         return json({ error: 'Estado inválido' }, 400)
@@ -675,9 +681,15 @@ export async function rutas(
 
       /* Todo lo demás de la partida —nombre, fecha, ciegas, reloj— sigue siendo de los
          admins: el jefe lleva el banco, no la configuración. */
-      const tocaAlgoMas = [nombre, fecha, torneo, redondeo, estructura, reloj].some(
-        (v) => v !== undefined,
-      )
+      const tocaAlgoMas = [
+        nombre,
+        fecha,
+        torneo,
+        redondeo,
+        estructura,
+        reloj,
+        registroCerrado,
+      ].some((v) => v !== undefined)
       if (tocaAlgoMas && !esAdminLiga)
         return json({ error: 'Solo un admin de la liga puede cambiar la partida' }, 403)
       await env.DB.prepare(
@@ -688,7 +700,8 @@ export async function rutas(
            torneo = COALESCE(?, torneo),
            redondeo = COALESCE(?, redondeo),
            estructura = COALESCE(?, estructura),
-           reloj = COALESCE(?, reloj)
+           reloj = COALESCE(?, reloj),
+           registro_cerrado = COALESCE(?, registro_cerrado)
          WHERE id = ?`,
       )
         .bind(
@@ -699,6 +712,7 @@ export async function rutas(
           redondeo === undefined ? null : Math.max(1, Math.floor(Number(redondeo) || 1)),
           estructura === undefined ? null : JSON.stringify(estructura),
           reloj === undefined ? null : JSON.stringify(reloj),
+          registroCerrado === undefined ? null : registroCerrado ? 1 : 0,
           partidaId,
         )
         .run()
@@ -743,6 +757,7 @@ export async function rutas(
           nombre: completa!.nombre,
           tipo: completa!.tipo,
           estado: completa!.estado,
+          registroCerrado: partida.registro_cerrado === 1,
         },
         liga: { id: partida.liga_id, nombre: liga?.nombre ?? '' },
         cuesta: completa!.tipo === 'torneo' ? num(t.buyIn) : ENTRADA_POR_DEFECTO,
@@ -754,6 +769,8 @@ export async function rutas(
     if (partes[2] === 'apuntarme' && metodo === 'POST') {
       if (partida.estado === 'cerrada')
         return json({ error: 'Esa partida ya se cerró' }, 409)
+      if (partida.registro_cerrado)
+        return json({ error: 'El registro ya se cerró. Pídele a un admin que te meta.' }, 409)
 
       const ya = await env.DB.prepare(
         'SELECT id FROM participaciones WHERE partida_id = ? AND usuario_id = ?',
@@ -781,6 +798,8 @@ export async function rutas(
     if (partes[2] === 'apuntarme' && metodo === 'DELETE') {
       if (partida.estado === 'cerrada')
         return json({ error: 'Esa partida ya se cerró' }, 409)
+      if (partida.registro_cerrado)
+        return json({ error: 'El registro ya se cerró. Pídele a un admin que te saque.' }, 409)
 
       const mio = await env.DB.prepare(
         'SELECT recompras, fichas_final, rebuys, addons, pagado FROM participaciones WHERE partida_id = ? AND usuario_id = ?',

@@ -1,0 +1,12 @@
+-- El registro de una partida se cierra antes que la partida.
+--
+-- Son dos momentos distintos de la noche: primero se deja de admitir gente —ya están
+-- todos, ya se puede repartir— y mucho después, cuando se contaron las fichas y se pagó,
+-- se cierra la partida entera.
+--
+-- Con el registro cerrado nadie se apunta ni se borra solo. El admin sí puede seguir
+-- moviendo la lista: siempre llega el que dijo que no iba.
+--
+-- 0 = abierto. Las partidas de antes de esta columna quedan abiertas, que es como
+-- estaban funcionando.
+ALTER TABLE partidas ADD COLUMN registro_cerrado INTEGER NOT NULL DEFAULT 0;

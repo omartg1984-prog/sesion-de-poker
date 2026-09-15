@@ -152,6 +152,8 @@ export interface PartidaResumen {
   podio?: PuestoPodio[]
   /** El mensaje del que ganó, si lo escribió. */
   presume?: string | null
+  /** 1 = ya no se apunta nadie solo. El admin sí puede seguir moviendo la lista. */
+  registro_cerrado?: number
 }
 
 /** Cómo quedó una noche, ya ordenada por el servidor. */
@@ -188,6 +190,7 @@ export interface InvitacionPartida {
     nombre: string | null
     tipo: TipoPartida
     estado: 'abierta' | 'cerrada'
+    registroCerrado: boolean
   }
   liga: { id: string; nombre: string }
   /** Con cuánto entraría. */
@@ -414,6 +417,8 @@ export const api = {
       redondeo?: number
       estructura?: Estructura
       reloj?: RelojTorneo
+      /** Cerrar el registro deja la lista como está para todos menos el admin. */
+      registroCerrado?: boolean
     },
   ) => patch<{ ok: true }>(`partidas/${id}`, cambios),
   cargarJugadores: (partidaId: string, jugadores: { usuarioId: string; entrada: number }[]) =>
