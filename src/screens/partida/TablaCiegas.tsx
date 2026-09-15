@@ -1,4 +1,4 @@
-import { Coffee } from 'lucide-react'
+import { Coffee, Recycle } from 'lucide-react'
 import NumInput from '../../components/NumInput'
 import { horaMas, tramosDe, type Estructura as Tabla } from '../../lib/torneo'
 
@@ -69,10 +69,25 @@ export default function TablaCiegas({ estructura, horaInicio, corridosSeg, onCam
             t.tipo === 'descanso' ? (
               <tr key={`d${i}`} className="border-t border-dashed border-paper-line bg-paper-soft">
                 <td className="px-1 py-1.5">
-                  <Coffee size={14} strokeWidth={2.4} className="text-ink-soft" />
+                  {t.retira ? (
+                    <Recycle size={14} strokeWidth={2.4} className="text-marca-tinta" />
+                  ) : (
+                    <Coffee size={14} strokeWidth={2.4} className="text-ink-soft" />
+                  )}
                 </td>
                 <td className="px-1 py-1.5 text-right text-[12px] font-semibold text-ink-soft">
-                  Descanso de {t.minutos} min
+                  {t.retira ? (
+                    <>
+                      <b className="text-marca-tinta">
+                        Salen las de {t.retira.map((v) => v.toLocaleString('es-MX')).join(' y ')}
+                      </b>
+                      <span className="block text-[11px] font-normal">
+                        se cambian por grandes · {t.minutos} min
+                      </span>
+                    </>
+                  ) : (
+                    <>Descanso de {t.minutos} min</>
+                  )}
                 </td>
                 <td className="px-1 py-1.5 text-right text-ink-soft">{cuando(t.desdeMinuto)}</td>
               </tr>

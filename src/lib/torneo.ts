@@ -45,10 +45,29 @@ export interface Descanso {
   minutos: number
 }
 
+/*
+ * Cuándo se retira una denominación de la mesa.
+ *
+ * Llega un momento en que la ficha más chica ya no paga nada: si las dos ciegas son
+ * múltiplos exactos de la siguiente hacia arriba, esa ficha sólo estorba en la pila y
+ * hace lento el conteo. Ahí se cambian por fichas grandes y se sacan del juego.
+ */
+export interface Retiro {
+  /** Nivel a partir del cual esas fichas ya no hacen falta; se sacan justo antes. */
+  nivel: number
+  /** Los valores que se retiran, de menor a mayor. */
+  valores: number[]
+}
+
+/** Lo que dura la parada para cambiar fichas. Es un trámite, no una cena. */
+export const MINUTOS_RETIRO = 5
+
 export interface Estructura {
   niveles: NivelCiegas[]
   /** `null` = se juega de corrido. */
   descanso: Descanso | null
+  /** En qué niveles se sacan fichas chicas. Vacío o ausente = no se saca ninguna. */
+  retiros?: Retiro[]
   stackInicial: number
   minutosPorNivel: number
   /** Lo que va a durar de verdad, que puede no ser lo que se pidió. */
@@ -66,6 +85,8 @@ export interface Peticion {
   stackInicial: number
   /** Valor de la ficha más chica que va a estar en la mesa. */
   fichaMasChica: number
+  /** Todas las denominaciones de la noche. Sin esto no se calcula ningún retiro. */
+  valores?: number[]
   minutosDeseados: number
   minutosPorNivel: number
   descanso?: Descanso | null
@@ -78,12 +99,36 @@ export interface Peticion {
  */
 export type Tramo =
   | { tipo: 'nivel'; nivel: NivelCiegas; minutos: number; desdeMinuto: number }
-  | { tipo: 'descanso'; minutos: number; desdeMinuto: number }
+  | {
+      tipo: 'descanso'
+      minutos: number
+      desdeMinuto: number
+      /** Si en ese descanso además se cambian fichas, los valores que se sacan. */
+      retira?: number[]
+    }
 
 export function tramosDe(e: Estructura): Tramo[] {
   const salida: Tramo[] = []
   let minuto = 0
+  const retiros = new Map((e.retiros ?? []).map((r) => [r.nivel, r.valores]))
+
   e.niveles.forEach((nivel, i) => {
+    /*
+     * Cambiar fichas se hace con la mesa parada. Si justo ahí ya tocaba descanso se
+     * aprovecha ése; si no, se mete una parada corta a propósito, que es mejor que
+     * interrumpir un nivel a media mano.
+     */
+    const retira = retiros.get(nivel.nivel)
+    if (retira && i > 0) {
+      const anterior = salida[salida.length - 1]
+      if (anterior && anterior.tipo === 'descanso') {
+        anterior.retira = retira
+      } else {
+        salida.push({ tipo: 'descanso', minutos: MINUTOS_RETIRO, desdeMinuto: minuto, retira })
+        minuto += MINUTOS_RETIRO
+      }
+    }
+
     salida.push({ tipo: 'nivel', nivel, minutos: e.minutosPorNivel, desdeMinuto: minuto })
     minuto += e.minutosPorNivel
     const toca = e.descanso && (i + 1) % e.descanso.cadaNiveles === 0
@@ -106,6 +151,46 @@ function redondear(valor: number, fichaMasChica: number): number {
   return Math.max(fichaMasChica, pagable)
 }
 
+/**
+ * En qué nivel deja de hacer falta cada ficha chica.
+ *
+ * El criterio es el de la mesa: una denominación ya no sirve cuando nada de lo que se
+ * paga la necesita, o sea cuando las dos ciegas son múltiplos exactos de la siguiente
+ * ficha hacia arriba. A partir de ahí sólo hace lentas las pilas y los conteos.
+ *
+ * La más grande nunca se retira —con qué se pagaría— y los retiros van en orden: una
+ * ficha no puede salir antes que otra más chica que ella.
+ */
+export function retirosDe(niveles: NivelCiegas[], valores: number[]): Retiro[] {
+  const orden = [...new Set(valores.map((v) => Math.round(v)).filter((v) => v > 0))].sort(
+    (a, b) => a - b,
+  )
+  if (orden.length < 2 || niveles.length < 2) return []
+
+  const porNivel = new Map<number, number[]>()
+  let ultimo = 0
+
+  for (let i = 0; i < orden.length - 1; i++) {
+    const siguiente = orden[i + 1]
+    /* Desde el segundo nivel: en el primero todavía se está repartiendo. */
+    const encontrado = niveles.findIndex(
+      (n, k) => k > 0 && n.chica % siguiente === 0 && n.grande % siguiente === 0,
+    )
+    if (encontrado < 1) continue
+
+    const nivel = Math.max(niveles[encontrado].nivel, ultimo)
+    /* Si el retiro cae en el último nivel ya no vale la pena parar la mesa. */
+    if (nivel >= niveles[niveles.length - 1].nivel) continue
+
+    ultimo = nivel
+    porNivel.set(nivel, [...(porNivel.get(nivel) ?? []), orden[i]])
+  }
+
+  return [...porNivel.entries()]
+    .map(([nivel, valores]) => ({ nivel, valores }))
+    .sort((a, b) => a.nivel - b.nivel)
+}
+
 export function calcularEstructura(p: Peticion): Estructura {
   const descanso = p.descanso ?? null
   const jugadores = Math.max(2, Math.floor(p.jugadores))
@@ -113,42 +198,65 @@ export function calcularEstructura(p: Peticion): Estructura {
   const ficha = Math.max(1, p.fichaMasChica)
   const minutosPorNivel = Math.max(5, Math.round(p.minutosPorNivel))
 
-  /* Cuánto reloj se lleva jugar tantos niveles, con sus descansos en medio. */
-  const loQueDura = (niveles: number) => {
-    const cuantosDescansos = descanso
-      ? Math.max(0, Math.ceil(niveles / descanso.cadaNiveles) - 1)
-      : 0
-    return niveles * minutosPorNivel + cuantosDescansos * (descanso?.minutos ?? 0)
-  }
-
-  /* Los descansos salen del tiempo que se pidió, no se le suman: si se quedó de jugar
-     de ocho a una, a la una hay que estar levantando la mesa. Cenar sale de ahí. */
-  let cuantos = Math.max(2, Math.round(p.minutosDeseados / minutosPorNivel))
-  while (cuantos > 2 && loQueDura(cuantos) > p.minutosDeseados) cuantos--
-
   /* La ciega chica es la mitad de la grande, así que se trabaja con ella y la grande
      sale al doble: así las dos se pueden pagar con las fichas que hay. */
   const chicaInicial = redondear(stackInicial / (PROFUNDIDAD * 2), ficha)
   const enJuego = jugadores * stackInicial
   const chicaFinal = redondear(enJuego / (PARTE_FINAL * 2), ficha)
 
-  const factor = (chicaFinal / chicaInicial) ** (1 / (cuantos - 1))
+  const factorDe = (cuantos: number) => (chicaFinal / chicaInicial) ** (1 / (cuantos - 1))
 
-  const niveles: NivelCiegas[] = []
-  let anterior = 0
-  for (let i = 0; i < cuantos; i++) {
-    let chica = redondear(chicaInicial * factor ** i, ficha)
-    /* Redondear puede empatar dos niveles seguidos; subir al menos una ficha evita que
-       el torneo se quede estancado en la misma ciega. */
-    if (chica <= anterior) chica = anterior + ficha
-    anterior = chica
-    niveles.push({
-      nivel: i + 1,
-      chica,
-      grande: chica * 2,
-      desdeMinuto: i * minutosPorNivel,
-    })
+  const generar = (cuantos: number): NivelCiegas[] => {
+    const f = factorDe(cuantos)
+    const salida: NivelCiegas[] = []
+    let anterior = 0
+    for (let i = 0; i < cuantos; i++) {
+      let chica = redondear(chicaInicial * f ** i, ficha)
+      /* Redondear puede empatar dos niveles seguidos; subir al menos una ficha evita
+         que el torneo se quede estancado en la misma ciega. */
+      if (chica <= anterior) chica = anterior + ficha
+      anterior = chica
+      salida.push({ nivel: i + 1, chica, grande: chica * 2, desdeMinuto: i * minutosPorNivel })
+    }
+    return salida
   }
+
+  /*
+   * Cuánto reloj se lleva todo: niveles, descansos y las paradas para cambiar fichas.
+   *
+   * Se mide armando los tramos de verdad en vez de sumar a mano, porque las paradas de
+   * retiro sólo cuentan cuando no caen en un descanso que ya estaba: dos cuentas
+   * distintas de lo mismo acabarían diciendo cosas distintas.
+   */
+  const duracionDe = (niveles: NivelCiegas[], retiros: Retiro[]) => {
+    const tramos = tramosDe({
+      niveles,
+      descanso,
+      retiros,
+      stackInicial,
+      minutosPorNivel,
+      duracionMinutos: 0,
+      profundidad: 0,
+      factor: 0,
+      aviso: null,
+    })
+    const ultimo = tramos[tramos.length - 1]
+    return ultimo ? ultimo.desdeMinuto + ultimo.minutos : 0
+  }
+
+  /* Los descansos salen del tiempo que se pidió, no se le suman: si se quedó de jugar
+     de ocho a una, a la una hay que estar levantando la mesa. Cenar sale de ahí, y las
+     paradas para cambiar fichas también. */
+  let cuantos = Math.max(2, Math.round(p.minutosDeseados / minutosPorNivel))
+  let niveles = generar(cuantos)
+  let retiros = retirosDe(niveles, p.valores ?? [])
+  while (cuantos > 2 && duracionDe(niveles, retiros) > p.minutosDeseados) {
+    cuantos--
+    niveles = generar(cuantos)
+    retiros = retirosDe(niveles, p.valores ?? [])
+  }
+
+  const factor = factorDe(cuantos)
 
   let aviso: string | null = null
   if (factor < FACTOR_MINIMO)
@@ -165,9 +273,10 @@ export function calcularEstructura(p: Peticion): Estructura {
   return {
     niveles,
     descanso,
+    retiros,
     stackInicial,
     minutosPorNivel,
-    duracionMinutos: loQueDura(cuantos),
+    duracionMinutos: duracionDe(niveles, retiros),
     profundidad,
     factor,
     aviso,

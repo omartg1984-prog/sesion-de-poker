@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { calcularEstructura, enCurso, tramosDe, type Peticion } from '../torneo'
+import {
+  calcularEstructura,
+  enCurso,
+  retirosDe,
+  tramosDe,
+  type NivelCiegas,
+  type Peticion,
+} from '../torneo'
 
 /* La liga real: fichas de $1 arriba, ocho jugadores, tres horas. */
 const OCHO: Peticion = {
@@ -134,5 +141,108 @@ describe('los descansos', () => {
     expect(enCurso(sin, 60 * 60).nivel.nivel).toBe(5)
     expect(enCurso(conDescanso, 60 * 60).tramo.tipo).toBe('descanso')
     expect(enCurso(conDescanso, 80 * 60).nivel.nivel).toBe(5)
+  })
+})
+
+describe('retirar las fichas chicas', () => {
+  /* Niveles a mano, para que el caso sea legible y no dependa de la fórmula. */
+  const conCiegas = (pares: [number, number][]): NivelCiegas[] =>
+    pares.map(([chica, grande], i) => ({
+      nivel: i + 1,
+      chica,
+      grande,
+      desdeMinuto: i * 15,
+    }))
+
+  it('saca la ficha cuando las ciegas ya son múltiplos de la siguiente', () => {
+    // Con fichas de 25 y 100: en cuanto las ciegas son 100/200, la de 25 no paga nada.
+    const r = retirosDe(conCiegas([[25, 50], [50, 100], [100, 200], [200, 400]]), [25, 100, 500])
+    expect(r).toEqual([{ nivel: 3, valores: [25] }])
+  })
+
+  it('no retira la más grande: con algo hay que pagar', () => {
+    const r = retirosDe(conCiegas([[100, 200], [200, 400], [400, 800]]), [100, 500])
+    expect(r.some((x) => x.valores.includes(500))).toBe(false)
+  })
+
+  it('no retira nada si sólo hay una denominación', () => {
+    expect(retirosDe(conCiegas([[25, 50], [100, 200]]), [25])).toEqual([])
+  })
+
+  it('no para la mesa en el último nivel', () => {
+    /* Sacar fichas cuando ya se va a acabar el torneo es interrumpir por nada. */
+    const r = retirosDe(conCiegas([[25, 50], [100, 200]]), [25, 100])
+    expect(r).toEqual([])
+  })
+
+  it('las fichas salen en orden: la chica nunca después de una más grande', () => {
+    const niveles = conCiegas([[25, 50], [500, 1000], [500, 1000], [1000, 2000], [2000, 4000]])
+    const r = retirosDe(niveles, [25, 100, 500])
+    const nivelesDeSalida = r.flatMap((x) => x.valores.map(() => x.nivel))
+    expect([...nivelesDeSalida].sort((a, b) => a - b)).toEqual(nivelesDeSalida)
+  })
+})
+
+describe('la parada para cambiar fichas', () => {
+  const base = {
+    descanso: null,
+    stackInicial: 10000,
+    minutosPorNivel: 15,
+    duracionMinutos: 0,
+    profundidad: 100,
+    factor: 1.3,
+    aviso: null,
+  }
+  const niveles: NivelCiegas[] = [1, 2, 3, 4].map((n) => ({
+    nivel: n,
+    chica: n * 100,
+    grande: n * 200,
+    desdeMinuto: (n - 1) * 15,
+  }))
+
+  it('mete una parada corta justo antes del nivel del retiro', () => {
+    const tramos = tramosDe({ ...base, niveles, retiros: [{ nivel: 3, valores: [25] }] })
+    const parada = tramos.find((t) => t.tipo === 'descanso')!
+    expect(parada.minutos).toBe(5)
+    expect(parada.tipo === 'descanso' && parada.retira).toEqual([25])
+    // va en tercer lugar: nivel 1, nivel 2, parada, nivel 3…
+    expect(tramos.indexOf(parada)).toBe(2)
+  })
+
+  it('si ahí ya tocaba descanso, aprovecha ése en vez de parar dos veces', () => {
+    const tramos = tramosDe({
+      ...base,
+      niveles,
+      descanso: { cadaNiveles: 2, minutos: 20 },
+      retiros: [{ nivel: 3, valores: [25] }],
+    })
+    const descansos = tramos.filter((t) => t.tipo === 'descanso')
+    expect(descansos).toHaveLength(1)
+    expect(descansos[0].minutos).toBe(20)
+    expect(descansos[0].tipo === 'descanso' && descansos[0].retira).toEqual([25])
+  })
+
+  it('las paradas salen del tiempo pedido, no se le suman', () => {
+    const e = calcularEstructura({
+      jugadores: 8,
+      stackInicial: 10000,
+      fichaMasChica: 50,
+      valores: [50, 200, 1000, 2000, 10000],
+      minutosDeseados: 300,
+      minutosPorNivel: 15,
+      descanso: { cadaNiveles: 4, minutos: 20 },
+    })
+    expect(e.duracionMinutos).toBeLessThanOrEqual(300)
+  })
+
+  it('sin valores no se retira nada, como los torneos de antes', () => {
+    const e = calcularEstructura({
+      jugadores: 8,
+      stackInicial: 10000,
+      fichaMasChica: 50,
+      minutosDeseados: 300,
+      minutosPorNivel: 15,
+    })
+    expect(e.retiros).toEqual([])
   })
 })

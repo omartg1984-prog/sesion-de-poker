@@ -207,6 +207,7 @@ export default function PartidaTorneo({
           jugadores={ps.length}
           stack={num(torneo.stack) || num(torneo.buyIn)}
           fichaMasChica={fichaMasChicaDe(torneo, colores)}
+          valores={fichasDeLaNoche.fichas.map((f) => f.valor)}
           estructura={estructura}
           puedeEditar={puedeEditar}
           horaInicio={torneo.horaInicio}

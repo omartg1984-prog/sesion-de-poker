@@ -179,6 +179,8 @@ export default function CrearTorneo({
     jugadores: paraCalcular,
     stackInicial: stack,
     fichaMasChica,
+    /* Con las denominaciones, el plan sabe en qué corte sacar las chicas de la mesa. */
+    valores: Object.values(valores),
     minutosDeseados: minutos,
     minutosPorNivel: porNivel,
     descanso: cadaNiveles > 0 ? { cadaNiveles, minutos: minDescanso } : null,

@@ -26,6 +26,8 @@ interface Props {
   stack: number
   /** La ficha más chica que va a estar en la mesa: la ciega chica tiene que pagarse con ella. */
   fichaMasChica: number
+  /** Todas las denominaciones, para saber en qué corte sale cada una de la mesa. */
+  valores?: number[]
   estructura: Tabla | null
   puedeEditar: boolean
   /** Hora a la que se quedó de arrancar, para poner la tabla en hora de reloj. */
@@ -39,6 +41,7 @@ export default function Estructura({
   jugadores,
   stack,
   fichaMasChica,
+  valores,
   estructura,
   puedeEditar,
   horaInicio,
@@ -54,6 +57,7 @@ export default function Estructura({
     jugadores: Math.max(2, jugadores),
     stackInicial: stack,
     fichaMasChica,
+    valores,
     minutosDeseados: duracion,
     minutosPorNivel: porNivel,
     descanso: cadaNiveles > 0 ? { cadaNiveles, minutos: minDescanso } : null,
