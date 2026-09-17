@@ -85,6 +85,10 @@ export default function Numeros({ datos, colores, torneo }: Props) {
   const entradaPromedio = entradas.reduce((a, b) => a + b, 0) / entradas.length
   const totalRecompras = filas.reduce((a, f) => a + f.recompras, 0)
   const montoRecompras = filas.reduce((a, f) => a + f.montoRecompras, 0)
+  /* Cuánto se compra cada vez que alguien recompra. No es lo mismo que el total: en
+     una noche de tres recompras de $200 y una de $1,000 el total engaña. Cada recompra
+     cuenta por sí sola, chica o grande. */
+  const recompraPromedio = totalRecompras > 0 ? montoRecompras / totalRecompras : 0
 
   const mejor = filas[0]
   const peor = filas[filas.length - 1]
@@ -158,6 +162,12 @@ export default function Numeros({ datos, colores, torneo }: Props) {
               )}
             </div>
           </div>
+          {totalRecompras > 0 && (
+            <div className="stat">
+              <div className="stat-k">Recompra promedio</div>
+              <div className="stat-v">{money(recompraPromedio)}</div>
+            </div>
+          )}
           <div className="stat">
             <div className="stat-k">Salieron ganando</div>
             <div className="stat-v">

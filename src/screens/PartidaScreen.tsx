@@ -5,6 +5,8 @@ import {
   Coins,
   Lock,
   LockOpen,
+  Play,
+  RefreshCw,
   Share2,
   Trash2,
   Trophy,
@@ -35,7 +37,7 @@ import Numeros from './partida/Numeros'
 import Presume from './partida/Presume'
 import { useAvisoDeNivel } from './partida/usarReloj'
 import { calcularCuadre, porQueNoSePuedeCerrar } from './partida/cuadre'
-import { calcularReparto, invertidoDe } from './partida/comun'
+import { calcularRepartoCash, invertidoDe } from './partida/comun'
 import { dineroDeLaCaja } from '../lib/distribution'
 import { RELOJ_PARADO, type Estructura, type RelojTorneo } from '../lib/torneo'
 import PartidaCash, { PESTANAS_CASH, type PestanaCash } from './partida/PartidaCash'
@@ -92,6 +94,7 @@ export default function PartidaScreen() {
   const [torneo, setTorneo] = useState<ConfigTorneo>(TORNEO_POR_DEFECTO)
   const [borrando, setBorrando] = useState(false)
   const [cerrando, setCerrando] = useState(false)
+  const [refrescando, setRefrescando] = useState(false)
 
   const diferido = useGuardadoDiferido()
   /** Para saber si la pestaña de arranque ya se eligió o es la primera vez que se abre. */
@@ -325,6 +328,29 @@ export default function PartidaScreen() {
     avisar((await copyText(texto)) ? 'Link copiado' : 'No se pudo copiar')
   }
 
+  /*
+   * A qué hora empezó de verdad. En torneo lo apunta el primer play del reloj; la cash
+   * no tiene reloj que apretar, así que lleva su propio botón.
+   */
+  const arrancoEn = datos.partida.arrancado_en ?? null
+  const arrancar = async () => {
+    if (ocupado) return
+    setOcupado(true)
+    const r = await conAviso(() => api.guardarPartida(partidaId, { arrancarAhora: true }))
+    setOcupado(false)
+    if (!r) return
+    avisar('Arrancó la partida')
+    void cargar()
+  }
+
+  /* Refrescar a mano: en la mesa hay varios teléfonos tocando la misma partida y lo
+     que tienes en pantalla puede ser de hace rato. */
+  const refrescar = async () => {
+    setRefrescando(true)
+    await cargar()
+    setRefrescando(false)
+  }
+
   const apuntarme = async () => {
     if (ocupado) return
     setOcupado(true)
@@ -339,9 +365,7 @@ export default function PartidaScreen() {
 
   /* El cuadre de la noche. En torneo no aplica: ahí no se cuentan fichas al final, el
      resultado sale de los premios por lugar. */
-  const repartoCash = esTorneo
-    ? null
-    : calcularReparto(datos.participaciones, colores, invertidoDe)
+  const repartoCash = esTorneo ? null : calcularRepartoCash(datos.participaciones, colores)
   const cuadre = repartoCash
     ? calcularCuadre(datos.participaciones, colores, repartoCash, invertidoDe)
     : null
@@ -380,6 +404,22 @@ export default function PartidaScreen() {
             </span>
           </div>
           {cerrada && <Lock size={15} className="shrink-0 text-white/85" />}
+
+          {/* En la mesa hay varios teléfonos tocando la misma partida. Esto trae lo que
+              hayan capturado los demás sin salirse ni recargar la app. */}
+          <button
+            type="button"
+            onClick={() => void refrescar()}
+            disabled={refrescando}
+            aria-label="Traer lo último"
+            className="flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-full border-none bg-white/15 text-white active:scale-90 disabled:opacity-60"
+          >
+            <RefreshCw
+              size={17}
+              strokeWidth={2.4}
+              className={refrescando ? 'animate-spin' : undefined}
+            />
+          </button>
         </div>
 
         <div className="no-scrollbar mt-2 flex gap-1 overflow-x-auto rounded-xl bg-black/25 p-1">
@@ -404,6 +444,42 @@ export default function PartidaScreen() {
 
         {caja && pestana === 'jugadores' && <BannerCaja caja={caja} />}
       </header>
+
+      {/* A qué hora empezó de verdad la noche. El torneo lo apunta solo con el primer
+          play del reloj; la cash no tiene reloj, así que se aprieta. Va hasta arriba
+          y no al fondo de la lista: es lo primero que se hace al sentarse. Lo aprieta
+          cualquiera de los que están jugando, no sólo el que lleva el banco. */}
+      {!esTorneo &&
+        !sinJugadores &&
+        !cerrada &&
+        pestana === 'jugadores' &&
+        (arrancoEn ? (
+          <div className="balance balance-ok">
+            <Play size={16} strokeWidth={2.4} />
+            <span>
+              Arrancó a las{' '}
+              <b>
+                {new Date(arrancoEn).toLocaleTimeString('es-MX', {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  hour12: false,
+                })}
+              </b>
+            </span>
+          </div>
+        ) : (
+          (soyJefe || estoyApuntado) && (
+            <button
+              type="button"
+              className="btn btn-marca mb-3 disabled:opacity-45"
+              disabled={ocupado}
+              onClick={() => void arrancar()}
+            >
+              <Play size={17} strokeWidth={2.4} />
+              Arrancar la partida
+            </button>
+          )
+        ))}
 
       {sinJugadores ? (
         <section className="panel text-center">
@@ -527,7 +603,10 @@ export default function PartidaScreen() {
       )}
 
       {/* Es la acción que cierra la noche, así que va en rojo y no escondida al final. */}
-      {!sinJugadores && soyJefe && !cerrada && (pestana === 'resultado' || pestana === 'numeros') && (
+      {!sinJugadores &&
+        (soyJefe || estoyApuntado) &&
+        !cerrada &&
+        (pestana === 'resultado' || pestana === 'numeros') && (
         <>
           <button
             type="button"

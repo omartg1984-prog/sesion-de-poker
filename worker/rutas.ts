@@ -690,28 +690,41 @@ export async function rutas(
     }
 
     if (partes.length === 2 && metodo === 'PATCH') {
-      const { estado, nombre, fecha, torneo, redondeo, estructura, reloj, registroCerrado, registroHasta } =
-        await cuerpo<Record<string, unknown>>()
+      const {
+        estado,
+        nombre,
+        fecha,
+        torneo,
+        redondeo,
+        estructura,
+        reloj,
+        registroCerrado,
+        registroHasta,
+        arrancarAhora,
+      } = await cuerpo<Record<string, unknown>>()
       if (estado !== undefined && estado !== 'abierta' && estado !== 'cerrada')
         return json({ error: 'Estado inválido' }, 400)
 
       /*
-       * Abrir y cerrar la noche es del jefe de la partida y de nadie más, aunque haya
-       * otros admins en la liga y aunque el jefe no sea admin: es quien recibió el
-       * dinero y a quien le reclaman si algo no cuadra.
+       * Arrancar y cerrar la noche lo puede hacer cualquiera que esté jugando, no sólo
+       * el jefe. Se probó al revés la primera noche de verdad y no funciona: el que
+       * lleva el banco está contando billetes justo cuando hay que cerrar, y los demás
+       * se quedan mirando. Quien está en la mesa tiene tanto derecho como él.
        *
-       * Las partidas de antes de que existiera el jefe no tienen a nadie apuntado; ésas
-       * las sigue cerrando cualquier admin, como siempre.
+       * Sigue siendo distinto de tocar la configuración, que es de los admins.
        */
       const esJefe = partida.jefe_id ? partida.jefe_id === yo.id : esAdminLiga
-      if (estado !== undefined && !esJefe && yo.es_admin_app !== 1) {
-        const jefe = await env.DB.prepare('SELECT nombre FROM usuarios WHERE id = ?')
-          .bind(partida.jefe_id)
-          .first<{ nombre: string }>()
-        return json(
-          { error: `Esta partida la cierra ${jefe?.nombre ?? 'su jefe'}, que llevó el banco` },
-          403,
+      const tocaLaNoche = estado !== undefined || arrancarAhora !== undefined
+
+      if (tocaLaNoche && !esJefe && yo.es_admin_app !== 1) {
+        /* Sólo se pregunta cuando hace falta: el reloj manda un PATCH cada vez que
+           alguien le da play o pausa y no tiene por qué pagar esta consulta. */
+        const juega = await env.DB.prepare(
+          'SELECT 1 FROM participaciones WHERE partida_id = ? AND usuario_id = ?',
         )
+          .bind(partidaId, yo.id)
+          .first()
+        if (!juega) return json({ error: 'Eso lo mueve quien está jugando esta partida' }, 403)
       }
 
       /* Todo lo demás de la partida —nombre, fecha, ciegas, reloj— sigue siendo de los
@@ -765,7 +778,8 @@ export async function rutas(
            *
            * Reiniciar el reloj lo borra: ahí el torneo vuelve a no haber empezado.
            */
-          arranqueReal(partida.arrancado_en, reloj),
+          /* El botón de arrancar sirve para la cash, que no tiene reloj que apretar. */
+          arrancarAhora ? (partida.arrancado_en ?? ahora()) : arranqueReal(partida.arrancado_en, reloj),
           partidaId,
         )
         .run()
@@ -1029,6 +1043,7 @@ export async function rutas(
         liga_id: string
         estado: string
         pagado: number | null
+        fichas_manual: string | null
       }>()
     if (!par) return json({ error: 'No encontrado' }, 404)
 
@@ -1075,6 +1090,24 @@ export async function rutas(
       return limpio
     }
 
+    /*
+     * El reparto hecho a mano llega de dos formas y las dos son válidas: el montón
+     * plano de siempre —{rojas: 4}— y el de ahora, una pila por concepto —entrada,
+     * recompra 1, recompra 2—. Se distinguen por dentro: si los valores son objetos,
+     * es lo segundo. En los dos casos las cantidades acaban enteras y sin negativos,
+     * que es lo que envenenaba la tabla de la liga.
+     */
+    const soloRepartos = (v: unknown): Record<string, unknown> => {
+      if (!v || typeof v !== 'object') return {}
+      const filas = Object.entries(v as Record<string, unknown>)
+      const porConcepto =
+        filas.length > 0 && filas.every(([, pila]) => pila !== null && typeof pila === 'object')
+      if (!porConcepto) return soloFichas(v)
+      const limpio: Record<string, Record<string, number>> = {}
+      for (const [clave, pila] of filas) limpio[clave] = soloFichas(pila)
+      return limpio
+    }
+
     await env.DB.prepare(
       `UPDATE participaciones SET
          entrada       = COALESCE(?, entrada),
@@ -1091,9 +1124,15 @@ export async function rutas(
       .bind(
         entrada === undefined ? null : Number(entrada) || 0,
         recompras === undefined ? null : JSON.stringify(recompras),
-        fichasManual === undefined || fichasManual === null
-          ? null
-          : JSON.stringify(soloFichas(fichasManual)),
+        /* Tampoco lleva COALESCE, y por la misma razón que `pagado`: mandar null es
+           "vuelve al reparto automático". Pero no mandarlo tiene que dejarlo como
+           estaba —si no, apuntar a quién se le pagó borraba de paso las fichas que
+           alguien había acomodado a mano en el registro—. */
+        fichasManual === undefined
+          ? par.fichas_manual
+          : fichasManual === null
+            ? null
+            : JSON.stringify(soloRepartos(fichasManual)),
         fichasFinal === undefined ? null : JSON.stringify(soloFichas(fichasFinal)),
         entero(rebuys),
         entero(addons),

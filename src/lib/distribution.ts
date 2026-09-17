@@ -27,6 +27,13 @@ export interface DealPlayer {
   buyIn: number
   /** Reparto editado a mano, o `null` si va en automático. */
   deal: Chips | null
+  /*
+   * Si esta entrega lleva su propia pila de fichas chicas. La entrada sí: hay que
+   * poder pagar las ciegas. Una recompra no: el jugador ya tiene cambio sobre la
+   * mesa y darle otro puñado de fichas chicas cada vez vacía la caja de las chicas y
+   * le llena el lugar de monedas.
+   */
+  cambio?: boolean
 }
 
 export interface DistributionRow {
@@ -72,7 +79,12 @@ function zeroCounts(colors: ChipColor[]): Chips {
  * el resto en fichas grandes, y una reparación final para cuadrar exacto — todo
  * sin pasarse de `caps`.
  */
-export function balancedStack(buyIn: number, colors: ChipColor[], caps: Caps): StackResult {
+export function balancedStack(
+  buyIn: number,
+  colors: ChipColor[],
+  caps: Caps,
+  conCambio = true,
+): StackResult {
   const counts = zeroCounts(colors)
   const target = Math.round(num(buyIn))
   if (target <= 0) return { counts, total: 0 }
@@ -81,11 +93,12 @@ export function balancedStack(buyIn: number, colors: ChipColor[], caps: Caps): S
   const capOf = (key: string) => (caps[key] === undefined ? Infinity : Math.max(0, caps[key]))
 
   // 1) pila de cambio modesta en todas las denominaciones menos la más grande
-  for (let i = 0; i < asc.length - 1; i++) {
-    const c = asc[i]
-    if (num(c.value) <= 0) continue
-    counts[c.key] = Math.min(capOf(c.key), desiredKeep(i))
-  }
+  if (conCambio)
+    for (let i = 0; i < asc.length - 1; i++) {
+      const c = asc[i]
+      if (num(c.value) <= 0) continue
+      counts[c.key] = Math.min(capOf(c.key), desiredKeep(i))
+    }
   let total = stackTotal(counts, colors)
 
   // 2) si el cambio ya se pasó del buy-in, recorta desde la ficha más grande
@@ -180,7 +193,7 @@ export function computeDistribution(
       caps[c.key] =
         remaining[c.key] === Infinity ? Infinity : Math.max(0, Math.floor(remaining[c.key] / left))
     }
-    const st = balancedStack(p.buyIn, colors, caps)
+    const st = balancedStack(p.buyIn, colors, caps, p.cambio !== false)
     for (const c of colors) {
       if (remaining[c.key] !== Infinity) remaining[c.key] -= st.counts[c.key]
     }

@@ -1,4 +1,4 @@
-import { AlertTriangle, Check, ChevronRight, RotateCcw } from 'lucide-react'
+import { AlertTriangle, Check, ChevronRight, RotateCcw, Save } from 'lucide-react'
 import { useState } from 'react'
 import Chip from '../../components/Chip'
 import NumInput from '../../components/NumInput'
@@ -12,7 +12,8 @@ import {
 } from '../../lib/distribution'
 import type { DatosTabla } from '../../lib/imagenTablas'
 import { EPS, money, num } from '../../lib/money'
-import { leerJson, type DetallePartida, type Participacion } from '../../lib/api'
+import { api, leerJson, type DetallePartida, type Participacion } from '../../lib/api'
+import { conAviso } from '../../store/app'
 import type { ChipColor, Chips } from '../../store/types'
 
 /** Lo que cada pestaña necesita para trabajar. */
@@ -84,6 +85,85 @@ export function calcularReparto(
   )
 }
 
+/*
+ * ---- las fichas, concepto por concepto ----
+ *
+ * Una noche de cash no es una entrega de fichas por jugador: es la de la entrada y una
+ * por cada recompra. Mientras todo iba en un solo montón, al apuntar una recompra de
+ * $400 las fichas del jugador saltaban de golpe a las de $900 y nadie sabía cuántas
+ * pasarle en ese momento: había que restar de cabeza sobre la mesa.
+ *
+ * Ahora cada concepto tiene su propio renglón con las fichas que le tocan a él solo,
+ * que es exactamente lo que se le entrega en la mano.
+ */
+
+export interface Concepto {
+  /** Cómo se guarda: 'entrada', 'r0', 'r1'… */
+  clave: string
+  rotulo: string
+  monto: number
+}
+
+export const conceptosDe = (p: Participacion): Concepto[] => [
+  { clave: 'entrada', rotulo: 'Entrada', monto: num(p.entrada) },
+  ...recomprasDe(p).map((r, i) => ({
+    clave: `r${i}`,
+    rotulo: `Recompra ${i + 1}`,
+    monto: num(r.dinero),
+  })),
+]
+
+/** La fila del reparto que le corresponde a un concepto de alguien. */
+export const idFila = (participacionId: string, clave: string) => `${participacionId}#${clave}`
+
+/** De vuelta al jugador: las filas del reparto ya no son una por participación. */
+export const participacionDeFila = (id: string) => id.split('#')[0]
+
+/**
+ * Los repartos hechos a mano, uno por concepto.
+ *
+ * Antes se guardaba un solo montón plano —{rojas: 4, verdes: 2}— para toda la noche.
+ * Esas partidas siguen abiertas, así que ese formato se lee y se cuelga de la entrada,
+ * que es donde estaba antes de que existieran las recompras por separado.
+ */
+export function manualesDe(p: Participacion): Record<string, Chips> {
+  const crudo = leerJson<Record<string, unknown>>(p.fichas_manual, {})
+  const claves = Object.keys(crudo)
+  if (claves.length === 0) return {}
+  const porConcepto = claves.every(
+    (k) => crudo[k] !== null && typeof crudo[k] === 'object',
+  )
+  return porConcepto
+    ? (crudo as Record<string, Chips>)
+    : { entrada: crudo as unknown as Chips }
+}
+
+/**
+ * El reparto de una noche de cash: una fila por entrada y una por cada recompra.
+ *
+ * El inventario se reparte entre todas las filas a la vez, no jugador por jugador: si
+ * la caja se está acabando, las recompras compiten por las fichas igual que las
+ * entradas.
+ */
+export function calcularRepartoCash(
+  participaciones: Participacion[],
+  colores: ChipColor[],
+): Distribution {
+  return computeDistribution(
+    participaciones.flatMap((p) => {
+      const manuales = manualesDe(p)
+      return conceptosDe(p).map((c) => ({
+        id: idFila(p.id, c.clave),
+        name: c.clave === 'entrada' ? p.nombre : `${p.nombre} · ${c.rotulo}`,
+        buyIn: Math.round(c.monto),
+        deal: manuales[c.clave] ?? null,
+        cambio: c.clave === 'entrada',
+      }))
+    }),
+    colores,
+  )
+}
+
 /**
  * Las fichas de un jugador, dentro de su tarjeta del registro.
  *
@@ -99,7 +179,10 @@ export function FichasDelJugador({
   fila,
   colores,
   puedeEditar,
-  tocar,
+  guardar,
+  /* Qué fichas son éstas. En cash hay un renglón por concepto y hace falta decir de
+     cuál: 'Entrada', 'Recompra 1'… */
+  rotulo = 'Fichas',
   /* En cash las fichas son pesos y se escriben con signo; en torneo son puntos y
      escribirlas con signo de pesos es justo la confusión que hay que evitar. */
   formato = money,
@@ -107,7 +190,9 @@ export function FichasDelJugador({
   fila: DistributionRow
   colores: ChipColor[]
   puedeEditar: boolean
-  tocar: PropsPestana['tocar']
+  /** `null` devuelve este renglón al reparto automático. */
+  guardar: (fichas: Chips | null) => void
+  rotulo?: string
   formato?: (n: number) => string
 }) {
   const [abierto, setAbierto] = useState(false)
@@ -121,7 +206,7 @@ export function FichasDelJugador({
         onClick={() => setAbierto((a) => !a)}
         className="flex w-full cursor-pointer items-center gap-2 border-none bg-transparent p-0 text-left"
       >
-        <span className="field-label shrink-0">Fichas</span>
+        <span className="field-label shrink-0">{rotulo}</span>
 
         {/*
          * Plegado: la fila de fichas con su cantidad, que es lo que se mira al
@@ -159,7 +244,7 @@ export function FichasDelJugador({
           {fila.manual && puedeEditar && (
             <button
               type="button"
-              onClick={() => tocar(fila.id, { fichas_manual: null }, { fichasManual: null })}
+              onClick={() => guardar(null)}
               className="mt-2 flex cursor-pointer items-center gap-1 rounded-full border-none bg-marca/20 px-2 py-0.5 text-[10px] font-bold text-marca-tinta active:scale-95"
             >
               <RotateCcw size={10} strokeWidth={3} />
@@ -183,12 +268,7 @@ export function FichasDelJugador({
                   className="w-full rounded-lg border border-paper-line bg-white px-0.5 py-1.5 text-center text-[14px] font-semibold outline-none focus:border-marca"
                   onChange={(v) => {
                     if (!puedeEditar) return
-                    const nuevas = { ...fila.counts, [c.key]: v }
-                    tocar(
-                      fila.id,
-                      { fichas_manual: JSON.stringify(nuevas) },
-                      { fichasManual: nuevas },
-                    )
+                    guardar({ ...fila.counts, [c.key]: v })
                   }}
                 />
               </label>
@@ -216,6 +296,63 @@ export function FichasDelJugador({
         )}
       </p>
     </div>
+  )
+}
+
+/**
+ * El botón de "ya conté las de éste".
+ *
+ * Las cantidades se guardan solas mientras se teclean, pero eso en la mesa no se ve:
+ * quien cuenta no sabe si lo que escribió ya salió de su teléfono, y con cuatro
+ * personas contando a la vez esa duda cuesta tiempo. Este botón lo manda en el
+ * momento y lo dice.
+ *
+ * No congela nada: si el conteo quedó mal se sigue corrigiendo, el botón vuelve a
+ * ponerse en "guardar" y se aprieta otra vez.
+ */
+export function GuardarConteo({
+  id,
+  fichas,
+  contado,
+  deshabilitado,
+}: {
+  id: string
+  fichas: Chips
+  contado: boolean
+  deshabilitado?: boolean
+}) {
+  const actual = JSON.stringify(fichas)
+  /* Lo que ya estaba al abrir la pantalla vino del servidor: eso ya está guardado. */
+  const [guardado, setGuardado] = useState(actual)
+  const [guardando, setGuardando] = useState(false)
+  const alDia = guardado === actual
+
+  if (deshabilitado) return null
+  if (alDia && !contado) return null
+
+  if (alDia)
+    return (
+      <p className="mt-2.5 mb-0 flex items-center justify-center gap-1.5 text-[12px] font-semibold text-win-tinta">
+        <Check size={13} strokeWidth={3} />
+        Conteo guardado
+      </p>
+    )
+
+  return (
+    <button
+      type="button"
+      className="btn btn-marca mt-2.5 disabled:opacity-45"
+      disabled={guardando}
+      onClick={async () => {
+        setGuardando(true)
+        const r = await conAviso(() => api.guardarParticipacion(id, { fichasFinal: fichas }))
+        setGuardando(false)
+        if (r) setGuardado(actual)
+      }}
+    >
+      <Save size={16} strokeWidth={2.5} />
+      {guardando ? 'Guardando…' : 'Guardar conteo'}
+    </button>
   )
 }
 
@@ -363,10 +500,13 @@ export function CompartirReparto({
       ...colores.map((c) => String(r.counts[c.key] ?? 0)),
       Math.round(r.total).toLocaleString('es-MX'),
     ]),
+    /* Las filas ya no son una por jugador: en cash hay una por entrada y una por cada
+       recompra, y todas llevan la foto del mismo. */
     fotos: reparto.rows.map(
-      (r) => datos.participaciones.find((p) => p.id === r.id)?.foto ?? null,
+      (r) =>
+        datos.participaciones.find((p) => p.id === participacionDeFila(r.id))?.foto ?? null,
     ),
-    pie: `${reparto.rows.length} jugadores`,
+    pie: `${datos.participaciones.length} jugadores`,
   }
 
   return (

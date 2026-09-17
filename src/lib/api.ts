@@ -428,6 +428,8 @@ export const api = {
       registroCerrado?: boolean
       /** null borra la hora de cierre; no mandarla la deja como estaba. */
       registroHasta?: string | null
+      /** Apunta la hora de arranque real. Lo puede mandar cualquiera que esté jugando. */
+      arrancarAhora?: boolean
     },
   ) => patch<{ ok: true }>(`partidas/${id}`, cambios),
   cargarJugadores: (partidaId: string, jugadores: { usuarioId: string; entrada: number }[]) =>
@@ -437,7 +439,8 @@ export const api = {
     cambios: {
       entrada?: number
       recompras?: { dinero: number }[]
-      fichasManual?: Chips | null
+      /** Plano = una sola pila; por concepto = {entrada: {...}, r0: {...}}. */
+      fichasManual?: Chips | Record<string, Chips> | null
       fichasFinal?: Chips
       rebuys?: number
       addons?: number

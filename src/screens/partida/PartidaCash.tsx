@@ -14,12 +14,15 @@ import type { Chips } from '../../store/types'
 import {
   CompartirReparto,
   FichasDelJugador,
+  GuardarConteo,
   InventarioUsado,
   ListaDeLaMesa,
-  calcularReparto,
+  calcularRepartoCash,
   claseClara,
   finalDe,
+  idFila,
   invertidoDe,
+  manualesDe,
   recomprasDe,
   type PropsPestana,
   type Recompra,
@@ -54,8 +57,9 @@ export default function PartidaCash({
   const ranking = [...conTotales].sort((a, b) => b.pl - a.pl)
 
   /* Las fichas cubren todo lo que puso en la noche, entrada y recompras: así lo que sale
-     del inventario es lo mismo que tiene que volver en el cash out. */
-  const reparto = calcularReparto(datos.participaciones, colores, invertidoDe)
+     del inventario es lo mismo que tiene que volver en el cash out. Van en renglones
+     aparte —uno por concepto— porque es lo que se entrega de una vez en la mano. */
+  const reparto = calcularRepartoCash(datos.participaciones, colores)
   const cuadre = calcularCuadre(datos.participaciones, colores, reparto, invertidoDe)
 
   /* ---- jugadores y sus recompras ---- */
@@ -71,7 +75,22 @@ export default function PartidaCash({
 
         {conTotales.map((p, i) => {
           const recompras = recomprasDe(p)
-          const fila = reparto.rows.find((r) => r.id === p.id)
+          /* Guardar un reparto a mano toca sólo su concepto: corregir las fichas de la
+             recompra 2 no debe mover las que ya se entregaron en la entrada. */
+          const guardarFichas = (clave: string) => (fichas: Chips | null) => {
+            const manuales = { ...manualesDe(p) }
+            if (fichas) manuales[clave] = fichas
+            else delete manuales[clave]
+            const vacio = Object.keys(manuales).length === 0
+            tocar(
+              p.id,
+              { fichas_manual: vacio ? null : JSON.stringify(manuales) },
+              { fichasManual: vacio ? null : manuales },
+            )
+          }
+          const filaDe = (clave: string) =>
+            reparto.rows.find((r) => r.id === idFila(p.id, clave))
+          const entrada = filaDe('entrada')
           return (
             <section key={p.id} className="panel">
               <div className="mb-2.5 flex items-center gap-2.5">
@@ -97,12 +116,13 @@ export default function PartidaCash({
 
               {/* Las fichas van arriba de las recompras: lo primero que se hace al
                   registrar a alguien es entregarle su pila. */}
-              {fila && (
+              {entrada && (
                 <FichasDelJugador
-                  fila={fila}
+                  fila={entrada}
                   colores={colores}
                   puedeEditar={puedeEditar}
-                  tocar={tocar}
+                  guardar={guardarFichas('entrada')}
+                  rotulo="Fichas de entrada"
                 />
               )}
 
@@ -149,6 +169,23 @@ export default function PartidaCash({
                       <b className="text-ink">{money(num(r.dinero))}</b>
                     </p>
                   )}
+
+                  {/* Las fichas de esta recompra y de ninguna otra: es la pila que se
+                      le pasa en el momento de pagarla. */}
+                  {(() => {
+                    const suya = filaDe(`r${ri}`)
+                    return (
+                      suya && (
+                        <FichasDelJugador
+                          fila={suya}
+                          colores={colores}
+                          puedeEditar={puedeEditar}
+                          guardar={guardarFichas(`r${ri}`)}
+                          rotulo="Fichas a entregar"
+                        />
+                      )
+                    )
+                  })()}
                 </div>
               ))}
 
@@ -239,6 +276,13 @@ export default function PartidaCash({
                   const nuevas = { ...fichas, [key]: v }
                   tocar(p.id, { fichas_final: JSON.stringify(nuevas) }, { fichasFinal: nuevas })
                 }}
+              />
+
+              <GuardarConteo
+                id={p.id}
+                fichas={fichas}
+                contado={yaContado}
+                deshabilitado={!puedeContar}
               />
 
               {/* Lo que cobra y lo que se le dio, uno al lado del otro: es la
@@ -334,6 +378,11 @@ export default function PartidaCash({
     ranking.forEach((r, i) => {
       const medalla = ['🥇', '🥈', '🥉'][i]
       lineas.push(`${r.pl > EPS && medalla ? medalla : '•'} ${r.nombre}: ${signed(r.pl)}`)
+      const suyas = recomprasDe(r)
+      if (suyas.length > 1)
+        lineas.push(
+          `   ${money(num(r.entrada))} + ${suyas.map((x) => money(num(x.dinero))).join(' + ')}`,
+        )
     })
     lineas.push('', `Total en la mesa: ${money(totalMesa)}`)
     return lineas.join('\n')
@@ -371,18 +420,36 @@ export default function PartidaCash({
       )}
 
       <ul className="m-0 mb-3 list-none p-0">
-        {ranking.map((r, i) => (
-          <li
-            key={r.id}
-            className="flex items-center justify-between border-b border-dashed border-paper-line py-2.5 font-semibold last:border-b-0"
-          >
-            <span className="flex min-w-0 items-center gap-2">
-              {r.pl > EPS && <Medalla lugar={i + 1} />}
-              <span className="truncate text-ink">{r.nombre}</span>
-            </span>
-            <span className={`font-display font-bold ${claseClara(r.pl)}`}>{signed(r.pl)}</span>
-          </li>
-        ))}
+        {ranking.map((r, i) => {
+          const suyas = recomprasDe(r)
+          return (
+            <li
+              key={r.id}
+              className="border-b border-dashed border-paper-line py-2.5 last:border-b-0"
+            >
+              <div className="flex items-center justify-between font-semibold">
+                <span className="flex min-w-0 items-center gap-2">
+                  {r.pl > EPS && <Medalla lugar={i + 1} />}
+                  <span className="truncate text-ink">{r.nombre}</span>
+                </span>
+                <span className={`font-display font-bold ${claseClara(r.pl)}`}>
+                  {signed(r.pl)}
+                </span>
+              </div>
+
+              {/* Con varias recompras, \"puso $1,400\" no dice de dónde salió y al día
+                  siguiente nadie se acuerda. Desglosadas, la cuenta se revisa sola. */}
+              {suyas.length > 1 && (
+                <p className="mt-1 mb-0 text-[11.5px] leading-snug text-ink-soft">
+                  Entró con <b className="text-ink">{money(num(r.entrada))}</b> y{' '}
+                  {suyas.length} recompras:{' '}
+                  {suyas.map((x) => money(num(x.dinero))).join(' + ')} ={' '}
+                  <b className="text-ink">{money(r.invertido)}</b>
+                </p>
+              )}
+            </li>
+          )
+        })}
       </ul>
 
       <ShareBlock datos={datosImagen} texto={texto} alt="Tabla de resultados de la partida" />

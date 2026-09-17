@@ -36,6 +36,8 @@ export interface Cuadre {
   pagadoDeMas: boolean
   /** Cuántos jugadores tienen ya su conteo de fichas capturado. */
   contados: number
+  /** A cuántos ya se les apuntó lo que se les entregó, aunque hayan sido $0. */
+  pagados: number
   jugadores: number
 }
 
@@ -73,6 +75,9 @@ export function calcularCuadre(
     enLaMesa: recaudado - pagado,
     pagadoDeMas: pagado - recaudado > EPS,
     contados: participaciones.filter((p) => Object.keys(leerJson<Chips>(p.fichas_final, {})).length > 0).length,
+    /* `pagado` en null es "todavía no se le entrega"; en 0 es "se fue sin nada", que es
+       un dato válido y muy común. Por eso se cuenta el null, no el cero. */
+    pagados: participaciones.filter((p) => p.pagado !== null).length,
     jugadores: participaciones.length,
   }
 }
@@ -87,6 +92,11 @@ export function calcularCuadre(
  * que no se pudieron partir en billetes y se quedan para la próxima; frenar por eso
  * trabaría todas las noches. Lo que sí frena es haber pagado más de lo que entró, que
  * es dinero que no existe.
+ *
+ * Y frena que alguien se quede sin anotar. Eso pasó la primera noche de verdad: se
+ * cerró la partida con dos jugadores sin apuntarles cuánto se les dio. Las fichas ya
+ * cuadraban, así que nada avisó —y el dinero de esa noche quedó contado a medias—.
+ * Anotar $0 es válido; dejarlo en blanco, no.
  */
 export function porQueNoSePuedeCerrar(c: Cuadre): string | null {
   if (c.jugadores === 0) return 'Todavía no hay jugadores cargados.'
@@ -100,5 +110,9 @@ export function porQueNoSePuedeCerrar(c: Cuadre): string | null {
     return `Las fichas no cuadran: ${detalle}.`
   }
   if (c.pagadoDeMas) return 'Se repartió más dinero del que entró a la mesa.'
+  if (c.pagados < c.jugadores) {
+    const faltan = c.jugadores - c.pagados
+    return `Falta apuntar cuánto se le dio a ${faltan} de ${c.jugadores}. Si se fue sin nada, ponle 0.`
+  }
   return null
 }

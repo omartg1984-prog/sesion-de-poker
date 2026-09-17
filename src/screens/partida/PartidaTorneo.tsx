@@ -14,6 +14,7 @@ import Reloj from './Reloj'
 import { leerJson } from '../../lib/api'
 import {
   RELOJ_PARADO,
+  retirosDe,
   segundosCorridos,
   type Estructura as Tabla,
   type RelojTorneo,
@@ -117,7 +118,7 @@ export default function PartidaTorneo({
 
   /* ---- configuración del torneo ---- */
   if (pestana === 'torneo') {
-    const estructura = leerJson<Tabla | null>(datos.partida.estructura, null)
+    const guardada = leerJson<Tabla | null>(datos.partida.estructura, null)
     const relojGuardado = leerJson<RelojTorneo>(datos.partida.reloj, RELOJ_PARADO)
 
     const stackDelTorneo = num(torneo.stack) || num(torneo.buyIn)
@@ -132,6 +133,21 @@ export default function PartidaTorneo({
         valor: torneo.valores?.[c.key] ?? num(c.value),
       })),
       pie: `Arrancas con ${enFichas(stackDelTorneo)}`,
+    }
+
+    /*
+     * Los torneos armados antes de que existieran los retiros tienen la tabla guardada
+     * sin ellos. En vez de obligar a recalcular las ciegas —y perder las que se hayan
+     * corregido a mano— se calculan al vuelo con las denominaciones de la noche.
+     */
+    const estructura: Tabla | null = guardada && {
+      ...guardada,
+      retiros:
+        guardada.retiros ??
+        retirosDe(
+          guardada.niveles,
+          colores.map((c) => torneo.valores?.[c.key] ?? num(c.value)),
+        ),
     }
 
     const textoFichas = () => {
@@ -281,7 +297,13 @@ export default function PartidaTorneo({
                     fila={fila}
                     colores={coloresTorneo}
                     puedeEditar={puedeEditar}
-                    tocar={tocar}
+                    guardar={(fichas) =>
+                      tocar(
+                        p.id,
+                        { fichas_manual: fichas && JSON.stringify(fichas) },
+                        { fichasManual: fichas },
+                      )
+                    }
                     formato={enFichas}
                   />
                 </div>
