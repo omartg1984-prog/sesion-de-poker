@@ -6,6 +6,7 @@ import type { ConfigTorneo, Participacion } from '../../lib/api'
 import type { DatosNumeros } from '../../lib/imagenTablas'
 import { MEDALS } from '../../lib/lienzo'
 import { finalDe, invertidoDe, recomprasDe, type PropsPestana } from './comun'
+import { duracionLarga } from '../../lib/tiempo'
 import { pagadoPor, bolsaDe } from './PartidaTorneo'
 
 const claseSaldo = (v: number) => (v > EPS ? 'text-win' : v < -EPS ? 'text-loss' : 'text-ink-soft')
@@ -90,6 +91,13 @@ export default function Numeros({ datos, colores, torneo }: Props) {
      cuenta por sí sola, chica o grande. */
   const recompraPromedio = totalRecompras > 0 ? montoRecompras / totalRecompras : 0
 
+  /* Cuánto se jugó de verdad: de la primera mano a la última. No hasta que se cerró la
+     partida, que suele ser un buen rato después —o al día siguiente—. */
+  const duro =
+    datos.partida.arrancado_en && datos.partida.terminado_en
+      ? duracionLarga(datos.partida.arrancado_en, datos.partida.terminado_en)
+      : ''
+
   const mejor = filas[0]
   const peor = filas[filas.length - 1]
   const masRecompras = [...filas].sort((a, b) => b.recompras - a.recompras)[0]
@@ -162,6 +170,12 @@ export default function Numeros({ datos, colores, torneo }: Props) {
               )}
             </div>
           </div>
+          {duro && (
+            <div className="stat">
+              <div className="stat-k">Cuánto se jugó</div>
+              <div className="stat-v">{duro}</div>
+            </div>
+          )}
           {totalRecompras > 0 && (
             <div className="stat">
               <div className="stat-k">Recompra promedio</div>

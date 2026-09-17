@@ -158,6 +158,8 @@ export interface PartidaResumen {
   registro_hasta?: string | null
   /** Instante ISO del primer play del reloj. null = todavía no empieza. */
   arrancado_en?: string | null
+  /** Instante ISO de la última mano. Cerrar la partida es después, ya repartido. */
+  terminado_en?: string | null
 }
 
 /** Cómo quedó una noche, ya ordenada por el servidor. */
@@ -430,6 +432,8 @@ export const api = {
       registroHasta?: string | null
       /** Apunta la hora de arranque real. Lo puede mandar cualquiera que esté jugando. */
       arrancarAhora?: boolean
+      /** true apunta la hora de la última mano; false la borra y se sigue jugando. */
+      terminarAhora?: boolean
     },
   ) => patch<{ ok: true }>(`partidas/${id}`, cambios),
   cargarJugadores: (partidaId: string, jugadores: { usuarioId: string; entrada: number }[]) =>

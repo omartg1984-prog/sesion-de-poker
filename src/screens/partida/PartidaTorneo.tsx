@@ -162,32 +162,22 @@ export default function PartidaTorneo({
     }
     return (
       <>
-        {/* A qué hora se quedó y a qué hora arrancó de verdad. Nunca son la misma, y
-            saberlo es lo que hace que las horas de la tabla sean ciertas. */}
-        {(torneo.horaInicio || datos.partida.arrancado_en) && (
+        {/* A qué hora se quedó, y qué tanto se corrió la hora. La de arranque de verdad
+            ya la dice el letrero de arriba; repetirla aquí era decir dos veces lo
+            mismo. Lo que ésta agrega es contra qué se compara. */}
+        {torneo.horaInicio && (
           <p className="mt-0 mb-3 px-1 text-center text-[12px] text-tiza-suave">
-            {torneo.horaInicio && <>Se quedó a las {torneo.horaInicio}</>}
-            {datos.partida.arrancado_en && (
-              <>
-                {torneo.horaInicio && ' · '}
-                arrancó a las{' '}
-                <b className="text-white">
-                  {new Date(datos.partida.arrancado_en).toLocaleTimeString('es-MX', {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    hour12: false,
-                  })}
-                </b>
-                {(() => {
-                  const tarde = minutosDeRetraso(
+            Se quedó a las <b className="text-white">{torneo.horaInicio}</b>
+            {(() => {
+              const tarde = datos.partida.arrancado_en
+                ? minutosDeRetraso(
                     datos.partida.fecha,
                     torneo.horaInicio,
                     datos.partida.arrancado_en,
                   )
-                  return tarde > 0 ? ` (${tarde} min tarde)` : ''
-                })()}
-              </>
-            )}
+                : 0
+              return tarde > 0 ? ` · arrancaron ${tarde} min tarde` : ''
+            })()}
           </p>
         )}
 

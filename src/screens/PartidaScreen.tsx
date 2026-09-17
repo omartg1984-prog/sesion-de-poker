@@ -5,7 +5,6 @@ import {
   Coins,
   Lock,
   LockOpen,
-  Play,
   RefreshCw,
   Share2,
   Trash2,
@@ -39,7 +38,8 @@ import { useAvisoDeNivel } from './partida/usarReloj'
 import { calcularCuadre, porQueNoSePuedeCerrar } from './partida/cuadre'
 import { calcularRepartoCash, invertidoDe } from './partida/comun'
 import { dineroDeLaCaja } from '../lib/distribution'
-import { RELOJ_PARADO, type Estructura, type RelojTorneo } from '../lib/torneo'
+import { RELOJ_PARADO, pausarReloj, type Estructura, type RelojTorneo } from '../lib/torneo'
+import TiempoDeJuego from './partida/TiempoDeJuego'
 import PartidaCash, { PESTANAS_CASH, type PestanaCash } from './partida/PartidaCash'
 import PartidaTorneo, {
   PESTANAS_TORNEO,
@@ -333,6 +333,7 @@ export default function PartidaScreen() {
    * no tiene reloj que apretar, así que lleva su propio botón.
    */
   const arrancoEn = datos.partida.arrancado_en ?? null
+  const terminoEn = datos.partida.terminado_en ?? null
   const arrancar = async () => {
     if (ocupado) return
     setOcupado(true)
@@ -340,6 +341,25 @@ export default function PartidaScreen() {
     setOcupado(false)
     if (!r) return
     avisar('Arrancó la partida')
+    void cargar()
+  }
+
+  /*
+   * Terminar es la última mano, no el cierre de la noche. De aquí en adelante viene el
+   * cash out —contar, cuadrar, pagar— y eso se lleva su rato; la partida se cierra
+   * cuando ya no queda dinero por repartir.
+   *
+   * En torneo, además, para el reloj: dejarlo corriendo después de la última mano hace
+   * subir ciegas de una mesa que ya se levantó.
+   */
+  const terminar = async (terminarAhora: boolean) => {
+    if (ocupado) return
+    setOcupado(true)
+    if (terminarAhora && esTorneo && relojDelAviso.corriendo) cambiarReloj(pausarReloj(relojDelAviso))
+    const r = await conAviso(() => api.guardarPartida(partidaId, { terminarAhora }))
+    setOcupado(false)
+    if (!r) return
+    avisar(terminarAhora ? 'Se acabó el juego' : 'Siguen jugando')
     void cargar()
   }
 
@@ -445,41 +465,24 @@ export default function PartidaScreen() {
         {caja && pestana === 'jugadores' && <BannerCaja caja={caja} />}
       </header>
 
-      {/* A qué hora empezó de verdad la noche. El torneo lo apunta solo con el primer
-          play del reloj; la cash no tiene reloj, así que se aprieta. Va hasta arriba
-          y no al fondo de la lista: es lo primero que se hace al sentarse. Lo aprieta
-          cualquiera de los que están jugando, no sólo el que lleva el banco. */}
-      {!esTorneo &&
-        !sinJugadores &&
-        !cerrada &&
-        pestana === 'jugadores' &&
-        (arrancoEn ? (
-          <div className="balance balance-ok">
-            <Play size={16} strokeWidth={2.4} />
-            <span>
-              Arrancó a las{' '}
-              <b>
-                {new Date(arrancoEn).toLocaleTimeString('es-MX', {
-                  hour: '2-digit',
-                  minute: '2-digit',
-                  hour12: false,
-                })}
-              </b>
-            </span>
-          </div>
-        ) : (
-          (soyJefe || estoyApuntado) && (
-            <button
-              type="button"
-              className="btn btn-marca mb-3 disabled:opacity-45"
-              disabled={ocupado}
-              onClick={() => void arrancar()}
-            >
-              <Play size={17} strokeWidth={2.4} />
-              Arrancar la partida
-            </button>
-          )
-        ))}
+      {/* De qué hora a qué hora se jugó. Va hasta arriba y no al fondo de la lista: es
+          lo primero que se hace al sentarse y lo primero al levantarse. Lo aprieta
+          cualquiera de los que están jugando, no sólo el que lleva el banco.
+
+          En cash vive en el registro y en torneo junto al reloj, que es la pestaña que
+          se tiene abierta en cada caso. */}
+      {!sinJugadores && pestana === (esTorneo ? 'torneo' : 'jugadores') && (
+        <TiempoDeJuego
+          arrancoEn={arrancoEn}
+          terminoEn={terminoEn}
+          puede={!cerrada && (soyJefe || estoyApuntado)}
+          ocupado={ocupado}
+          onArrancar={esTorneo ? null : () => void arrancar()}
+          onTerminar={() => void terminar(true)}
+          onSeguir={() => void terminar(false)}
+          oscuro={esTorneo}
+        />
+      )}
 
       {sinJugadores ? (
         <section className="panel text-center">

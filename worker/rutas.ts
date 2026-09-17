@@ -640,6 +640,7 @@ export async function rutas(
         registro_cerrado: number
         registro_hasta: string | null
         arrancado_en: string | null
+        terminado_en: string | null
       }>()
     if (!partida) return json({ error: 'Partida no encontrada' }, 404)
 
@@ -701,6 +702,7 @@ export async function rutas(
         registroCerrado,
         registroHasta,
         arrancarAhora,
+        terminarAhora,
       } = await cuerpo<Record<string, unknown>>()
       if (estado !== undefined && estado !== 'abierta' && estado !== 'cerrada')
         return json({ error: 'Estado inválido' }, 400)
@@ -714,7 +716,8 @@ export async function rutas(
        * Sigue siendo distinto de tocar la configuración, que es de los admins.
        */
       const esJefe = partida.jefe_id ? partida.jefe_id === yo.id : esAdminLiga
-      const tocaLaNoche = estado !== undefined || arrancarAhora !== undefined
+      const tocaLaNoche =
+        estado !== undefined || arrancarAhora !== undefined || terminarAhora !== undefined
 
       if (tocaLaNoche && !esJefe && yo.es_admin_app !== 1) {
         /* Sólo se pregunta cuando hace falta: el reloj manda un PATCH cada vez que
@@ -752,7 +755,8 @@ export async function rutas(
            reloj = COALESCE(?, reloj),
            registro_cerrado = COALESCE(?, registro_cerrado),
            registro_hasta = ?,
-           arrancado_en = ?
+           arrancado_en = ?,
+           terminado_en = ?
          WHERE id = ?`,
       )
         .bind(
@@ -780,6 +784,17 @@ export async function rutas(
            */
           /* El botón de arrancar sirve para la cash, que no tiene reloj que apretar. */
           arrancarAhora ? (partida.arrancado_en ?? ahora()) : arranqueReal(partida.arrancado_en, reloj),
+          /*
+           * A qué hora se dejó de jugar, que no es a la que se cierra la partida:
+           * después de la última mano vienen el conteo y los pagos, y eso se lleva su
+           * rato. Apretarlo dos veces no mueve la hora —sería perderla—; mandar false
+           * la borra, para cuando alguien lo apretó antes de tiempo y siguen jugando.
+           */
+          terminarAhora === undefined
+            ? partida.terminado_en
+            : terminarAhora
+              ? (partida.terminado_en ?? ahora())
+              : null,
           partidaId,
         )
         .run()
