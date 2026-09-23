@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { computeDistribution, stackTotal } from '../distribution'
+import { CAMBIO_RECOMPRA, computeDistribution, stackTotal } from '../distribution'
 import type { ChipColor } from '../../store/types'
 
 /*
@@ -21,9 +21,9 @@ describe('fichas por concepto', () => {
   it('cada renglón cubre su propio monto, no el de la noche entera', () => {
     const d = computeDistribution(
       [
-        { id: 'ana#entrada', name: 'Ana', buyIn: 500, deal: null, cambio: true },
-        { id: 'ana#r0', name: 'Ana · Recompra 1', buyIn: 400, deal: null, cambio: false },
-        { id: 'ana#r1', name: 'Ana · Recompra 2', buyIn: 300, deal: null, cambio: false },
+        { id: 'ana#entrada', name: 'Ana', buyIn: 500, deal: null, cambio: 1 },
+        { id: 'ana#r0', name: 'Ana · Recompra 1', buyIn: 400, deal: null, cambio: CAMBIO_RECOMPRA },
+        { id: 'ana#r1', name: 'Ana · Recompra 2', buyIn: 300, deal: null, cambio: CAMBIO_RECOMPRA },
       ],
       COLORES,
     )
@@ -39,8 +39,8 @@ describe('fichas por concepto', () => {
     )
     const partido = computeDistribution(
       [
-        { id: 'ana#entrada', name: 'Ana', buyIn: 500, deal: null, cambio: true },
-        { id: 'ana#r0', name: 'Ana · Recompra 1', buyIn: 700, deal: null, cambio: false },
+        { id: 'ana#entrada', name: 'Ana', buyIn: 500, deal: null, cambio: 1 },
+        { id: 'ana#r0', name: 'Ana · Recompra 1', buyIn: 700, deal: null, cambio: CAMBIO_RECOMPRA },
       ],
       COLORES,
     )
@@ -51,30 +51,34 @@ describe('fichas por concepto', () => {
     )
   })
 
-  it('la recompra va en fichas grandes: el jugador ya tiene cambio en la mesa', () => {
+  it('la recompra se reparte entre todos los colores, con menos morralla que la entrada', () => {
     const [entrada] = computeDistribution(
-      [{ id: 'a', name: 'A', buyIn: 500, deal: null, cambio: true }],
+      [{ id: 'a', name: 'A', buyIn: 500, deal: null, cambio: 1 }],
       COLORES,
     ).rows
     const [recompra] = computeDistribution(
-      [{ id: 'b', name: 'B', buyIn: 500, deal: null, cambio: false }],
+      [{ id: 'b', name: 'B', buyIn: 500, deal: null, cambio: CAMBIO_RECOMPRA }],
       COLORES,
     ).rows
 
-    /* Mismo dinero, muchas menos fichas que contar y que sacar de la caja. */
-    const cuantas = (c: Record<string, number>) =>
-      COLORES.reduce((t, x) => t + (c[x.key] ?? 0), 0)
     expect(recompra.total).toBe(500)
-    expect(cuantas(recompra.counts)).toBeLessThan(cuantas(entrada.counts))
-    expect(recompra.counts.azul ?? 0).toBe(0)
+
+    /* Repartida: nadie recibe un bloque de la ficha más grande y nada más, porque con
+       eso no se puede ni pagar una ciega sin pedir cambio. */
+    for (const c of COLORES) expect(recompra.counts[c.key]).toBeGreaterThan(0)
+
+    /* Pero con menos morralla que una entrada: algo de cambio ya trae en la mesa, y
+       cada recompra completa le vaciaría a la casa las fichas chicas. */
+    const chica = COLORES[COLORES.length - 1].key
+    expect(recompra.counts[chica]).toBeLessThan(entrada.counts[chica])
   })
 
   it('un reparto a mano en una recompra no toca las fichas de la entrada', () => {
     const aMano = { verde: 16, negra: 0, roja: 0, azul: 0 }
     const d = computeDistribution(
       [
-        { id: 'ana#entrada', name: 'Ana', buyIn: 500, deal: null, cambio: true },
-        { id: 'ana#r0', name: 'Ana · Recompra 1', buyIn: 400, deal: aMano, cambio: false },
+        { id: 'ana#entrada', name: 'Ana', buyIn: 500, deal: null, cambio: 1 },
+        { id: 'ana#r0', name: 'Ana · Recompra 1', buyIn: 400, deal: aMano, cambio: CAMBIO_RECOMPRA },
       ],
       COLORES,
     )

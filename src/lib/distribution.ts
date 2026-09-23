@@ -12,6 +12,15 @@ export function desiredKeep(index: number): number {
   return index < CHANGE_KEEP.length ? CHANGE_KEEP[index] : 2
 }
 
+/**
+ * Qué tanta morralla lleva una recompra, comparada con una entrada.
+ *
+ * Media pila. Entera sobra —el jugador casi siempre tiene cambio en la mesa y cada
+ * recompra le vaciaría a la casa las fichas chicas—, pero ninguna es peor: le caen
+ * quince fichas de la más grande y no puede ni pagar una ciega sin pedir cambio.
+ */
+export const CAMBIO_RECOMPRA = 0.5
+
 /** Tope de fichas por color para un jugador. `Infinity` = sin límite. */
 export type Caps = Record<string, number>
 
@@ -28,12 +37,12 @@ export interface DealPlayer {
   /** Reparto editado a mano, o `null` si va en automático. */
   deal: Chips | null
   /*
-   * Si esta entrega lleva su propia pila de fichas chicas. La entrada sí: hay que
-   * poder pagar las ciegas. Una recompra no: el jugador ya tiene cambio sobre la
-   * mesa y darle otro puñado de fichas chicas cada vez vacía la caja de las chicas y
-   * le llena el lugar de monedas.
+   * Qué tanta pila de fichas chicas lleva esta entrega, de 0 a 1. Una entrada va
+   * completa: hay que poder pagar las ciegas desde la primera mano. Una recompra va a
+   * media —`CAMBIO_RECOMPRA`— porque el jugador ya tiene cambio sobre la mesa, pero
+   * tampoco puede recibir un bloque entero de la ficha más grande y nada más.
    */
-  cambio?: boolean
+  cambio?: number
 }
 
 export interface DistributionRow {
@@ -83,7 +92,7 @@ export function balancedStack(
   buyIn: number,
   colors: ChipColor[],
   caps: Caps,
-  conCambio = true,
+  cambio = 1,
 ): StackResult {
   const counts = zeroCounts(colors)
   const target = Math.round(num(buyIn))
@@ -93,11 +102,12 @@ export function balancedStack(
   const capOf = (key: string) => (caps[key] === undefined ? Infinity : Math.max(0, caps[key]))
 
   // 1) pila de cambio modesta en todas las denominaciones menos la más grande
-  if (conCambio)
+  if (cambio > 0)
     for (let i = 0; i < asc.length - 1; i++) {
       const c = asc[i]
       if (num(c.value) <= 0) continue
-      counts[c.key] = Math.min(capOf(c.key), desiredKeep(i))
+      /* Hacia arriba: media pila de dos fichas es una, no ninguna. */
+      counts[c.key] = Math.min(capOf(c.key), Math.ceil(desiredKeep(i) * cambio))
     }
   let total = stackTotal(counts, colors)
 
@@ -193,7 +203,7 @@ export function computeDistribution(
       caps[c.key] =
         remaining[c.key] === Infinity ? Infinity : Math.max(0, Math.floor(remaining[c.key] / left))
     }
-    const st = balancedStack(p.buyIn, colors, caps, p.cambio !== false)
+    const st = balancedStack(p.buyIn, colors, caps, p.cambio ?? 1)
     for (const c of colors) {
       if (remaining[c.key] !== Infinity) remaining[c.key] -= st.counts[c.key]
     }

@@ -4,6 +4,7 @@ import Chip from '../../components/Chip'
 import NumInput from '../../components/NumInput'
 import ShareBlock from '../../components/ShareBlock'
 import {
+  CAMBIO_RECOMPRA,
   computeDistribution,
   dineroDeLaCaja,
   distributionText,
@@ -157,7 +158,7 @@ export function calcularRepartoCash(
         name: c.clave === 'entrada' ? p.nombre : `${p.nombre} · ${c.rotulo}`,
         buyIn: Math.round(c.monto),
         deal: manuales[c.clave] ?? null,
-        cambio: c.clave === 'entrada',
+        cambio: c.clave === 'entrada' ? 1 : CAMBIO_RECOMPRA,
       }))
     }),
     colores,
