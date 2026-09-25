@@ -100,6 +100,15 @@ export default function PasosTorneo({
         value={torneo.addOnPrice}
         onChange={(v) => aplicar({ addOnPrice: v })}
       />
+      <MoneyInput
+        label="Cena por persona"
+        value={num(torneo.cenaPorPersona)}
+        onChange={(v) => aplicar({ cenaPorPersona: v })}
+      />
+      <p className="mt-0 mb-3 text-[12px] leading-snug text-ink-soft">
+        Si la entrada incluye cena, sale de la bolsa antes de repartir premios. En 0 no se
+        descuenta nada.
+      </p>
 
       {/* Hasta cuándo se compra. Es la regla que se discute a media noche, cuando al
           que se quedó sin fichas le urge una recompra más: escrita antes de empezar, y

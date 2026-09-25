@@ -1,5 +1,6 @@
 import type { ConfigTorneo } from './api'
-import { num } from './money'
+import type { DatosTabla } from './imagenTablas'
+import { money, num } from './money'
 
 /*
  * De qué consta un torneo, dicho para alguien que todavía no se apunta.
@@ -29,6 +30,8 @@ export interface PremioDelTorneo {
 export interface ResumenTorneo {
   compras: CompraDelTorneo[]
   premios: PremioDelTorneo[]
+  /** Lo que se le cobra a cada quien de cena y no se reparte. 0 = no hay. */
+  cenaPorPersona: number
   /** Lo que junta la mesa si se apuntan todos los que hay, sin recompras. */
   bolsaMinima: number
 }
@@ -67,5 +70,53 @@ export function resumenDeTorneo(t: ConfigTorneo, apuntados = 0): ResumenTorneo {
     .map((x, i) => ({ lugar: i + 1, pct: num(x.pct) }))
     .filter((x) => x.pct > 0)
 
-  return { compras, premios, bolsaMinima: num(t.buyIn) * Math.max(0, Math.floor(apuntados)) }
+  return {
+    compras,
+    premios,
+    cenaPorPersona: Math.max(0, num(t.cenaPorPersona)),
+    bolsaMinima: num(t.buyIn) * Math.max(0, Math.floor(apuntados)),
+  }
+}
+
+/**
+ * Las reglas del torneo como imagen, para tirarlas en el chat del grupo.
+ *
+ * El link sirve para apuntarse, pero no todo el mundo lo abre y no siempre se quiere
+ * que lo abran: a veces sólo hace falta que quede escrito de qué se trata la noche.
+ * Esta tabla dice lo mismo que la invitación, sin link y sin que nadie tenga que
+ * entrar a nada.
+ */
+export function tablaDeReglas(
+  t: ConfigTorneo,
+  datos: { titulo: string; liga: string },
+): DatosTabla {
+  const { compras, premios, cenaPorPersona } = resumenDeTorneo(t)
+  const miles = (n: number) => Math.round(n).toLocaleString('es-MX')
+
+  const filas = compras.map((c) => [
+    c.que,
+    money(c.dinero),
+    [`${miles(c.fichas)} fichas`, c.hasta].filter(Boolean).join(' · '),
+  ])
+
+  if (cenaPorPersona > 0)
+    filas.push(['Cena', money(cenaPorPersona), 'por persona, sale de la bolsa'])
+
+  for (const pr of premios)
+    filas.push([`${pr.lugar}º lugar`, `${pr.pct}%`, 'de la bolsa a repartir'])
+
+  const horas = [
+    t.horaInicio && `Empieza ${t.horaInicio}`,
+    t.horaFin && `termina cerca de ${t.horaFin}`,
+  ].filter(Boolean)
+
+  return {
+    tipo: 'tabla',
+    titulo: 'Reglas del torneo',
+    subtitulo: datos.titulo,
+    gorro: datos.liga,
+    columnas: ['Qué', 'Cuánto', 'Detalle'],
+    filas,
+    pie: horas.join(' · ') || 'La bolsa sube con cada recompra',
+  }
 }

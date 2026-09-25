@@ -300,6 +300,23 @@ export default function Invitacion() {
                 )}
               </li>
             ))}
+
+            {/* La cena va en la misma lista: es parte de lo que se paga, aunque no dé
+                fichas. Y hay que decir que sale de la bolsa, porque es lo que hace que
+                los premios sean menores de lo que la gente calcula de cabeza. */}
+            {resumen.cenaPorPersona > 0 && (
+              <li className="border-b border-dashed border-paper-line py-2 last:border-b-0">
+                <div className="flex items-baseline justify-between gap-2 text-[13.5px]">
+                  <span className="font-semibold text-ink">Cena</span>
+                  <span className="text-ink-soft">
+                    <b className="text-ink">{money(resumen.cenaPorPersona)}</b> por persona
+                  </span>
+                </div>
+                <div className="mt-0.5 text-[11.5px] text-ink-soft">
+                  Sale de la bolsa antes de repartir premios.
+                </div>
+              </li>
+            )}
           </ul>
 
           {resumen.premios.length > 0 && (

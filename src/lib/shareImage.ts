@@ -72,6 +72,8 @@ export interface DatosTorneo {
   dineroEntradas: number
   dineroRecompras: number
   dineroAddons: number
+  /** Lo que se fue en cena y por eso no se reparte. 0 = no hubo. */
+  cena: number
   lugares: LugarTorneo[]
 }
 
@@ -244,6 +246,8 @@ function dibujarTorneo(d: DatosTorneo): HTMLCanvasElement {
   const partes = [`${moneyShort(d.dineroEntradas)} de entradas`]
   if (d.dineroRecompras > 0) partes.push(`${moneyShort(d.dineroRecompras)} en recompras`)
   if (d.dineroAddons > 0) partes.push(`${moneyShort(d.dineroAddons)} en add-ons`)
+  /* Sin esto, quien ve la imagen suma las tres cifras y no le da la bolsa. */
+  if (d.cena > 0) partes.push(`−${moneyShort(d.cena)} de cena`)
   dibujarBolsa(ctx, W, pad, headerH - 6, 'BOLSA A REPARTIR', d.bolsa, partes.join(' · '))
 
   const poolH = ALTO_BOLSA

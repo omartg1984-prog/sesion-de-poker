@@ -133,6 +133,14 @@ export interface ConfigTorneo {
    */
   recomprasHasta?: number
   addOnsHasta?: number
+  /*
+   * Lo que se le cobra a cada quien de cena, y que sale de la bolsa antes de repartir
+   * premios. "Entrada $500, cena incluida" es lo normal en la mesa, y si no se aparta,
+   * el que lleva el banco reparte porcentajes de un dinero que ya pagó la comida.
+   *
+   * Se cobra por persona una sola vez: recomprar tres veces no es cenar tres veces.
+   */
+  cenaPorPersona?: number
   /** A qué hora se quedó de empezar y de terminar, "HH:MM". */
   horaInicio?: string
   horaFin?: string

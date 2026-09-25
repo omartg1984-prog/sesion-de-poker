@@ -33,6 +33,8 @@ export interface ConfigTorneo {
   rebuyPrice: number
   addOnPrice: number
   payouts: { pct: number }[]
+  /** Lo que se le cobra a cada quien de cena y que no se reparte en premios. */
+  cenaPorPersona?: number
 }
 
 /** Lo mínimo de una participación para poder ordenar la mesa. */
@@ -84,7 +86,17 @@ export function podioDe<T extends JugadorDeLaNoche>(
   const pagadoTorneo = (j: JugadorDeLaNoche) =>
     num(t.buyIn) + num(j.rebuys) * num(t.rebuyPrice) + num(j.addons) * num(t.addOnPrice)
 
-  const bolsa = esTorneo ? jugadores.reduce((s, j) => s + pagadoTorneo(j), 0) : 0
+  const recaudado = esTorneo ? jugadores.reduce((s, j) => s + pagadoTorneo(j), 0) : 0
+  /*
+   * La cena sale de la bolsa antes de repartir: "entrada $500, cena incluida" es lo
+   * normal en la mesa. Se cobra por persona una sola vez —recomprar tres veces no es
+   * cenar tres veces— y nunca se lleva más que lo recaudado.
+   *
+   * Tiene que descontarse aquí y no sólo en la pantalla: de esta cuenta sale la tabla
+   * de la liga, y si las dos no dan lo mismo, alguien aparece ganando lo que no ganó.
+   */
+  const cena = Math.min(recaudado, Math.max(0, jugadores.length * num(t.cenaPorPersona)))
+  const bolsa = recaudado - cena
 
   const sinOrdenar = jugadores.map((j) => {
     if (esTorneo) {

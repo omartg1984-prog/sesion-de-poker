@@ -26,6 +26,7 @@ import {
   type Tramo,
   type ValoresTorneo,
 } from '../../lib/torneo'
+import { resumenDeTorneo, tablaDeReglas } from '../../lib/resumenTorneo'
 import TablaCiegas from '../partida/TablaCiegas'
 import Premios, { premiosCuadran, type Premio } from './Premios'
 import { conAviso, useApp } from '../../store/app'
@@ -158,6 +159,9 @@ export default function CrearTorneo({
   /* La cara de la noche. Se elige aquí porque es cuando se tiene a la mano el cartel
      que alguien hizo para el grupo; después se puede cambiar desde la partida. */
   const [foto, setFoto] = useState<string | null>(null)
+  /* Lo que sale de la bolsa para la cena. Se puede dejar en 0 y ponerlo a media noche,
+     cuando llega la cuenta, desde la pestaña de resultado. */
+  const [cenaPorPersona, setCenaPorPersona] = useState(0)
   /* Hasta qué nivel se puede comprar. 0 = toda la noche. */
   const [recomprasHasta, setRecomprasHasta] = useState(0)
   const [addOnsHasta, setAddOnsHasta] = useState(0)
@@ -231,7 +235,8 @@ export default function CrearTorneo({
   const bolsa =
     paraCalcular * num(buyIn) +
     recomprasEsperadas * num(rebuyPrice) +
-    addOnsEsperados * num(addOnPrice)
+    addOnsEsperados * num(addOnPrice) -
+    paraCalcular * num(cenaPorPersona)
 
   /* Mover el stack tira los valores y la tabla hechos a mano: se calcularon con otro
      número y dejarían un plan que no cierra. */
@@ -249,27 +254,32 @@ export default function CrearTorneo({
       setTablaManual(null)
     }
 
+  /* Todo lo que define el torneo, en un solo objeto: es lo que se guarda y también lo
+     que lee la imagen de reglas, para que las dos digan exactamente lo mismo. */
+  const torneoArmado: ConfigTorneo = {
+    buyIn,
+    rebuyPrice,
+    addOnPrice,
+    payouts,
+    stack,
+    rebuyChips: fichasRecompra,
+    addOnChips: fichasAddOn,
+    valores,
+    recomprasEsperadas,
+    addOnsEsperados,
+    recomprasHasta,
+    addOnsHasta,
+    cenaPorPersona,
+    horaInicio,
+    horaFin,
+  }
+
   /* ---- crear ---- */
 
   const crear = async () => {
     if (ocupado) return
     setOcupado(true)
-    const torneo: ConfigTorneo = {
-      buyIn,
-      rebuyPrice,
-      addOnPrice,
-      payouts,
-      stack,
-      rebuyChips: fichasRecompra,
-      addOnChips: fichasAddOn,
-      valores,
-      recomprasEsperadas,
-      addOnsEsperados,
-      recomprasHasta,
-      addOnsHasta,
-      horaInicio,
-      horaFin,
-    }
+    const torneo = torneoArmado
     const r = await conAviso(() =>
       api.crearPartida(ligaId, {
         fecha,
@@ -330,6 +340,22 @@ export default function CrearTorneo({
       /* si cancela o el teléfono no deja, queda el portapapeles */
     }
     avisar((await copyText(texto)) ? 'Link copiado' : 'No se pudo copiar')
+  }
+
+  /* Las reglas en texto, para quien prefiere pegarlas que mandar la imagen. */
+  const textoReglas = () => {
+    const r = resumenDeTorneo(torneoArmado)
+    const lineas = [`🏆 ${nombreLiga} — ${nombre.trim() || fechaLarga(fecha)}`, '']
+    for (const c of r.compras)
+      lineas.push(
+        `${c.que}: ${money(c.dinero)} → ${miles(c.fichas)} fichas${c.hasta ? ` (${c.hasta})` : ''}`,
+      )
+    if (r.cenaPorPersona > 0)
+      lineas.push(`Cena: ${money(r.cenaPorPersona)} por persona, sale de la bolsa`)
+    lineas.push('', 'Se reparte:')
+    for (const pr of r.premios) lineas.push(`  ${pr.lugar}º · ${pr.pct}%`)
+    lineas.push('', `Empieza ${horaInicio}`)
+    return lineas.join('\n')
   }
 
   /* ---- lo que se comparte ---- */
@@ -567,6 +593,11 @@ export default function CrearTorneo({
         <MoneyInput label="Entrada" value={buyIn} onChange={setBuyIn} />
         <MoneyInput label="Recompra" value={rebuyPrice} onChange={setRebuyPrice} />
         <MoneyInput label="Add-on" value={addOnPrice} onChange={setAddOnPrice} />
+        <MoneyInput label="Cena por persona" value={cenaPorPersona} onChange={setCenaPorPersona} />
+        <p className="mt-0 mb-3 text-[12px] leading-snug text-ink-soft">
+          Si la entrada incluye cena, ponla aquí: sale de la bolsa antes de repartir
+          premios. Déjala en 0 y la pones después, cuando llegue la cuenta.
+        </p>
 
         {/* Hasta cuándo se compra. Es la regla que se discute a media noche, cuando al
             que se quedó sin fichas le urge una más; puesta por escrito antes de empezar
@@ -930,6 +961,19 @@ export default function CrearTorneo({
       </p>
 
       <ShareBlock datos={imagen} texto={texto} alt="Resumen del torneo" />
+
+      {/* Las reglas aparte de las ciegas: son dos cosas que se preguntan distinto
+          —"¿a qué hora sube?" y "¿hasta cuándo recompro?"— y una sola imagen con todo
+          no se lee en el chat. */}
+      <p className="field-label mt-4 mb-1.5">Y las reglas, en su propia imagen</p>
+      <ShareBlock
+        datos={tablaDeReglas(torneoArmado, {
+          titulo: nombre.trim() || fechaLarga(fecha),
+          liga: nombreLiga,
+        })}
+        texto={textoReglas}
+        alt="Reglas del torneo"
+      />
 
       {/* El link va aparte del resumen: el resumen se lee, el link se aprieta y te
           apunta. */}

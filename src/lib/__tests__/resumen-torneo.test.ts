@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { resumenDeTorneo } from '../resumenTorneo'
+import { resumenDeTorneo, tablaDeReglas } from '../resumenTorneo'
 import type { ConfigTorneo } from '../api'
 
 const BASE: ConfigTorneo = {
@@ -61,5 +61,39 @@ describe('de qué consta el torneo', () => {
   it('la bolsa mínima es lo que juntan los que ya están, sin recompras', () => {
     expect(resumenDeTorneo(BASE, 8).bolsaMinima).toBe(4000)
     expect(resumenDeTorneo(BASE).bolsaMinima).toBe(0)
+  })
+})
+
+describe('las reglas como imagen', () => {
+  it('lleva cada compra con sus fichas y hasta cuándo', () => {
+    const t = tablaDeReglas(BASE, { titulo: 'El del reloj', liga: 'Los Domingos' })
+    expect(t.columnas).toEqual(['Qué', 'Cuánto', 'Detalle'])
+    expect(t.filas.slice(0, 3)).toEqual([
+      ['Entrada', '$500', '10,000 fichas'],
+      ['Recompra', '$400', '8,000 fichas · hasta que acabe el nivel 6'],
+      ['Add-on', '$300', '6,000 fichas · hasta que acabe el nivel 6'],
+    ])
+  })
+
+  it('la cena sale en la tabla y dice que se va de la bolsa', () => {
+    const t = tablaDeReglas(
+      { ...BASE, cenaPorPersona: 150 },
+      { titulo: 'El del reloj', liga: 'Los Domingos' },
+    )
+    expect(t.filas).toContainEqual(['Cena', '$150', 'por persona, sale de la bolsa'])
+  })
+
+  it('sin cena no se inventa el renglón', () => {
+    const t = tablaDeReglas(BASE, { titulo: 'x', liga: 'y' })
+    expect(t.filas.some((f) => f[0] === 'Cena')).toBe(false)
+  })
+
+  it('cierra con los premios, uno por lugar que cobra', () => {
+    const t = tablaDeReglas(BASE, { titulo: 'x', liga: 'y' })
+    expect(t.filas.slice(-3)).toEqual([
+      ['1º lugar', '50%', 'de la bolsa a repartir'],
+      ['2º lugar', '30%', 'de la bolsa a repartir'],
+      ['3º lugar', '20%', 'de la bolsa a repartir'],
+    ])
   })
 })

@@ -79,6 +79,31 @@ describe('el podio de un torneo', () => {
     expect(podio[2].jugador.usuario_id).toBe('cris')
     expect(podio[2].saco).toBe(0)
   })
+
+  it('la cena sale de la bolsa antes de repartir premios', () => {
+    /* Tres entradas de $500 son $1,500; con $200 de cena por cabeza quedan $900 para
+       premios. Sin descontarla, la tabla de la liga daría a cada quien más de lo que
+       de verdad se llevó a casa. */
+    const conCena = {
+      tipo: 'torneo',
+      torneo: JSON.stringify({
+        buyIn: 500,
+        rebuyPrice: 400,
+        addOnPrice: 300,
+        payouts: [{ pct: 70 }, { pct: 30 }],
+        cenaPorPersona: 200,
+      }),
+    }
+    const podio = podioDe(
+      conCena,
+      [jugador('ana', { lugar: 2 }), jugador('beto', { lugar: 1 }), jugador('cris')],
+      COLORES,
+    )
+    const saco = (id: string) => podio.find((x) => x.jugador.usuario_id === id)!.saco
+    expect(saco('beto')).toBeCloseTo(630, 6)
+    expect(saco('ana')).toBeCloseTo(270, 6)
+    expect(saco('beto') + saco('ana')).toBeCloseTo(900, 6)
+  })
 })
 
 describe('el derecho a presumir', () => {

@@ -1,5 +1,6 @@
 import { AlertTriangle } from 'lucide-react'
 import Medalla from '../../components/Medalla'
+import MoneyInput from '../../components/MoneyInput'
 import SelectorJugador from '../../components/SelectorJugador'
 import ShareBlock from '../../components/ShareBlock'
 import Stepper from '../../components/Stepper'
@@ -8,7 +9,8 @@ import type { DatosTorneo } from '../../lib/shareImage'
 import type { DatosFichas } from '../../lib/imagenTablas'
 import type { ConfigTorneo, Participacion } from '../../lib/api'
 import { coloresDelTorneo } from '../../lib/torneo'
-import { resumenDeTorneo } from '../../lib/resumenTorneo'
+import { desgloseDeBolsa, premioDelLugar } from '../../lib/bolsaTorneo'
+import { resumenDeTorneo, tablaDeReglas } from '../../lib/resumenTorneo'
 import type { Chips } from '../../store/types'
 import Estructura from './Estructura'
 import PasosTorneo from '../liga/PasosTorneo'
@@ -54,8 +56,19 @@ export const TORNEO_POR_DEFECTO: ConfigTorneo = {
 export const pagadoPor = (p: Participacion, t: ConfigTorneo) =>
   num(t.buyIn) + num(p.rebuys) * num(t.rebuyPrice) + num(p.addons) * num(t.addOnPrice)
 
+/** Todo el dinero que puso la mesa, cena incluida. */
 export const bolsaDe = (ps: Participacion[], t: ConfigTorneo) =>
   ps.reduce((s, p) => s + pagadoPor(p, t), 0)
+
+/* El desglose de la noche, que es lo único que cuadra al final: la cena sale de lo
+   recaudado y los premios se calculan sobre lo que queda. */
+const desgloseDe = (ps: Participacion[], t: ConfigTorneo) =>
+  desgloseDeBolsa(
+    ps.length,
+    ps.reduce((a, p) => a + num(p.rebuys), 0),
+    ps.reduce((a, p) => a + num(p.addons), 0),
+    t,
+  )
 
 const sumaPct = (t: ConfigTorneo) => t.payouts.reduce((s, x) => s + num(x.pct), 0)
 
@@ -82,10 +95,8 @@ function minutosDeRetraso(fecha: string, planeada: string | undefined, real: str
 const fichaMasChicaDe = (t: ConfigTorneo, colores: { key: string; value: number }[]) =>
   Math.min(...(t.valores ? Object.values(t.valores) : colores.map((c) => num(c.value) || 1)), Infinity) || 1
 
-const premioDe = (i: number, ps: Participacion[], t: ConfigTorneo) => {
-  const po = t.payouts[i]
-  return po ? (bolsaDe(ps, t) * num(po.pct)) / 100 : 0
-}
+const premioDe = (i: number, ps: Participacion[], t: ConfigTorneo) =>
+  premioDelLugar(i, desgloseDe(ps, t).premios, t)
 
 interface Props extends PropsPestana {
   pestana: PestanaTorneo
@@ -108,16 +119,26 @@ export default function PartidaTorneo({
   recargar,
 }: Props) {
   const ps = datos.participaciones
-  const bolsa = bolsaDe(ps, torneo)
+  const desglose = desgloseDe(ps, torneo)
   const suma = sumaPct(torneo)
   const cuadra = Math.abs(suma - 100) < EPS
 
+  /*
+   * El número grande es siempre lo que se va a repartir, no lo recaudado. Si parte del
+   * dinero ya se fue en la cena, enseñar el total de arriba es lo que hace que al final
+   * nadie cuadre.
+   */
   const Banner = ({ titulo }: { titulo: string }) => (
     <div className="mb-3.5 rounded-xl bg-gradient-to-br from-[#2a1016] to-[#100e12] px-4 py-3.5 text-center ring-1 ring-marca/25">
       <div className="text-[10px] tracking-[1px] text-tiza-suave uppercase">{titulo}</div>
       <div className="mt-0.5 font-display text-[34px] font-bold text-marca-alta">
-        {money(bolsa)}
+        {money(desglose.premios)}
       </div>
+      {desglose.cena > 0 && (
+        <div className="mt-0.5 text-[11.5px] text-tiza-suave">
+          de {money(desglose.recaudado)} que puso la mesa · {money(desglose.cena)} son de cena
+        </div>
+      )}
     </div>
   )
 
@@ -153,6 +174,25 @@ export default function PartidaTorneo({
           guardada.niveles,
           colores.map((c) => torneo.valores?.[c.key] ?? num(c.value)),
         ),
+    }
+
+    /* Las mismas reglas en texto, para quien prefiere pegarlas que mandar la imagen. */
+    const textoReglas = () => {
+      const r = resumenDeTorneo(torneo)
+      const lineas = [
+        `🏆 ${datos.liga.nombre} — ${datos.partida.nombre || datos.partida.fecha}`,
+        '',
+      ]
+      for (const c of r.compras)
+        lineas.push(
+          `${c.que}: ${money(c.dinero)} → ${enFichas(c.fichas)} fichas${c.hasta ? ` (${c.hasta})` : ''}`,
+        )
+      if (r.cenaPorPersona > 0)
+        lineas.push(`Cena: ${money(r.cenaPorPersona)} por persona, sale de la bolsa`)
+      lineas.push('', 'Se reparte:')
+      for (const pr of r.premios) lineas.push(`  ${pr.lugar}º · ${pr.pct}%`)
+      if (torneo.horaInicio) lineas.push('', `Empieza ${torneo.horaInicio}`)
+      return lineas.join('\n')
     }
 
     const textoFichas = () => {
@@ -211,6 +251,25 @@ export default function PartidaTorneo({
             datos={fichasDeLaNoche}
             texto={textoFichas}
             alt="Valor de cada ficha en el torneo"
+          />
+        </section>
+
+        {/* Las reglas como imagen: el link sirve para apuntarse, pero a veces sólo hace
+            falta que quede escrito en el chat de qué va la noche. */}
+        <section className="panel">
+          <p className="panel-title">
+            <span>Las reglas del torneo</span>
+          </p>
+          <p className="mt-0 mb-2.5 text-[12.5px] leading-snug text-ink-soft">
+            Lo mismo que ve quien abre el link, en una imagen que se manda sola.
+          </p>
+          <ShareBlock
+            datos={tablaDeReglas(torneo, {
+              titulo: datos.partida.nombre || datos.partida.fecha,
+              liga: datos.liga.nombre,
+            })}
+            texto={textoReglas}
+            alt="Reglas del torneo"
           />
         </section>
 
@@ -406,13 +465,14 @@ export default function PartidaTorneo({
     tipo: 'torneo',
     titulo: 'OnlyCards',
     subtitulo: datos.partida.nombre || datos.partida.fecha,
-    bolsa,
+    bolsa: desglose.premios,
     jugadores: ps.length,
     recompras: totalRecompras,
     addons: totalAddons,
     dineroEntradas: ps.length * num(torneo.buyIn),
     dineroRecompras: totalRecompras * num(torneo.rebuyPrice),
     dineroAddons: totalAddons * num(torneo.addOnPrice),
+    cena: desglose.cena,
     lugares: torneo.payouts.map((po, i) => ({
       lugar: i + 1,
       pct: num(po.pct),
@@ -425,9 +485,13 @@ export default function PartidaTorneo({
     const lineas = [
       `🏆 ${datos.liga.nombre} · ${datos.partida.nombre || datos.partida.fecha}`,
       '',
-      `Bolsa: ${money(bolsa)}`,
-      '',
+      `Puso la mesa: ${money(desglose.recaudado)}`,
     ]
+    if (desglose.cena > 0)
+      lineas.push(
+        `Cena: ${ps.length} × ${money(num(torneo.cenaPorPersona))} = −${money(desglose.cena)}`,
+      )
+    lineas.push(`Bolsa a repartir: ${money(desglose.premios)}`, '')
     torneo.payouts.forEach((po, i) => {
       const g = ps.find((p) => p.lugar === i + 1)
       lineas.push(
@@ -442,28 +506,73 @@ export default function PartidaTorneo({
       <Banner titulo="Bolsa a repartir" />
 
       <section className="panel">
-        <div className="grid grid-cols-2 gap-2.5">
-          <div className="stat">
-            <div className="stat-k">Jugadores</div>
-            <div className="stat-v">{ps.length}</div>
+        <p className="panel-title">
+          <span>De dónde sale la bolsa</span>
+        </p>
+
+        {/* Renglón por renglón y con la cuenta escrita —"8 × $500"— para que cualquiera
+            la pueda rehacer en la mesa sin preguntar de dónde salió cada número. */}
+        <table className="w-full border-collapse text-[13.5px]">
+          <tbody>
+            {desglose.entradas.map((r) => (
+              <tr key={r.que} className="border-b border-dashed border-paper-line">
+                <td className="py-2 font-semibold text-ink">{r.que}</td>
+                <td className="py-2 text-right whitespace-nowrap text-ink-soft">
+                  {r.cuantos} × {money(r.precio)}
+                </td>
+                <td className="w-[86px] py-2 text-right font-display font-bold text-ink tabular-nums">
+                  {money(r.total)}
+                </td>
+              </tr>
+            ))}
+
+            <tr className="border-b border-paper-line">
+              <td className="py-2 font-semibold text-ink" colSpan={2}>
+                Puso la mesa
+              </td>
+              <td className="py-2 text-right font-display font-bold text-ink tabular-nums">
+                {money(desglose.recaudado)}
+              </td>
+            </tr>
+
+            {desglose.salidas.map((r) => (
+              <tr key={r.que} className="border-b border-dashed border-paper-line">
+                <td className="py-2 font-semibold text-ink">{r.que}</td>
+                <td className="py-2 text-right whitespace-nowrap text-ink-soft">
+                  {r.cuantos} × {money(r.precio)}
+                </td>
+                <td className="py-2 text-right font-display font-bold text-loss tabular-nums">
+                  −{money(-r.total)}
+                </td>
+              </tr>
+            ))}
+
+            <tr>
+              <td className="pt-2.5 font-display text-[15px] font-bold text-ink" colSpan={2}>
+                Se reparte
+              </td>
+              <td className="pt-2.5 text-right font-display text-[17px] font-bold text-win tabular-nums">
+                {money(desglose.premios)}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+
+        {/* La cena se teclea aquí y no al armar el torneo porque casi siempre se sabe
+            cuando llega la cuenta, a media noche. */}
+        {puedeEditar && (
+          <div className="mt-3 border-t border-paper-line pt-3">
+            <MoneyInput
+              label="Cena por persona"
+              value={num(torneo.cenaPorPersona)}
+              onChange={(v) => cambiarTorneo({ ...torneo, cenaPorPersona: v })}
+            />
+            <p className="mt-0 mb-0 text-[12px] leading-snug text-ink-soft">
+              Sale de la bolsa antes de repartir premios. Se cobra una vez por persona,
+              no por recompra. En 0 no se descuenta nada.
+            </p>
           </div>
-          <div className="stat">
-            <div className="stat-k">Entradas</div>
-            <div className="stat-v">{money(ps.length * num(torneo.buyIn))}</div>
-          </div>
-          <div className="stat">
-            <div className="stat-k">Recompras</div>
-            <div className="stat-v">
-              {totalRecompras} · {money(totalRecompras * num(torneo.rebuyPrice))}
-            </div>
-          </div>
-          <div className="stat">
-            <div className="stat-k">Add-ons</div>
-            <div className="stat-v">
-              {totalAddons} · {money(totalAddons * num(torneo.addOnPrice))}
-            </div>
-          </div>
-        </div>
+        )}
 
         {!cuadra && (
           <div className="balance balance-off mt-3 mb-0">
