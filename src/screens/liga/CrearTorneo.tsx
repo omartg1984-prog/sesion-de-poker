@@ -1,6 +1,9 @@
-import { ArrowLeft, ArrowRight, Check, Coins, Trophy, Users } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Check, Coins, Share2, Trophy, Users } from 'lucide-react'
 import { useState } from 'react'
 import { AvatarEditable } from '../../components/Avatar'
+import { linkDePartida } from '../../components/Invitacion'
+import { compartirTextoNativo, esNativo } from '../../lib/nativo'
+import { copyText } from '../../lib/portapapeles'
 import Chip from '../../components/Chip'
 import MoneyInput from '../../components/MoneyInput'
 import NumInput from '../../components/NumInput'
@@ -105,6 +108,8 @@ function Opciones({
 interface Props {
   ligaId: string
   nombreLiga: string
+  /** Para armar el link con el que cada quien se apunta solo. */
+  codigoLiga: string
   /** Quién está creando el torneo: es el jefe de la noche salvo que digan otra cosa. */
   yoId: string
   miembros: Miembro[]
@@ -117,6 +122,7 @@ interface Props {
 export default function CrearTorneo({
   ligaId,
   nombreLiga,
+  codigoLiga,
   yoId,
   miembros,
   colores,
@@ -132,6 +138,15 @@ export default function CrearTorneo({
   const [fecha, setFecha] = useState(hoy())
   const [nombre, setNombre] = useState('')
   const [elegidos, setElegidos] = useState<string[]>([])
+  /*
+   * Para cuántos se arma el torneo cuando todavía no hay nadie marcado.
+   *
+   * Se puede crear el torneo vacío y mandar el link, como en cash, pero las fichas no
+   * se pueden repartir entre nadie: de cuántos sean dependen los valores, el stack y
+   * cuánto alcanza la caja. Así que se pregunta, y si luego llegan más o menos, el
+   * plan se vuelve a calcular desde la partida.
+   */
+  const [esperados, setEsperados] = useState(8)
   /* Quién funge de banco esa noche. */
   const [jefe, setJefe] = useState(yoId)
 
@@ -163,7 +178,8 @@ export default function CrearTorneo({
   /* ---- todo lo que se recalcula solo ---- */
 
   const jugadores = elegidos.length
-  const paraCalcular = Math.max(2, jugadores)
+  /* Con gente marcada manda la mesa de verdad; sin nadie, lo que se calcula. */
+  const paraCalcular = Math.max(2, jugadores || esperados)
   const stack = stackManual ?? stackSugerido(buyIn)
 
   const plan = planFichas({
@@ -194,18 +210,26 @@ export default function CrearTorneo({
   })
   const estructura = tablaManual ?? automatica
 
-  const reparto = computeDistribution(
-    elegidos.map((id) => ({
-      id,
-      name: miembros.find((m) => m.id === id)?.nombre ?? '',
-      buyIn: stack,
-      deal: null,
-    })),
-    coloresTorneo,
-  )
+  /* Sin nadie marcado se reparte entre los que se calculan: el plan tiene que enseñar
+     con cuántas fichas arranca cada quien, no un montón de ceros. */
+  const paraRepartir =
+    jugadores > 0
+      ? elegidos.map((id) => ({
+          id,
+          name: miembros.find((m) => m.id === id)?.nombre ?? '',
+          buyIn: stack,
+          deal: null,
+        }))
+      : Array.from({ length: paraCalcular }, (_, i) => ({
+          id: `sitio${i}`,
+          name: `Jugador ${i + 1}`,
+          buyIn: stack,
+          deal: null,
+        }))
+  const reparto = computeDistribution(paraRepartir, coloresTorneo)
 
   const bolsa =
-    jugadores * num(buyIn) +
+    paraCalcular * num(buyIn) +
     recomprasEsperadas * num(rebuyPrice) +
     addOnsEsperados * num(addOnPrice)
 
@@ -265,18 +289,47 @@ export default function CrearTorneo({
     const id = r.partida.id
     /* Los jugadores y la escalera van en la misma tanda: el torneo tiene que quedar
        listo para arrancar, no a medio armar. */
-    await conAviso(() =>
-      api.cargarJugadores(
-        id,
-        elegidos.map((usuarioId) => ({ usuarioId, entrada: buyIn })),
-      ),
-    )
+    /* Un torneo puede nacer vacío: se manda el link y cada quien se apunta. */
+    if (elegidos.length > 0)
+      await conAviso(() =>
+        api.cargarJugadores(
+          id,
+          elegidos.map((usuarioId) => ({ usuarioId, entrada: buyIn })),
+        ),
+      )
     await conAviso(() => api.guardarPartida(id, { estructura }))
     setOcupado(false)
     setCreada(id)
     setPaso(5)
     onCreada()
     avisar('Torneo listo')
+  }
+
+  /*
+   * El link para que cada quien se apunte solo, igual que en cash.
+   *
+   * Es lo que hace que un torneo se pueda armar sin perseguir a nadie: se manda al
+   * grupo y la lista se llena sola hasta la hora de arranque. Al abrirlo sale de qué
+   * consta el torneo y hay que aceptarlo para entrar.
+   */
+  const compartirLink = async () => {
+    if (!creada) return
+    const link = linkDePartida(creada, codigoLiga)
+    const cuando = nombre.trim() || fechaLarga(fecha)
+    const texto = `🏆 Torneo en ${nombreLiga} — ${cuando}\nEmpieza ${horaInicio} · entrada ${money(buyIn)}\nApúntate aquí:\n${link}`
+    try {
+      if (esNativo()) {
+        await compartirTextoNativo(texto, 'Invitación al torneo')
+        return
+      }
+      if (navigator.share) {
+        await navigator.share({ title: cuando, text: texto })
+        return
+      }
+    } catch {
+      /* si cancela o el teléfono no deja, queda el portapapeles */
+    }
+    avisar((await copyText(texto)) ? 'Link copiado' : 'No se pudo copiar')
   }
 
   /* ---- lo que se comparte ---- */
@@ -420,6 +473,28 @@ export default function CrearTorneo({
           {jugadores === 0 ? 'Nadie todavía' : `${jugadores} en la mesa`}
         </div>
 
+        {/* Se puede armar el torneo sin marcar a nadie y mandar el link, igual que en
+            cash. Pero las fichas hay que repartirlas entre alguien: de cuántos sean
+            dependen los valores, el stack y si alcanza la caja. */}
+        {jugadores === 0 && (
+          <div className="mb-4 rounded-xl border border-paper-line bg-paper-soft px-3 py-2.5">
+            <span className="field-label">Para cuántos lo armo</span>
+            <p className="mt-0.5 mb-1.5 text-[12px] leading-snug text-ink-soft">
+              No marques a nadie si prefieres mandar el link y que cada quien se apunte
+              solo. Dime nada más para cuántos calculo las fichas; si al final son otros,
+              el plan se vuelve a hacer desde la partida.
+            </p>
+            <div className="field-box">
+              <NumInput
+                value={esperados}
+                showZero
+                aria-label="Para cuántos lo armo"
+                onChange={setEsperados}
+              />
+            </div>
+          </div>
+        )}
+
         <label className="mb-3 block">
           <span className="field-label">Fecha</span>
           <input
@@ -466,10 +541,15 @@ export default function CrearTorneo({
           />
         </div>
 
-        <Navegar puede={jugadores >= 2} rotulo="Continuar" />
-        {jugadores < 2 && (
+        <Navegar puede={paraCalcular >= 2 && (jugadores === 0 || jugadores >= 2)} rotulo="Continuar" />
+        {jugadores === 1 && (
           <p className="mt-0 mb-2 text-center text-[12px] text-ink-soft">
-            Un torneo necesita al menos dos.
+            Un torneo necesita al menos dos. Déjalo sin nadie si vas a mandar el link.
+          </p>
+        )}
+        {jugadores === 0 && esperados < 2 && (
+          <p className="mt-0 mb-2 text-center text-[12px] text-ink-soft">
+            Dime para cuántos lo armo: dos por lo menos.
           </p>
         )}
       </>
@@ -851,9 +931,22 @@ export default function CrearTorneo({
 
       <ShareBlock datos={imagen} texto={texto} alt="Resumen del torneo" />
 
+      {/* El link va aparte del resumen: el resumen se lee, el link se aprieta y te
+          apunta. */}
+      <button type="button" className="btn btn-share mt-3 mb-2" onClick={() => void compartirLink()}>
+        <Share2 size={17} strokeWidth={2.4} />
+        Mandar el link para que se apunten
+      </button>
+      {jugadores === 0 && (
+        <p className="mt-0 mb-2 text-center text-[12px] leading-snug text-ink-soft">
+          No hay nadie apuntado todavía. Con el link cada quien entra solo hasta las{' '}
+          <b className="text-ink">{horaInicio}</b>.
+        </p>
+      )}
+
       <button
         type="button"
-        className="btn btn-marca mt-3 mb-2"
+        className="btn btn-marca mb-2"
         onClick={() => creada && onIrAlTorneo(creada)}
       >
         <Coins size={17} strokeWidth={2.4} />

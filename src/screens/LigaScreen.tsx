@@ -574,6 +574,7 @@ ${link}`
           <CrearTorneo
             ligaId={ligaId}
             nombreLiga={liga.nombre}
+            codigoLiga={liga.codigo}
             yoId={yo.id}
             miembros={miembros}
             colores={colores}
