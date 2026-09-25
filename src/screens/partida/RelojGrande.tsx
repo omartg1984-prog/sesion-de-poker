@@ -1,4 +1,4 @@
-import { Coffee, Minimize2, Pause, Play, Recycle } from 'lucide-react'
+import { Coffee, Minimize2, Pause, Play } from 'lucide-react'
 import { useEffect } from 'react'
 import {
   arrancarReloj,
@@ -43,7 +43,7 @@ export default function RelojGrande({
   recargar,
   onCerrar,
 }: Props) {
-  const { corridos, restanteSeg, terminado, nivel, siguienteNivel, enDescanso, avance, porSubir, retira } =
+  const { corridos, restanteSeg, terminado, nivel, siguienteNivel, enDescanso, avance, porSubir } =
     usarReloj(estructura, reloj, recargar)
 
   /* Pantalla completa de verdad y pantalla que no se apaga. Las dos son un lujo: si el
@@ -79,9 +79,7 @@ export default function RelojGrande({
   const rotulo = terminado
     ? 'Se acabaron los niveles'
     : enDescanso
-      ? retira
-        ? 'Cambio de fichas'
-        : 'Descanso'
+      ? 'Descanso'
       : `Nivel ${nivel.nivel} de ${estructura.niveles.length}`
 
   return (
@@ -121,28 +119,16 @@ export default function RelojGrande({
         {enDescanso ? (
           <>
             <div
-              className={`mt-[2vmin] flex items-center justify-center gap-[2vmin] font-display font-bold ${
-                retira ? 'text-marca-alta' : 'text-win-alto'
-              }`}
+              className="mt-[2vmin] flex items-center justify-center gap-[2vmin] font-display font-bold text-win-alto"
               style={{ fontSize: 'clamp(1.5rem, 9vmin, 6rem)' }}
             >
-              {retira ? (
-                <>
-                  <Recycle size="1em" strokeWidth={2.4} />
-                  Salen las de {retira.map((v) => v.toLocaleString('es-MX')).join(' y ')}
-                </>
-              ) : (
-                <>
-                  <Coffee size="1em" strokeWidth={2.4} />
-                  Vuelven a las {horaDeVuelta(restanteSeg)}
-                </>
-              )}
+              <Coffee size="1em" strokeWidth={2.4} />
+              Vuelven a las {horaDeVuelta(restanteSeg)}
             </div>
             <div
               className="mt-[1vmin] text-tiza-suave"
               style={{ fontSize: 'clamp(0.9rem, 4vmin, 2.5rem)' }}
             >
-              {retira && `Se cambian por grandes · `}
               Se sigue con {nivel.chica} / {nivel.grande}
             </div>
           </>

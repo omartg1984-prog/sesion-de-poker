@@ -18,7 +18,6 @@ import Reloj from './Reloj'
 import { leerJson } from '../../lib/api'
 import {
   RELOJ_PARADO,
-  retirosDe,
   segundosCorridos,
   type Estructura as Tabla,
   type RelojTorneo,
@@ -161,20 +160,7 @@ export default function PartidaTorneo({
       pie: `Arrancas con ${enFichas(stackDelTorneo)}`,
     }
 
-    /*
-     * Los torneos armados antes de que existieran los retiros tienen la tabla guardada
-     * sin ellos. En vez de obligar a recalcular las ciegas —y perder las que se hayan
-     * corregido a mano— se calculan al vuelo con las denominaciones de la noche.
-     */
-    const estructura: Tabla | null = guardada && {
-      ...guardada,
-      retiros:
-        guardada.retiros ??
-        retirosDe(
-          guardada.niveles,
-          colores.map((c) => torneo.valores?.[c.key] ?? num(c.value)),
-        ),
-    }
+    const estructura: Tabla | null = guardada
 
     /* Las mismas reglas en texto, para quien prefiere pegarlas que mandar la imagen. */
     const textoReglas = () => {
@@ -277,7 +263,6 @@ export default function PartidaTorneo({
           jugadores={ps.length}
           stack={num(torneo.stack) || num(torneo.buyIn)}
           fichaMasChica={fichaMasChicaDe(torneo, colores)}
-          valores={fichasDeLaNoche.fichas.map((f) => f.valor)}
           estructura={estructura}
           puedeEditar={puedeEditar}
           horaInicio={torneo.horaInicio}

@@ -26,10 +26,11 @@ describe('valores de ficha en torneo', () => {
     expect(asignarValores(COLORES, 25).white).toBe(25)
   })
 
-  it('usa la escalera de un juego de fichas de verdad', () => {
-    // Con unidad 25 sale el set que vende cualquier tienda; sin denominaciones raras.
+  it('usa una escalera plana, sin denominaciones raras', () => {
+    /* Números que cualquiera suma de cabeza, y con la más cara a veinte veces la más
+       barata: así caben las cinco en la pila del arranque. */
     const v = asignarValores(COLORES, 25)
-    expect([v.white, v.blue, v.red, v.black, v.green]).toEqual([25, 100, 500, 1000, 5000])
+    expect([v.white, v.blue, v.red, v.black, v.green]).toEqual([25, 50, 100, 250, 500])
   })
 
   it('no toca los valores en dinero de la liga', () => {
@@ -41,7 +42,7 @@ describe('valores de ficha en torneo', () => {
     const v = asignarValores(COLORES, 5)
     const delTorneo = coloresDelTorneo(COLORES, v)
     expect(delTorneo.find((c) => c.key === 'white')!.value).toBe(5)
-    expect(delTorneo.find((c) => c.key === 'green')!.value).toBe(1000)
+    expect(delTorneo.find((c) => c.key === 'green')!.value).toBe(100)
   })
 
   it('sin valores de torneo deja los de la liga como están', () => {
@@ -53,7 +54,7 @@ describe('repartir un stack de torneo', () => {
   it('con valores de torneo alcanza para stacks que en dinero serían imposibles', () => {
     /* Todo el inventario junto vale $8,600, así que ocho stacks de 5,000 no caben ni de
        broma si las fichas valen pesos. Valiendo puntos de torneo sobra inventario. */
-    const valores = asignarValores(COLORES, 5)
+    const valores = asignarValores(COLORES, 25)
     const jugadores = Array.from({ length: 8 }, (_, i) => ({
       id: String(i),
       name: `J${i}`,
@@ -69,16 +70,32 @@ describe('repartir un stack de torneo', () => {
     expect(conTorneo.anyOver).toBe(false)
   })
 
-  it('y se arma con muchas menos fichas físicas', () => {
+  it('y se arma con bastantes menos fichas físicas', () => {
     // Es la otra mitad del problema: en la mesa hay que poder contarlas.
     const valores = asignarValores(COLORES, 5)
     const uno = [{ id: '1', name: 'J', buyIn: 1500, deal: null }]
     const cuantas = (filas: { counts: Record<string, number> }[]) =>
       Object.values(filas[0].counts).reduce((a, b) => a + b, 0)
 
-    expect(cuantas(computeDistribution(uno, coloresDelTorneo(COLORES, valores)).rows)).toBeLessThan(
-      cuantas(computeDistribution(uno, COLORES).rows) / 2,
-    )
+    const conTorneo = cuantas(computeDistribution(uno, coloresDelTorneo(COLORES, valores)).rows)
+    const conDinero = cuantas(computeDistribution(uno, COLORES).rows)
+    expect(conTorneo).toBeLessThan(conDinero * 0.7)
+  })
+
+  it('a cada quien le tocan los cinco colores desde la primera mano', () => {
+    /* Lo que motivó aplanar la escalera: con saltos de casino, la ficha más cara valía
+       casi el stack entero y los dos colores de arriba se quedaban en la caja. */
+    const valores = asignarValores(COLORES, 50)
+    const jugadores = Array.from({ length: 8 }, (_, i) => ({
+      id: String(i),
+      name: `J${i}`,
+      buyIn: 10000,
+      deal: null,
+    }))
+    const d = computeDistribution(jugadores, coloresDelTorneo(COLORES, valores))
+
+    for (const fila of d.rows)
+      for (const c of COLORES) expect(fila.counts[c.key]).toBeGreaterThan(0)
   })
 
   it('cada quien arranca con el stack exacto', () => {

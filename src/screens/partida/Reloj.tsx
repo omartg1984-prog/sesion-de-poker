@@ -5,7 +5,6 @@ import {
   Maximize2,
   Pause,
   Play,
-  Recycle,
   RotateCcw,
 } from 'lucide-react'
 import { useState } from 'react'
@@ -51,7 +50,7 @@ export default function Reloj({ estructura, reloj, puedeEditar, onReloj, recarga
 
   /* Con el grande abierto, éste deja de pedirle el estado al servidor: el de arriba ya
      lo está haciendo y serían dos peticiones para lo mismo. */
-  const { corridos, restanteSeg, terminado, nivel, siguienteNivel, enDescanso, avance, porSubir, retira } =
+  const { corridos, restanteSeg, terminado, nivel, siguienteNivel, enDescanso, avance, porSubir } =
     usarReloj(estructura, reloj, recargar, !grande)
 
   /* El color de fondo va aparte del degradado: `.panel` trae crema y el degradado es una
@@ -64,9 +63,7 @@ export default function Reloj({ estructura, reloj, puedeEditar, onReloj, recarga
             {terminado
               ? 'Se acabaron los niveles'
               : enDescanso
-                ? retira
-                  ? 'Cambio de fichas'
-                  : 'Descanso'
+                ? 'Descanso'
                 : `Nivel ${nivel.nivel} de ${estructura.niveles.length}`}
           </span>
           <button
@@ -90,24 +87,10 @@ export default function Reloj({ estructura, reloj, puedeEditar, onReloj, recarga
             {terminado ? formatear(0) : formatear(restanteSeg)}
           </div>
           {enDescanso ? (
-            retira ? (
-              /* Cambiar fichas no es descansar: es un trámite con la mesa parada, y
-                 decirlo distinto evita que alguien se vaya a fumar. */
-              <div className="mt-1 flex flex-col items-center gap-0.5">
-                <span className="flex items-center gap-1.5 font-display text-2xl font-bold text-marca-alta">
-                  <Recycle size={20} strokeWidth={2.4} />
-                  Salen las de {retira.map((v) => v.toLocaleString('es-MX')).join(' y ')}
-                </span>
-                <span className="text-[12px] text-tiza-suave">
-                  Se cambian por grandes · al volver {nivel.chica} / {nivel.grande}
-                </span>
-              </div>
-            ) : (
-              <div className="mt-1 flex items-center justify-center gap-1.5 font-display text-2xl font-bold text-win-alto">
-                <Coffee size={20} strokeWidth={2.4} />
-                Al volver {nivel.chica} / {nivel.grande}
-              </div>
-            )
+            <div className="mt-1 flex items-center justify-center gap-1.5 font-display text-2xl font-bold text-win-alto">
+              <Coffee size={20} strokeWidth={2.4} />
+              Al volver {nivel.chica} / {nivel.grande}
+            </div>
           ) : (
             <>
               <div className="mt-1 font-display text-2xl font-bold text-win-alto">

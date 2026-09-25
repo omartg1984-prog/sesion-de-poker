@@ -206,8 +206,6 @@ export default function CrearTorneo({
     jugadores: paraCalcular,
     stackInicial: stack,
     fichaMasChica,
-    /* Con las denominaciones, el plan sabe en qué corte sacar las chicas de la mesa. */
-    valores: Object.values(valores),
     minutosDeseados: minutos,
     minutosPorNivel: porNivel,
     descanso: cadaNiveles > 0 ? { cadaNiveles, minutos: minDescanso } : null,
@@ -360,20 +358,9 @@ export default function CrearTorneo({
 
   /* ---- lo que se comparte ---- */
 
-  /*
-   * La parada para cambiar fichas no es un descanso: la mesa se queda sentada y se
-   * canjean las chicas por grandes. Decírselo "Descanso" en el resumen que se manda al
-   * grupo la volvía invisible —que es justo donde se mira antes de llegar—.
-   */
   const filaDe = (t: Tramo) =>
     t.tipo === 'descanso'
-      ? t.retira
-        ? [
-            'Cambio de fichas',
-            `Salen las de ${t.retira.map(miles).join(' y ')} · ${t.minutos} min`,
-            horaMas(horaInicio, t.desdeMinuto),
-          ]
-        : ['Descanso', `${t.minutos} min`, horaMas(horaInicio, t.desdeMinuto)]
+      ? ['Descanso', `${t.minutos} min`, horaMas(horaInicio, t.desdeMinuto)]
       : [
           `Nivel ${t.nivel.nivel}`,
           `${miles(t.nivel.chica)} / ${miles(t.nivel.grande)}`,
@@ -890,9 +877,8 @@ export default function CrearTorneo({
                   </span>
                 </span>
                 <span className="shrink-0 text-right">
-                  {/* Las de más valor no siempre entran al arranque: son para cambiar
-                      las chicas cuando las ciegas suban. Decirlo evita que parezca
-                      que la cuenta salió mal. */}
+                  {/* Con la caja justa, algún color puede no entrar al arranque.
+                      Decirlo evita que parezca que la cuenta salió mal. */}
                   {cadaQuien > 0 ? (
                     <>
                       <b className="font-display text-[15px] text-ink">{cadaQuien} c/u</b>
@@ -903,7 +889,7 @@ export default function CrearTorneo({
                       </span>
                     </>
                   ) : (
-                    <span className="text-[12px] text-ink-soft">se guardan para cambiar</span>
+                    <span className="text-[12px] text-ink-soft">no alcanzó para el arranque</span>
                   )}
                 </span>
               </li>

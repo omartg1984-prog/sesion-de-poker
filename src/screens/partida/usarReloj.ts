@@ -37,7 +37,6 @@ export interface EstadoReloj {
   /** Último minuto del nivel: el aviso de que ya van a subir. */
   porSubir: boolean
   /** Si el descanso en curso es para cambiar fichas, los valores que salen. */
-  retira: number[] | null
 }
 
 export function usarReloj(
@@ -79,7 +78,6 @@ export function usarReloj(
     enDescanso,
     avance: terminado ? 1 : 1 - restanteSeg / (tramo.minutos * 60),
     porSubir: !terminado && !enDescanso && restanteSeg <= 60,
-    retira: tramo.tipo === 'descanso' ? (tramo.retira ?? null) : null,
   }
 }
 
