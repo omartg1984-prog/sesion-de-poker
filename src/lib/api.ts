@@ -125,14 +125,18 @@ export interface ConfigTorneo {
   recomprasEsperadas?: number
   addOnsEsperados?: number
   /*
-   * Hasta qué nivel se puede comprar. 0 o sin poner = toda la noche.
+   * Hasta qué descanso se puede comprar. 0 o sin poner = toda la noche.
    *
-   * Es la regla que más se discute en la mesa a las once y media, cuando alguien que
-   * acaba de perder su stack quiere recomprar. Puesta por escrito antes de empezar —y
-   * aceptada por todos al apuntarse— deja de discutirse.
+   * Va contra los descansos y no contra los niveles porque así se dice en la mesa —"se
+   * recompra hasta el primer descanso"— y porque el corte cae solo en un momento en que
+   * la mesa ya está parada: nadie tiene que interrumpir una mano para comprar.
+   *
+   * Es la regla que más se discute a las once y media, cuando alguien que acaba de
+   * perder su stack quiere una más. Puesta por escrito antes de empezar —y aceptada por
+   * todos al apuntarse— deja de discutirse.
    */
-  recomprasHasta?: number
-  addOnsHasta?: number
+  recomprasHastaDescanso?: number
+  addOnsHastaDescanso?: number
   /*
    * Lo que se le cobra a cada quien de cena, y que sale de la bolsa antes de repartir
    * premios. "Entrada $500, cena incluida" es lo normal en la mesa, y si no se aparta,

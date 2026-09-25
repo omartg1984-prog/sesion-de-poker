@@ -33,7 +33,7 @@ export const REGLAS_POR_DEFECTO: SeccionReglas[] = [
     titulo: 'Para los torneos',
     reglas: [
       'El registro tardío cierra al terminar el nivel 4. Después de eso ya no entra nadie.',
-      'Se puede recomprar hasta el nivel 6, y sólo si andas por debajo del stack con el que se arrancó.',
+      'Se puede recomprar hasta el primer descanso, y sólo si andas por debajo del stack con el que se arrancó.',
       'El add-on es uno solo por persona y nada más en el primer descanso.',
       'Al que llega tarde se le da su stack completo, pero las ciegas que se le pasaron corren igual.',
       'Si se acuerda cortar antes de terminar, se reparte según las fichas que cada quien tenga en ese momento.',

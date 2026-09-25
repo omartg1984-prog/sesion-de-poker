@@ -10,8 +10,8 @@ const BASE: ConfigTorneo = {
   stack: 10000,
   rebuyChips: 8000,
   addOnChips: 6000,
-  recomprasHasta: 6,
-  addOnsHasta: 6,
+  recomprasHastaDescanso: 1,
+  addOnsHastaDescanso: 1,
 }
 
 describe('de qué consta el torneo', () => {
@@ -19,13 +19,17 @@ describe('de qué consta el torneo', () => {
     const { compras } = resumenDeTorneo(BASE)
     expect(compras).toEqual([
       { que: 'Entrada', dinero: 500, fichas: 10000, hasta: '' },
-      { que: 'Recompra', dinero: 400, fichas: 8000, hasta: 'hasta que acabe el nivel 6' },
-      { que: 'Add-on', dinero: 300, fichas: 6000, hasta: 'hasta que acabe el nivel 6' },
+      { que: 'Recompra', dinero: 400, fichas: 8000, hasta: 'hasta el primer descanso' },
+      { que: 'Add-on', dinero: 300, fichas: 6000, hasta: 'hasta el primer descanso' },
     ])
   })
 
-  it('sin nivel de corte, se compra toda la noche', () => {
-    const { compras } = resumenDeTorneo({ ...BASE, recomprasHasta: 0, addOnsHasta: undefined })
+  it('sin descanso de corte, se compra toda la noche', () => {
+    const { compras } = resumenDeTorneo({
+      ...BASE,
+      recomprasHastaDescanso: 0,
+      addOnsHastaDescanso: undefined,
+    })
     expect(compras[1].hasta).toBe('toda la noche')
     expect(compras[2].hasta).toBe('toda la noche')
   })
@@ -70,8 +74,8 @@ describe('las reglas como imagen', () => {
     expect(t.columnas).toEqual(['Qué', 'Cuánto', 'Detalle'])
     expect(t.filas.slice(0, 3)).toEqual([
       ['Entrada', '$500', '10,000 fichas'],
-      ['Recompra', '$400', '8,000 fichas · hasta que acabe el nivel 6'],
-      ['Add-on', '$300', '6,000 fichas · hasta que acabe el nivel 6'],
+      ['Recompra', '$400', '8,000 fichas · hasta el primer descanso'],
+      ['Add-on', '$300', '6,000 fichas · hasta el primer descanso'],
     ])
   })
 

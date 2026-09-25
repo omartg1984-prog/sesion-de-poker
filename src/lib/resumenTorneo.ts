@@ -39,9 +39,16 @@ export interface ResumenTorneo {
 /** Las fichas de una compra. Los torneos viejos no las traen y ahí manda el stack. */
 const fichasDe = (fichas: unknown, stack: number) => num(fichas) || stack
 
-const hastaCuando = (nivel: unknown) => {
-  const n = Math.max(0, Math.floor(num(nivel)))
-  return n > 0 ? `hasta que acabe el nivel ${n}` : 'toda la noche'
+/** 'el primer descanso', 'el segundo descanso'… Como se dice, no como se numera. */
+export function nombreDelDescanso(n: number): string {
+  const ordinales = ['primer', 'segundo', 'tercer', 'cuarto', 'quinto']
+  const o = ordinales[n - 1]
+  return o ? `el ${o} descanso` : `el descanso ${n}`
+}
+
+const hastaCuando = (descanso: unknown) => {
+  const n = Math.max(0, Math.floor(num(descanso)))
+  return n > 0 ? `hasta ${nombreDelDescanso(n)}` : 'toda la noche'
 }
 
 export function resumenDeTorneo(t: ConfigTorneo, apuntados = 0): ResumenTorneo {
@@ -55,14 +62,14 @@ export function resumenDeTorneo(t: ConfigTorneo, apuntados = 0): ResumenTorneo {
       que: 'Recompra',
       dinero: num(t.rebuyPrice),
       fichas: fichasDe(t.rebuyChips, stack),
-      hasta: hastaCuando(t.recomprasHasta),
+      hasta: hastaCuando(t.recomprasHastaDescanso),
     })
   if (num(t.addOnPrice) > 0)
     compras.push({
       que: 'Add-on',
       dinero: num(t.addOnPrice),
       fichas: fichasDe(t.addOnChips, stack),
-      hasta: hastaCuando(t.addOnsHasta),
+      hasta: hastaCuando(t.addOnsHastaDescanso),
     })
 
   /* Sólo los lugares que de verdad cobran: un 0% en la lista es ruido. */

@@ -22,6 +22,43 @@ import type { ChipColor } from '../../store/types'
 
 const miles = (n: number) => Math.round(n).toLocaleString('es-MX')
 
+/**
+ * Hasta qué descanso se puede comprar. 0 = toda la noche.
+ *
+ * Son botones y no una casilla de número porque un torneo tiene dos o tres descansos,
+ * no veinte: escoger de una lista corta es más rápido y no deja teclear un disparate.
+ */
+export function HastaDescanso({
+  valor,
+  onElegir,
+}: {
+  valor: number
+  onElegir: (v: number) => void
+}) {
+  const opciones = [
+    { v: 0, texto: 'Toda la noche' },
+    { v: 1, texto: '1er descanso' },
+    { v: 2, texto: '2º descanso' },
+    { v: 3, texto: '3er descanso' },
+  ]
+  return (
+    <div className="flex gap-1.5">
+      {opciones.map((o) => (
+        <button
+          key={o.v}
+          type="button"
+          onClick={() => onElegir(o.v)}
+          className={`flex-1 cursor-pointer rounded-lg border-none px-1 py-2 text-[12px] font-bold whitespace-nowrap transition-colors ${
+            valor === o.v ? 'bg-marca text-white' : 'bg-[#e6e1d8] text-ink-soft'
+          }`}
+        >
+          {o.texto}
+        </button>
+      ))}
+    </div>
+  )
+}
+
 export default function PasosTorneo({
   torneo,
   colores,
@@ -110,43 +147,35 @@ export default function PasosTorneo({
         descuenta nada.
       </p>
 
-      {/* Hasta cuándo se compra. Es la regla que se discute a media noche, cuando al
-          que se quedó sin fichas le urge una recompra más: escrita antes de empezar, y
-          aceptada por cada quien al apuntarse, ya no se discute. */}
+      {/* Hasta cuándo se compra. Va contra los descansos y no contra los niveles: así
+          se dice en la mesa y así el corte cae cuando ya está parada, sin que nadie
+          tenga que interrumpir una mano para comprar. */}
       {(num(torneo.rebuyPrice) > 0 || num(torneo.addOnPrice) > 0) && (
-        <div className="mb-3 grid grid-cols-2 gap-2">
+        <>
+          <p className="field-label mt-1 mb-1">Hasta cuándo se puede comprar</p>
           {num(torneo.rebuyPrice) > 0 && (
-            <div>
-              <span className="field-label">Recompras hasta el nivel</span>
-              <div className="field-box mt-1">
-                <NumInput
-                  value={num(torneo.recomprasHasta)}
-                  showZero
-                  aria-label="Recompras hasta el nivel"
-                  onChange={(v) => aplicar({ recomprasHasta: v })}
-                />
-              </div>
+            <div className="mb-2">
+              <span className="mb-1 block text-[12px] text-ink-soft">Recompras</span>
+              <HastaDescanso
+                valor={num(torneo.recomprasHastaDescanso)}
+                onElegir={(v) => aplicar({ recomprasHastaDescanso: v })}
+              />
             </div>
           )}
           {num(torneo.addOnPrice) > 0 && (
-            <div>
-              <span className="field-label">Add-on hasta el nivel</span>
-              <div className="field-box mt-1">
-                <NumInput
-                  value={num(torneo.addOnsHasta)}
-                  showZero
-                  aria-label="Add-on hasta el nivel"
-                  onChange={(v) => aplicar({ addOnsHasta: v })}
-                />
-              </div>
+            <div className="mb-2">
+              <span className="mb-1 block text-[12px] text-ink-soft">Add-on</span>
+              <HastaDescanso
+                valor={num(torneo.addOnsHastaDescanso)}
+                onElegir={(v) => aplicar({ addOnsHastaDescanso: v })}
+              />
             </div>
           )}
-        </div>
-      )}
-      {(num(torneo.rebuyPrice) > 0 || num(torneo.addOnPrice) > 0) && (
-        <p className="mt-0 mb-3 text-[12px] leading-snug text-ink-soft">
-          En 0 se puede comprar toda la noche.
-        </p>
+          <p className="mt-0 mb-3 text-[12px] leading-snug text-ink-soft">
+            Esta regla sale en la invitación, y quien se apunta tiene que marcar que la
+            leyó.
+          </p>
+        </>
       )}
 
       <div className="mt-1 mb-4 rounded-xl border border-paper-line bg-paper-soft px-3 py-2.5">

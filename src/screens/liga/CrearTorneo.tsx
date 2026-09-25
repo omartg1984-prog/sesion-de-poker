@@ -26,9 +26,10 @@ import {
   type Tramo,
   type ValoresTorneo,
 } from '../../lib/torneo'
-import { resumenDeTorneo, tablaDeReglas } from '../../lib/resumenTorneo'
+import { nombreDelDescanso, resumenDeTorneo, tablaDeReglas } from '../../lib/resumenTorneo'
 import TablaCiegas from '../partida/TablaCiegas'
 import Premios, { premiosCuadran, type Premio } from './Premios'
+import { HastaDescanso } from './PasosTorneo'
 import { conAviso, useApp } from '../../store/app'
 import type { ChipColor } from '../../store/types'
 
@@ -162,9 +163,9 @@ export default function CrearTorneo({
   /* Lo que sale de la bolsa para la cena. Se puede dejar en 0 y ponerlo a media noche,
      cuando llega la cuenta, desde la pestaña de resultado. */
   const [cenaPorPersona, setCenaPorPersona] = useState(0)
-  /* Hasta qué nivel se puede comprar. 0 = toda la noche. */
-  const [recomprasHasta, setRecomprasHasta] = useState(0)
-  const [addOnsHasta, setAddOnsHasta] = useState(0)
+  /* Hasta qué descanso se puede comprar. 0 = toda la noche. */
+  const [recomprasHastaDescanso, setRecomprasHastaDescanso] = useState(0)
+  const [addOnsHastaDescanso, setAddOnsHastaDescanso] = useState(0)
 
   const [horaInicio, setHoraInicio] = useState('20:00')
   const [horaFin, setHoraFin] = useState('01:00')
@@ -265,8 +266,8 @@ export default function CrearTorneo({
     valores,
     recomprasEsperadas,
     addOnsEsperados,
-    recomprasHasta,
-    addOnsHasta,
+    recomprasHastaDescanso,
+    addOnsHastaDescanso,
     cenaPorPersona,
     horaInicio,
     horaFin,
@@ -384,15 +385,15 @@ export default function CrearTorneo({
       `Arranca ${horaInicio}, se acaba cerca de las ${horaMas(horaInicio, estructura.duracionMinutos)}`,
       `Entrada ${money(buyIn)} → ${miles(stack)} fichas`,
     ]
-    const hasta = (nivel: number) =>
-      nivel > 0 ? ` (hasta que acabe el nivel ${nivel})` : ''
+    const hasta = (descanso: number) =>
+      descanso > 0 ? ` (hasta ${nombreDelDescanso(descanso)})` : ''
     if (num(rebuyPrice) > 0)
       lineas.push(
-        `Recompra ${money(rebuyPrice)} → ${miles(fichasRecompra)} fichas${hasta(recomprasHasta)}`,
+        `Recompra ${money(rebuyPrice)} → ${miles(fichasRecompra)} fichas${hasta(recomprasHastaDescanso)}`,
       )
     if (num(addOnPrice) > 0)
       lineas.push(
-        `Add-on ${money(addOnPrice)} → ${miles(fichasAddOn)} fichas${hasta(addOnsHasta)}`,
+        `Add-on ${money(addOnPrice)} → ${miles(fichasAddOn)} fichas${hasta(addOnsHastaDescanso)}`,
       )
     lineas.push('', 'Premios:')
     payouts.forEach((po, i) => lineas.push(`  ${i + 1}º · ${num(po.pct)}%`))
@@ -586,44 +587,31 @@ export default function CrearTorneo({
           premios. Déjala en 0 y la pones después, cuando llegue la cuenta.
         </p>
 
-        {/* Hasta cuándo se compra. Es la regla que se discute a media noche, cuando al
-            que se quedó sin fichas le urge una más; puesta por escrito antes de empezar
-            —y aceptada por cada quien al apuntarse— ya no se discute. */}
+        {/* Hasta cuándo se compra. Va contra los descansos y no contra los niveles: así
+            se dice en la mesa, y el corte cae cuando ya está parada, sin que nadie tenga
+            que interrumpir una mano para comprar. */}
         {(num(rebuyPrice) > 0 || num(addOnPrice) > 0) && (
           <>
             <p className="field-label mt-1 mb-1">Hasta cuándo se puede comprar</p>
             <p className="mt-0 mb-2 text-[12px] leading-snug text-ink-soft">
-              En 0 se compra toda la noche. Esta regla sale en la invitación, y quien se
-              apunta tiene que marcar que la leyó.
+              Esta regla sale en la invitación, y quien se apunta tiene que marcar que la
+              leyó. Los descansos se definen en el paso que sigue.
             </p>
-            <div className="mb-4 grid grid-cols-2 gap-2">
-              {num(rebuyPrice) > 0 && (
-                <div>
-                  <span className="field-label">Recompras hasta el nivel</span>
-                  <div className="field-box mt-1">
-                    <NumInput
-                      value={recomprasHasta}
-                      showZero
-                      aria-label="Recompras hasta el nivel"
-                      onChange={setRecomprasHasta}
-                    />
-                  </div>
-                </div>
-              )}
-              {num(addOnPrice) > 0 && (
-                <div>
-                  <span className="field-label">Add-on hasta el nivel</span>
-                  <div className="field-box mt-1">
-                    <NumInput
-                      value={addOnsHasta}
-                      showZero
-                      aria-label="Add-on hasta el nivel"
-                      onChange={setAddOnsHasta}
-                    />
-                  </div>
-                </div>
-              )}
-            </div>
+            {num(rebuyPrice) > 0 && (
+              <div className="mb-2">
+                <span className="mb-1 block text-[12px] text-ink-soft">Recompras</span>
+                <HastaDescanso
+                  valor={recomprasHastaDescanso}
+                  onElegir={setRecomprasHastaDescanso}
+                />
+              </div>
+            )}
+            {num(addOnPrice) > 0 && (
+              <div className="mb-4">
+                <span className="mb-1 block text-[12px] text-ink-soft">Add-on</span>
+                <HastaDescanso valor={addOnsHastaDescanso} onElegir={setAddOnsHastaDescanso} />
+              </div>
+            )}
           </>
         )}
 
