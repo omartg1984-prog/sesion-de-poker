@@ -140,20 +140,58 @@ export function manualesDe(p: Participacion): Record<string, Chips> {
 }
 
 /**
- * El reparto de una noche de cash: una fila por entrada y una por cada recompra.
+ * Los conceptos de un torneo: el stack con el que arranca y una entrega por cada
+ * recompra y cada add-on.
+ *
+ * En torneo todas las recompras valen lo mismo —lo dijo el que armó el torneo—, así
+ * que no hace falta preguntar de cuánto fue cada una: basta con cuántas lleva.
+ *
+ * Los torneos de antes no traen fichas de recompra ni de add-on configuradas; ahí esas
+ * entregas valen cero y no se pintan, que es lo mismo que hacía la app.
+ */
+export function conceptosDeTorneo(
+  p: Participacion,
+  stack: number,
+  fichasRecompra: number,
+  fichasAddOn: number,
+): Concepto[] {
+  const cuantos = (n: unknown) => Math.max(0, Math.floor(num(n)))
+  return [
+    { clave: 'entrada', rotulo: 'Fichas de entrada', monto: stack },
+    ...Array.from({ length: cuantos(p.rebuys) }, (_, i) => ({
+      clave: `r${i}`,
+      rotulo: `Recompra ${i + 1}`,
+      monto: fichasRecompra,
+    })),
+    ...Array.from({ length: cuantos(p.addons) }, (_, i) => ({
+      clave: `a${i}`,
+      rotulo: `Add-on ${i + 1}`,
+      monto: fichasAddOn,
+    })),
+  ].filter((c) => c.clave === 'entrada' || c.monto > 0)
+}
+
+/**
+ * El reparto de una noche, concepto por concepto: una fila por entrada y una por cada
+ * recompra o add-on.
  *
  * El inventario se reparte entre todas las filas a la vez, no jugador por jugador: si
  * la caja se está acabando, las recompras compiten por las fichas igual que las
  * entradas.
+ *
+ * Sólo la entrada lleva pila de cambio completa. Lo que se entrega después lleva media
+ * —`CAMBIO_RECOMPRA`—: el jugador ya tiene morralla en la mesa, pero tampoco puede
+ * recibir un bloque de la ficha más grande y nada más.
  */
-export function calcularRepartoCash(
+export function calcularRepartoPorConcepto(
   participaciones: Participacion[],
   colores: ChipColor[],
+  conceptos: (p: Participacion) => Concepto[],
 ): Distribution {
   return computeDistribution(
     participaciones.flatMap((p) => {
       const manuales = manualesDe(p)
-      return conceptosDe(p).map((c) => ({
+      return conceptos(p).map((c) => ({
         id: idFila(p.id, c.clave),
         name: c.clave === 'entrada' ? p.nombre : `${p.nombre} · ${c.rotulo}`,
         buyIn: Math.round(c.monto),
@@ -164,6 +202,9 @@ export function calcularRepartoCash(
     colores,
   )
 }
+
+export const calcularRepartoCash = (participaciones: Participacion[], colores: ChipColor[]) =>
+  calcularRepartoPorConcepto(participaciones, colores, conceptosDe)
 
 /**
  * Las fichas de un jugador, dentro de su tarjeta del registro.

@@ -89,3 +89,44 @@ describe('fichas por concepto', () => {
     expect(stackTotal(d.rows[1].counts, COLORES)).toBe(400)
   })
 })
+
+/*
+ * Lo mismo en torneo. Ahí las fichas son puntos y todas las recompras valen igual —lo
+ * dijo quien armó el torneo—, pero el reparto es el de siempre: una entrega por
+ * concepto, la entrada con morralla completa y lo demás con media.
+ */
+describe('fichas por concepto en torneo', () => {
+  const PUNTOS: ChipColor[] = [
+    { key: 'verde', label: 'Verdes', color: '#1f8f4e', value: 5000, inventory: 200 },
+    { key: 'negra', label: 'Negras', color: '#2b2b2b', value: 1000, inventory: 200 },
+    { key: 'roja', label: 'Rojas', color: '#d0342c', value: 500, inventory: 300 },
+    { key: 'azul', label: 'Azules', color: '#2563c9', value: 100, inventory: 400 },
+    { key: 'blanca', label: 'Blancas', color: '#f2f2ea', value: 25, inventory: 400 },
+  ]
+
+  it('el stack y cada recompra y add-on van por separado y cuadran', () => {
+    const d = computeDistribution(
+      [
+        { id: 'p#entrada', name: 'Ana', buyIn: 10000, deal: null, cambio: 1 },
+        { id: 'p#r0', name: 'Ana · Recompra 1', buyIn: 8000, deal: null, cambio: CAMBIO_RECOMPRA },
+        { id: 'p#r1', name: 'Ana · Recompra 2', buyIn: 8000, deal: null, cambio: CAMBIO_RECOMPRA },
+        { id: 'p#a0', name: 'Ana · Add-on 1', buyIn: 6000, deal: null, cambio: CAMBIO_RECOMPRA },
+      ],
+      PUNTOS,
+    )
+
+    expect(d.rows.map((r) => r.total)).toEqual([10000, 8000, 8000, 6000])
+    expect(d.anyShortfall).toBe(false)
+    /* Las dos recompras son iguales: nadie recibe más por recomprar antes. */
+    expect(d.rows[1].counts).toEqual(d.rows[2].counts)
+  })
+
+  it('una recompra de torneo tampoco sale toda en la ficha más grande', () => {
+    const [recompra] = computeDistribution(
+      [{ id: 'x', name: 'X', buyIn: 8000, deal: null, cambio: CAMBIO_RECOMPRA }],
+      PUNTOS,
+    ).rows
+    const usados = PUNTOS.filter((c) => (recompra.counts[c.key] ?? 0) > 0)
+    expect(usados.length).toBeGreaterThan(1)
+  })
+})

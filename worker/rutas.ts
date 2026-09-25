@@ -641,6 +641,7 @@ export async function rutas(
         registro_hasta: string | null
         arrancado_en: string | null
         terminado_en: string | null
+        foto: string | null
       }>()
     if (!partida) return json({ error: 'Partida no encontrada' }, 404)
 
@@ -703,6 +704,7 @@ export async function rutas(
         registroHasta,
         arrancarAhora,
         terminarAhora,
+        foto,
       } = await cuerpo<Record<string, unknown>>()
       if (estado !== undefined && estado !== 'abierta' && estado !== 'cerrada')
         return json({ error: 'Estado inválido' }, 400)
@@ -741,6 +743,7 @@ export async function rutas(
         reloj,
         registroCerrado,
         registroHasta,
+        foto,
       ].some((v) => v !== undefined)
       if (tocaAlgoMas && !esAdminLiga)
         return json({ error: 'Solo un admin de la liga puede cambiar la partida' }, 403)
@@ -756,7 +759,8 @@ export async function rutas(
            registro_cerrado = COALESCE(?, registro_cerrado),
            registro_hasta = ?,
            arrancado_en = ?,
-           terminado_en = ?
+           terminado_en = ?,
+           foto = ?
          WHERE id = ?`,
       )
         .bind(
@@ -795,6 +799,9 @@ export async function rutas(
             : terminarAhora
               ? (partida.terminado_en ?? ahora())
               : null,
+          /* Sin COALESCE, igual que la foto de la liga: mandar null es quitarla, y no
+             mandarla es dejarla como estaba. */
+          foto === undefined ? partida.foto : foto === null ? null : String(foto),
           partidaId,
         )
         .run()
@@ -812,14 +819,21 @@ export async function rutas(
      * llama. Para mover a alguien más sigue estando el admin.
      */
     if (partes[2] === 'invitacion' && metodo === 'GET') {
-      const liga = await env.DB.prepare('SELECT nombre FROM ligas WHERE id = ?')
+      const liga = await env.DB.prepare('SELECT nombre, foto FROM ligas WHERE id = ?')
         .bind(partida.liga_id)
-        .first<{ nombre: string }>()
+        .first<{ nombre: string; foto: string | null }>()
       const completa = await env.DB.prepare(
-        'SELECT fecha, nombre, tipo, estado, torneo FROM partidas WHERE id = ?',
+        'SELECT fecha, nombre, tipo, estado, torneo, foto FROM partidas WHERE id = ?',
       )
         .bind(partidaId)
-        .first<{ fecha: string; nombre: string | null; tipo: string; estado: string; torneo: string | null }>()
+        .first<{
+          fecha: string
+          nombre: string | null
+          tipo: string
+          estado: string
+          torneo: string | null
+          foto: string | null
+        }>()
       const mia2 = await env.DB.prepare(
         'SELECT id FROM participaciones WHERE partida_id = ? AND usuario_id = ?',
       )
@@ -841,9 +855,15 @@ export async function rutas(
           estado: completa!.estado,
           registroCerrado: !registroAbierto(partida),
           registroHasta: partida.registro_hasta,
+          /* Con la cara de la noche puesta atrás, la invitación se reconoce de un
+             vistazo. Si la partida no tiene, sirve la de la liga. */
+          foto: completa!.foto ?? liga?.foto ?? null,
         },
         liga: { id: partida.liga_id, nombre: liga?.nombre ?? '' },
         cuesta: completa!.tipo === 'torneo' ? num(t.buyIn) : ENTRADA_POR_DEFECTO,
+        /* De qué consta el torneo, entero: quien todavía no se apunta tiene que poder
+           leer las reglas antes de decir que sí, no después. */
+        torneo: completa!.tipo === 'torneo' ? t : null,
         jugadores: n,
         yaApuntado: !!mia2,
       })

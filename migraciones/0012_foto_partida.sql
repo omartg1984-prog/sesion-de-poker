@@ -1,0 +1,12 @@
+-- Foto de la partida, como la de la liga.
+--
+-- Una liga juega muchas noches y todas se ven igual en la lista. Ponerle cara a cada una
+-- —el cartel del torneo, la foto de la mesa, el logo que alguien hizo— es lo que hace
+-- que la invitación se reconozca de un vistazo en el chat del grupo, y es el fondo de la
+-- pantalla de bienvenida que ve quien abre el link.
+--
+-- Se guarda igual que la de la liga y la de los usuarios: un data URL con el JPEG ya
+-- encogido a 256px en el navegador, que ronda los 20 KB.
+--
+-- Aditiva y anulable: las partidas que ya existen se quedan en NULL y se ven como antes.
+ALTER TABLE partidas ADD COLUMN foto TEXT;

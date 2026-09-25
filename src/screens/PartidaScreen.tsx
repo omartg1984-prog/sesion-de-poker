@@ -1,3 +1,4 @@
+import Avatar, { AvatarEditable } from '../components/Avatar'
 import Esqueleto from '../components/Esqueleto'
 import {
   AlertTriangle,
@@ -363,6 +364,18 @@ export default function PartidaScreen() {
     void cargar()
   }
 
+  /*
+   * La cara de la noche. Se guarda sola al elegirla, igual que la de la liga.
+   *
+   * Es lo que se ve difuminado detrás de la invitación: el cartel del torneo o la foto
+   * de la mesa hacen que en el chat del grupo se reconozca de qué noche se habla.
+   */
+  const cambiarFoto = async (foto: string | null) => {
+    setDatos((d) => (d ? { ...d, partida: { ...d.partida, foto } } : d))
+    const r = await conAviso(() => api.guardarPartida(partidaId, { foto }))
+    if (r) avisar(foto ? 'Foto de la partida actualizada' : 'Foto quitada')
+  }
+
   /* Refrescar a mano: en la mesa hay varios teléfonos tocando la misma partida y lo
      que tienes en pantalla puede ser de hace rato. */
   const refrescar = async () => {
@@ -415,6 +428,29 @@ export default function PartidaScreen() {
           >
             <ArrowLeft size={18} strokeWidth={2.4} />
           </button>
+
+          {/* La foto de la noche. La cambia un admin; los demás sólo la ven, y si no
+              hay, no se ocupa el hueco. */}
+          {puedeEditar ? (
+            <AvatarEditable
+              foto={datos.partida.foto ?? null}
+              nombre={datos.partida.nombre || datos.partida.fecha}
+              size={34}
+              etiqueta="Cambiar la foto de la partida"
+              onCambiar={(f) => void cambiarFoto(f)}
+              onError={avisar}
+            />
+          ) : (
+            datos.partida.foto && (
+              <Avatar
+                foto={datos.partida.foto}
+                nombre={datos.partida.nombre || datos.partida.fecha}
+                size={34}
+                oscuro
+              />
+            )
+          )}
+
           <div className="min-w-0 flex-1">
             <h1 className="m-0 truncate font-display text-[17px] leading-tight font-bold tracking-[.5px] text-white uppercase">
               {datos.partida.nombre || datos.partida.fecha}

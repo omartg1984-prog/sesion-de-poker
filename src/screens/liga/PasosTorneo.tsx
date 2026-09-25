@@ -101,6 +101,45 @@ export default function PasosTorneo({
         onChange={(v) => aplicar({ addOnPrice: v })}
       />
 
+      {/* Hasta cuándo se compra. Es la regla que se discute a media noche, cuando al
+          que se quedó sin fichas le urge una recompra más: escrita antes de empezar, y
+          aceptada por cada quien al apuntarse, ya no se discute. */}
+      {(num(torneo.rebuyPrice) > 0 || num(torneo.addOnPrice) > 0) && (
+        <div className="mb-3 grid grid-cols-2 gap-2">
+          {num(torneo.rebuyPrice) > 0 && (
+            <div>
+              <span className="field-label">Recompras hasta el nivel</span>
+              <div className="field-box mt-1">
+                <NumInput
+                  value={num(torneo.recomprasHasta)}
+                  showZero
+                  aria-label="Recompras hasta el nivel"
+                  onChange={(v) => aplicar({ recomprasHasta: v })}
+                />
+              </div>
+            </div>
+          )}
+          {num(torneo.addOnPrice) > 0 && (
+            <div>
+              <span className="field-label">Add-on hasta el nivel</span>
+              <div className="field-box mt-1">
+                <NumInput
+                  value={num(torneo.addOnsHasta)}
+                  showZero
+                  aria-label="Add-on hasta el nivel"
+                  onChange={(v) => aplicar({ addOnsHasta: v })}
+                />
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+      {(num(torneo.rebuyPrice) > 0 || num(torneo.addOnPrice) > 0) && (
+        <p className="mt-0 mb-3 text-[12px] leading-snug text-ink-soft">
+          En 0 se puede comprar toda la noche.
+        </p>
+      )}
+
       <div className="mt-1 mb-4 rounded-xl border border-paper-line bg-paper-soft px-3 py-2.5">
         <p className="field-label mt-0 mb-1.5">Lo que da cada cosa</p>
         <ul className="m-0 list-none p-0 text-[13px]">

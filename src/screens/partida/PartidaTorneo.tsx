@@ -8,6 +8,8 @@ import type { DatosTorneo } from '../../lib/shareImage'
 import type { DatosFichas } from '../../lib/imagenTablas'
 import type { ConfigTorneo, Participacion } from '../../lib/api'
 import { coloresDelTorneo } from '../../lib/torneo'
+import { resumenDeTorneo } from '../../lib/resumenTorneo'
+import type { Chips } from '../../store/types'
 import Estructura from './Estructura'
 import PasosTorneo from '../liga/PasosTorneo'
 import Reloj from './Reloj'
@@ -22,9 +24,12 @@ import {
 import {
   CompartirReparto,
   FichasDelJugador,
+  conceptosDeTorneo,
+  idFila,
+  manualesDe,
   InventarioUsado,
   ListaDeLaMesa,
-  calcularReparto,
+  calcularRepartoPorConcepto,
   claseClara,
   type PropsPestana,
 } from './comun'
@@ -258,12 +263,19 @@ export default function PartidaTorneo({
      */
     const coloresTorneo = coloresDelTorneo(colores, torneo.valores)
     const stack = num(torneo.stack) || num(torneo.buyIn)
-    const reparto = calcularReparto(
-      ps,
-      coloresTorneo,
-      (p) =>
-        stack + num(p.rebuys) * num(torneo.rebuyChips) + num(p.addons) * num(torneo.addOnChips),
-    )
+    /* Cada entrega lleva su renglón, igual que en cash: lo que se le pone en la mano al
+       que recompra son sus fichas de recompra, no el montón de toda su noche. */
+    const conceptos = (p: Participacion) =>
+      conceptosDeTorneo(p, stack, num(torneo.rebuyChips), num(torneo.addOnChips))
+    const reparto = calcularRepartoPorConcepto(ps, coloresTorneo, conceptos)
+    /* Hasta cuándo se compra, con las mismas palabras que leyó cada quien al apuntarse. */
+    const { compras } = resumenDeTorneo(torneo, ps.length)
+    const conHasta = (que: string) => {
+      const c = compras.find((x) => x.que === que)
+      return c ? `Se puede ${c.hasta}.` : ''
+    }
+    const reglaRecompras = conHasta('Recompra')
+    const reglaAddOns = conHasta('Add-on')
     return (
       <>
         <Banner titulo="Bolsa acumulada" />
@@ -278,45 +290,80 @@ export default function PartidaTorneo({
               {p.nombre}
             </b>
 
-            {/* Las fichas van arriba de las recompras, igual que en cash. */}
             {(() => {
-              const fila = reparto.rows.find((r) => r.id === p.id)
-              return fila ? (
-                <div className="mb-3">
+              /* Guardar un reparto a mano toca sólo su concepto: corregir las fichas de
+                 una recompra no debe mover el stack que ya se entregó al empezar. */
+              const guardarFichas = (clave: string) => (fichas: Chips | null) => {
+                const manuales = { ...manualesDe(p) }
+                if (fichas) manuales[clave] = fichas
+                else delete manuales[clave]
+                const vacio = Object.keys(manuales).length === 0
+                tocar(
+                  p.id,
+                  { fichas_manual: vacio ? null : JSON.stringify(manuales) },
+                  { fichasManual: vacio ? null : manuales },
+                )
+              }
+              const pinta = (clave: string, rotulo: string) => {
+                const fila = reparto.rows.find((r) => r.id === idFila(p.id, clave))
+                return fila ? (
                   <FichasDelJugador
                     fila={fila}
                     colores={coloresTorneo}
                     puedeEditar={puedeEditar}
-                    guardar={(fichas) =>
-                      tocar(
-                        p.id,
-                        { fichas_manual: fichas && JSON.stringify(fichas) },
-                        { fichasManual: fichas },
-                      )
-                    }
+                    guardar={guardarFichas(clave)}
+                    rotulo={rotulo}
                     formato={enFichas}
                   />
-                </div>
-              ) : null
+                ) : null
+              }
+              const suyos = conceptos(p)
+
+              return (
+                <>
+                  {/* Las fichas de entrada van arriba, igual que en cash. */}
+                  <div className="mb-3">{pinta('entrada', 'Fichas de entrada')}</div>
+
+                  <div className="mb-1 flex items-center justify-between gap-2.5">
+                    <span className="text-sm font-semibold text-ink-soft">Recompras</span>
+                    <Stepper
+                      label="recompra"
+                      value={p.rebuys}
+                      onChange={(v) => puedeEditar && tocar(p.id, { rebuys: v }, { rebuys: v })}
+                    />
+                  </div>
+                  {/* La regla, donde se pregunta: junto al botón de sumar una más. */}
+                  <p className="mt-0 mb-3 text-[11.5px] text-ink-soft">{reglaRecompras}</p>
+
+                  {/* Un renglón por recompra: es lo que se le entrega en el momento. */}
+                  {suyos
+                    .filter((c) => c.clave.startsWith('r'))
+                    .map((c) => (
+                      <div key={c.clave} className="mb-3 rounded-xl border border-paper-line bg-paper-soft px-3 py-1">
+                        {pinta(c.clave, c.rotulo)}
+                      </div>
+                    ))}
+
+                  <div className="mb-1 flex items-center justify-between gap-2.5">
+                    <span className="text-sm font-semibold text-ink-soft">Add-ons</span>
+                    <Stepper
+                      label="add-on"
+                      value={p.addons}
+                      onChange={(v) => puedeEditar && tocar(p.id, { addons: v }, { addons: v })}
+                    />
+                  </div>
+                  <p className="mt-0 mb-3 text-[11.5px] text-ink-soft">{reglaAddOns}</p>
+
+                  {suyos
+                    .filter((c) => c.clave.startsWith('a'))
+                    .map((c) => (
+                      <div key={c.clave} className="mb-3 rounded-xl border border-paper-line bg-paper-soft px-3 py-1">
+                        {pinta(c.clave, c.rotulo)}
+                      </div>
+                    ))}
+                </>
+              )
             })()}
-
-            <div className="mb-3 flex items-center justify-between gap-2.5">
-              <span className="text-sm font-semibold text-ink-soft">Recompras</span>
-              <Stepper
-                label="recompra"
-                value={p.rebuys}
-                onChange={(v) => puedeEditar && tocar(p.id, { rebuys: v }, { rebuys: v })}
-              />
-            </div>
-
-            <div className="mb-3 flex items-center justify-between gap-2.5">
-              <span className="text-sm font-semibold text-ink-soft">Add-ons</span>
-              <Stepper
-                label="add-on"
-                value={p.addons}
-                onChange={(v) => puedeEditar && tocar(p.id, { addons: v }, { addons: v })}
-              />
-            </div>
 
             <p className="m-0 text-right text-xs text-ink-soft">
               Pagó: <b className="text-ink">{money(pagadoPor(p, torneo))}</b>

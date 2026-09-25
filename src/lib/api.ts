@@ -124,6 +124,15 @@ export interface ConfigTorneo {
    */
   recomprasEsperadas?: number
   addOnsEsperados?: number
+  /*
+   * Hasta qué nivel se puede comprar. 0 o sin poner = toda la noche.
+   *
+   * Es la regla que más se discute en la mesa a las once y media, cuando alguien que
+   * acaba de perder su stack quiere recomprar. Puesta por escrito antes de empezar —y
+   * aceptada por todos al apuntarse— deja de discutirse.
+   */
+  recomprasHasta?: number
+  addOnsHasta?: number
   /** A qué hora se quedó de empezar y de terminar, "HH:MM". */
   horaInicio?: string
   horaFin?: string
@@ -160,6 +169,8 @@ export interface PartidaResumen {
   arrancado_en?: string | null
   /** Instante ISO de la última mano. Cerrar la partida es después, ya repartido. */
   terminado_en?: string | null
+  /** La cara de la noche, como la de la liga. */
+  foto?: string | null
 }
 
 /** Cómo quedó una noche, ya ordenada por el servidor. */
@@ -198,10 +209,14 @@ export interface InvitacionPartida {
     estado: 'abierta' | 'cerrada'
     registroCerrado: boolean
     registroHasta: string | null
+    /** La de la partida, o la de la liga si la partida no tiene. */
+    foto: string | null
   }
   liga: { id: string; nombre: string }
   /** Con cuánto entraría. */
   cuesta: number
+  /** De qué consta, para poder leerlo antes de apuntarse. null en cash. */
+  torneo: ConfigTorneo | null
   jugadores: number
   yaApuntado: boolean
 }
@@ -434,6 +449,8 @@ export const api = {
       arrancarAhora?: boolean
       /** true apunta la hora de la última mano; false la borra y se sigue jugando. */
       terminarAhora?: boolean
+      /** null la quita; no mandarla la deja como estaba. */
+      foto?: string | null
     },
   ) => patch<{ ok: true }>(`partidas/${id}`, cambios),
   cargarJugadores: (partidaId: string, jugadores: { usuarioId: string; entrada: number }[]) =>

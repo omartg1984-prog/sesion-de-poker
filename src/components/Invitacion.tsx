@@ -1,8 +1,9 @@
-import { CalendarCheck, LogIn, PartyPopper } from 'lucide-react'
+import { CalendarCheck, Check, LogIn, PartyPopper, Trophy } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import Sheet from './Sheet'
 import { api, type InvitacionPartida } from '../lib/api'
 import { money } from '../lib/money'
+import { resumenDeTorneo } from '../lib/resumenTorneo'
 import { conAviso, useApp } from '../store/app'
 
 /*
@@ -76,6 +77,12 @@ export default function Invitacion() {
   const [yaEnLaLiga, setYaEnLaLiga] = useState(false)
   const [noche, setNoche] = useState<InvitacionPartida | null>(null)
   const [ocupado, setOcupado] = useState(false)
+  /*
+   * En un torneo hay reglas que se discuten a media noche —hasta cuándo se recompra,
+   * cómo se reparte la bolsa— y siempre acaba habiendo alguien que dice que no sabía.
+   * Aquí están antes de entrar, y hay que marcarlas para poder apuntarse.
+   */
+  const [deAcuerdo, setDeAcuerdo] = useState(false)
 
   /* Lo del link puede llegar antes que la sesión, así que se guarda y se espera. */
   useEffect(() => {
@@ -101,6 +108,7 @@ export default function Invitacion() {
     setPendiente(null)
     setLiga(null)
     setNoche(null)
+    setDeAcuerdo(false)
   }
 
   useEffect(() => {
@@ -181,31 +189,142 @@ export default function Invitacion() {
   const cerrada = noche?.partida.estado === 'cerrada'
   const registroCerrado = !!noche?.partida.registroCerrado && !noche.yaApuntado
   const esTorneo = noche?.partida.tipo === 'torneo'
+  const foto = noche?.partida.foto ?? null
+
+  /*
+   * El resumen sólo se pide leer cuando hay algo que leer y cuando de verdad se está
+   * entrando: al que ya está apuntado, o al que llega cuando ya cerró, no se le pone
+   * una casilla en el camino.
+   */
+  const resumen = esTorneo && noche?.torneo ? resumenDeTorneo(noche.torneo, noche.jugadores) : null
+  const hayQueLeer = !!resumen && !noche?.yaApuntado && !cerrada && !registroCerrado
+  const horaInicio = noche?.torneo?.horaInicio
+  const cierraA = noche?.partida.registroHasta
+    ? new Date(noche.partida.registroHasta).toLocaleTimeString('es-MX', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      })
+    : null
+
+  const miles = (n: number) => Math.round(n).toLocaleString('es-MX')
 
   return (
-    <Sheet abierta onCerrar={olvidar} titulo={noche ? 'Te invitan a jugar' : 'Te invitaron'}>
-      <div className="mb-3 flex items-center gap-3 rounded-xl border border-marca/25 bg-gradient-to-br from-[#2a1016] to-[#100e12] px-4 py-3.5">
-        {noche ? (
-          <CalendarCheck size={26} className="shrink-0 text-marca-alta" strokeWidth={2.2} />
-        ) : (
-          <PartyPopper size={26} className="shrink-0 text-marca-alta" strokeWidth={2.2} />
+    <Sheet
+      abierta
+      onCerrar={olvidar}
+      titulo={noche ? (esTorneo ? 'Te invitan a un torneo' : 'Te invitan a jugar') : 'Te invitaron'}
+    >
+      {/* La cara de la noche, difuminada detrás del título: se reconoce de un vistazo
+          sin que el cartel le gane al texto. */}
+      <div className="relative mb-3 overflow-hidden rounded-xl border border-marca/25 bg-gradient-to-br from-[#2a1016] to-[#100e12]">
+        {foto && (
+          <>
+            <img
+              src={foto}
+              alt=""
+              aria-hidden
+              className="pointer-events-none absolute inset-0 h-full w-full scale-125 object-cover blur-md"
+            />
+            {/* Un velo encima: sin él, una foto clara se come las letras blancas. Va
+                justo lo bastante oscuro para que el título se lea sobre cualquier
+                imagen, y no más: la gracia es que la foto se vea. */}
+            <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-[#2a1016]/60 to-[#100e12]/80" />
+          </>
         )}
-        <div className="min-w-0">
-          <div className="text-[10px] font-semibold tracking-[1px] text-tiza-suave uppercase">
-            {noche ? `${esTorneo ? 'Torneo' : 'Cash'} · ${liga.nombre}` : yaEnLaLiga ? 'Ya juegas aquí' : 'Liga'}
-          </div>
-          <div className="truncate font-display text-xl font-bold text-marca-alta">
-            {noche ? noche.partida.nombre || fechaLarga(noche.partida.fecha) : liga.nombre}
-          </div>
-          {noche && (
-            <div className="text-[12px] text-tiza-suave">
-              {noche.partida.nombre ? `${fechaLarga(noche.partida.fecha)} · ` : ''}
-              {noche.jugadores} {noche.jugadores === 1 ? 'apuntado' : 'apuntados'}
-              {noche.cuesta > 0 && ` · entra con ${money(noche.cuesta)}`}
-            </div>
+        <div className="relative flex items-center gap-3 px-4 py-3.5">
+          {noche ? (
+            esTorneo ? (
+              <Trophy size={26} className="shrink-0 text-marca-alta" strokeWidth={2.2} />
+            ) : (
+              <CalendarCheck size={26} className="shrink-0 text-marca-alta" strokeWidth={2.2} />
+            )
+          ) : (
+            <PartyPopper size={26} className="shrink-0 text-marca-alta" strokeWidth={2.2} />
           )}
+          <div className="min-w-0">
+            <div className="text-[10px] font-semibold tracking-[1px] text-tiza-suave uppercase">
+              {noche
+                ? `${esTorneo ? 'Torneo' : 'Cash'} · ${liga.nombre}`
+                : yaEnLaLiga
+                  ? 'Ya juegas aquí'
+                  : 'Liga'}
+            </div>
+            <div className="truncate font-display text-xl font-bold text-marca-alta">
+              {noche ? noche.partida.nombre || fechaLarga(noche.partida.fecha) : liga.nombre}
+            </div>
+            {noche && (
+              <div className="text-[12px] text-tiza-suave">
+                {noche.partida.nombre ? `${fechaLarga(noche.partida.fecha)} · ` : ''}
+                {noche.jugadores} {noche.jugadores === 1 ? 'apuntado' : 'apuntados'}
+                {!resumen && noche.cuesta > 0 && ` · entra con ${money(noche.cuesta)}`}
+              </div>
+            )}
+          </div>
         </div>
       </div>
+
+      {/* ---- de qué consta el torneo ---- */}
+      {resumen && (
+        <>
+          {(horaInicio || cierraA) && (
+            <p className="mt-0 mb-3 text-[12.5px] leading-snug text-ink-soft">
+              {horaInicio && (
+                <>
+                  Empieza a las <b className="text-ink">{horaInicio}</b>.{' '}
+                </>
+              )}
+              {cierraA && (
+                <>
+                  El registro se cierra a las <b className="text-ink">{cierraA}</b>.
+                </>
+              )}
+            </p>
+          )}
+
+          <p className="field-label mt-0 mb-1.5">De qué consta</p>
+          <ul className="m-0 mb-3 list-none p-0">
+            {resumen.compras.map((c) => (
+              <li
+                key={c.que}
+                className="border-b border-dashed border-paper-line py-2 last:border-b-0"
+              >
+                <div className="flex items-baseline justify-between gap-2 text-[13.5px]">
+                  <span className="font-semibold text-ink">{c.que}</span>
+                  <span className="text-ink-soft">
+                    <b className="text-ink">{money(c.dinero)}</b> → {miles(c.fichas)} fichas
+                  </span>
+                </div>
+                {c.hasta && (
+                  <div className="mt-0.5 text-[11.5px] text-ink-soft">Se puede {c.hasta}.</div>
+                )}
+              </li>
+            ))}
+          </ul>
+
+          {resumen.premios.length > 0 && (
+            <>
+              <p className="field-label mt-0 mb-1.5">Cómo se reparte la bolsa</p>
+              <div className="mb-3 flex flex-wrap gap-1.5">
+                {resumen.premios.map((x) => (
+                  <span
+                    key={x.lugar}
+                    className="rounded-full bg-ink/8 px-2.5 py-1 text-[12.5px] font-semibold text-ink"
+                  >
+                    {x.lugar}º lugar · {x.pct}%
+                  </span>
+                ))}
+              </div>
+              {resumen.bolsaMinima > 0 && (
+                <p className="mt-0 mb-3 text-[12px] leading-snug text-ink-soft">
+                  Con los {noche!.jugadores} que van, la bolsa arranca en{' '}
+                  <b className="text-ink">{money(resumen.bolsaMinima)}</b> y sube con cada recompra.
+                </p>
+              )}
+            </>
+          )}
+        </>
+      )}
 
       <p className="mt-0 mb-4 text-[13px] leading-snug text-ink-soft">
         {cerrada
@@ -223,10 +342,35 @@ export default function Invitacion() {
                     : 'Vas a entrar como jugador. Vas a ver las partidas, la tabla y las reglas de la casa.'}
       </p>
 
+      {/* El visto bueno. Sin él no se puede apuntar: es la diferencia entre "no sabía"
+          y "lo leí y dije que sí". */}
+      {hayQueLeer && (
+        <button
+          type="button"
+          role="checkbox"
+          aria-checked={deAcuerdo}
+          onClick={() => setDeAcuerdo((v) => !v)}
+          className={`mb-3 flex w-full cursor-pointer items-center gap-2.5 rounded-xl border px-3 py-2.5 text-left transition-colors ${
+            deAcuerdo ? 'border-win/45 bg-win/10' : 'border-paper-line bg-paper-soft'
+          }`}
+        >
+          <span
+            className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border-2 ${
+              deAcuerdo ? 'border-win bg-win text-white' : 'border-ink-soft/40 bg-white'
+            }`}
+          >
+            {deAcuerdo && <Check size={13} strokeWidth={3.5} />}
+          </span>
+          <span className="text-[13px] leading-snug font-semibold text-ink">
+            Leí todo y estoy de acuerdo
+          </span>
+        </button>
+      )}
+
       <button
         type="button"
         className="btn btn-marca mb-2 disabled:opacity-45"
-        disabled={ocupado || cerrada || registroCerrado}
+        disabled={ocupado || cerrada || registroCerrado || (hayQueLeer && !deAcuerdo)}
         onClick={() => void aceptar()}
       >
         <LogIn size={17} strokeWidth={2.4} />
