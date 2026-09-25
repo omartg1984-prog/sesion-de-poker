@@ -578,7 +578,7 @@ export async function rutas(
 
         if (metodo === 'POST') {
           if (!esAdminLiga) return json({ error: 'Solo un admin de la liga puede crear partidas' }, 403)
-          const { fecha, nombre, tipo, torneo, jefeId, registroHasta } =
+          const { fecha, nombre, tipo, torneo, jefeId, registroHasta, foto } =
             await cuerpo<Record<string, unknown>>()
 
           /* El jefe de la noche: quien funge de banco. Si no dicen quién, es quien la
@@ -601,7 +601,7 @@ export async function rutas(
 
           const id = nuevoId()
           await env.DB.prepare(
-            'INSERT INTO partidas (id, liga_id, fecha, nombre, tipo, torneo, estado, jefe_id, registro_hasta, creada_por, creada_en) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            'INSERT INTO partidas (id, liga_id, fecha, nombre, tipo, torneo, estado, jefe_id, registro_hasta, foto, creada_por, creada_en) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
           )
             .bind(
               id,
@@ -613,6 +613,9 @@ export async function rutas(
               'abierta',
               jefe,
               registroHasta ? String(registroHasta) : null,
+              /* La cara de la noche se elige al armarla, que es cuando se tiene a la
+                 mano el cartel; después se puede cambiar desde la partida. */
+              foto ? String(foto) : null,
               yo.id,
               ahora(),
             )

@@ -418,6 +418,8 @@ export const api = {
       jefeId?: string
       /** Instante ISO en que se deja de admitir gente sola. */
       registroHasta?: string | null
+      /** La cara de la noche, ya encogida a data URL. */
+      foto?: string | null
     },
   ) => post<{ partida: PartidaResumen }>(`ligas/${ligaId}/partidas`, datos),
   /** El mensaje del que ganó la noche. Texto vacío lo borra. */

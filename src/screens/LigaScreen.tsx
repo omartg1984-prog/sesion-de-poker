@@ -19,7 +19,7 @@ import {
 import { useEffect, useState } from 'react'
 import EditorFichas from '../components/EditorFichas'
 import Sheet from '../components/Sheet'
-import Avatar from '../components/Avatar'
+import Avatar, { AvatarEditable } from '../components/Avatar'
 import LaLiga from './liga/LaLiga'
 import CrearTorneo from './liga/CrearTorneo'
 import Reglas from './liga/Reglas'
@@ -101,6 +101,9 @@ export default function LigaScreen() {
 
   const [fecha, setFecha] = useState(hoy())
   const [nombrePartida, setNombrePartida] = useState('')
+  /* La cara de la noche. Se elige al crearla, que es cuando se tiene a la mano el
+     cartel o la foto del lugar; después se puede cambiar desde la partida. */
+  const [fotoPartida, setFotoPartida] = useState<string | null>(null)
   const [tipo, setTipo] = useState<TipoPartida>('cash')
   /* Quién funge de banco esa noche. Por defecto, quien está creando la partida. */
   const [jefe, setJefe] = useState<string>(yo.id)
@@ -146,6 +149,7 @@ export default function LigaScreen() {
         nombre: nombrePartida.trim() || undefined,
         tipo: 'cash',
         jefeId: jefe,
+        foto: fotoPartida,
         /* Se manda el instante, no la hora suelta: aquí sí se sabe en qué zona horaria
            está quien la crea, y el servidor corre en UTC. */
         registroHasta: instanteDe(fecha, horaInicio),
@@ -155,6 +159,7 @@ export default function LigaScreen() {
     if (r) {
       setCreando(false)
       setNombrePartida('')
+      setFotoPartida(null)
       irAPartida(r.partida.id, ligaId)
     }
   }
@@ -590,16 +595,28 @@ ${link}`
               />
             </label>
 
-            <label className="mb-4 block">
-              <span className="field-label">Nombre (opcional)</span>
-              <input
-                type="text"
-                value={nombrePartida}
-                onChange={(e) => setNombrePartida(e.target.value)}
-                placeholder="ej. Cumpleaños de Beto"
-                className="mt-1 w-full rounded-xl border border-paper-line bg-white px-3 py-3 text-base font-semibold text-ink outline-none focus:border-marca"
+            {/* El nombre y la foto van juntos: son las dos cosas con las que se
+                reconoce esta noche en la lista y en el link que se manda al grupo. */}
+            <div className="mb-4 flex items-end gap-3">
+              <label className="block min-w-0 flex-1">
+                <span className="field-label">Nombre (opcional)</span>
+                <input
+                  type="text"
+                  value={nombrePartida}
+                  onChange={(e) => setNombrePartida(e.target.value)}
+                  placeholder="ej. Cumpleaños de Beto"
+                  className="mt-1 w-full rounded-xl border border-paper-line bg-white px-3 py-3 text-base font-semibold text-ink outline-none focus:border-marca"
+                />
+              </label>
+              <AvatarEditable
+                foto={fotoPartida}
+                nombre={nombrePartida || 'Partida'}
+                size={52}
+                etiqueta="Foto de la partida"
+                onCambiar={setFotoPartida}
+                onError={avisar}
               />
-            </label>
+            </div>
 
             <label className="mb-4 block">
               <span className="field-label">Empieza a las</span>

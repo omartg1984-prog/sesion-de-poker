@@ -1,5 +1,6 @@
 import { ArrowLeft, ArrowRight, Check, Coins, Trophy, Users } from 'lucide-react'
 import { useState } from 'react'
+import { AvatarEditable } from '../../components/Avatar'
 import Chip from '../../components/Chip'
 import MoneyInput from '../../components/MoneyInput'
 import NumInput from '../../components/NumInput'
@@ -139,6 +140,9 @@ export default function CrearTorneo({
   const [addOnPrice, setAddOnPrice] = useState(300)
   const [recomprasEsperadas, setRecomprasEsperadas] = useState(0)
   const [addOnsEsperados, setAddOnsEsperados] = useState(0)
+  /* La cara de la noche. Se elige aquí porque es cuando se tiene a la mano el cartel
+     que alguien hizo para el grupo; después se puede cambiar desde la partida. */
+  const [foto, setFoto] = useState<string | null>(null)
   /* Hasta qué nivel se puede comprar. 0 = toda la noche. */
   const [recomprasHasta, setRecomprasHasta] = useState(0)
   const [addOnsHasta, setAddOnsHasta] = useState(0)
@@ -249,6 +253,7 @@ export default function CrearTorneo({
         tipo: 'torneo',
         torneo,
         jefeId: jefe,
+        foto,
         /* La hora a la que se quedó es también hasta cuándo se apunta uno solo. */
         registroHasta: instanteDe(fecha, horaInicio),
       }),
@@ -425,16 +430,28 @@ export default function CrearTorneo({
           />
         </label>
 
-        <label className="mb-4 block">
-          <span className="field-label">Nombre (opcional)</span>
-          <input
-            type="text"
-            value={nombre}
-            onChange={(e) => setNombre(e.target.value)}
-            placeholder="ej. Torneo de cumpleaños"
-            className="mt-1 w-full rounded-xl border border-paper-line bg-white px-3 py-3 text-base font-semibold text-ink outline-none focus:border-marca"
+        {/* El nombre y la foto van juntos: son las dos cosas con las que se reconoce
+            esta noche en la lista y en el link que se manda al grupo. */}
+        <div className="mb-4 flex items-end gap-3">
+          <label className="min-w-0 flex-1 block">
+            <span className="field-label">Nombre (opcional)</span>
+            <input
+              type="text"
+              value={nombre}
+              onChange={(e) => setNombre(e.target.value)}
+              placeholder="ej. Torneo de cumpleaños"
+              className="mt-1 w-full rounded-xl border border-paper-line bg-white px-3 py-3 text-base font-semibold text-ink outline-none focus:border-marca"
+            />
+          </label>
+          <AvatarEditable
+            foto={foto}
+            nombre={nombre || 'Torneo'}
+            size={52}
+            etiqueta="Foto del torneo"
+            onCambiar={setFoto}
+            onError={avisar}
           />
-        </label>
+        </div>
 
         <div className="mb-4">
           <span className="field-label">Quién lleva el banco</span>
