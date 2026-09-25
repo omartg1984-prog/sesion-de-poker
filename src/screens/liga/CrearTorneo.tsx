@@ -26,10 +26,10 @@ import {
   type Tramo,
   type ValoresTorneo,
 } from '../../lib/torneo'
-import { nombreDelDescanso, resumenDeTorneo, tablaDeReglas } from '../../lib/resumenTorneo'
+import { resumenDeTorneo, tablaDeReglas } from '../../lib/resumenTorneo'
 import TablaCiegas from '../partida/TablaCiegas'
 import Premios, { premiosCuadran, type Premio } from './Premios'
-import { HastaDescanso } from './PasosTorneo'
+import { CuantasSePueden, HastaDescanso } from './PasosTorneo'
 import { conAviso, useApp } from '../../store/app'
 import type { ChipColor } from '../../store/types'
 
@@ -166,6 +166,9 @@ export default function CrearTorneo({
   /* Hasta qué descanso se puede comprar. 0 = toda la noche. */
   const [recomprasHastaDescanso, setRecomprasHastaDescanso] = useState(0)
   const [addOnsHastaDescanso, setAddOnsHastaDescanso] = useState(0)
+  /* Cuántas se le permiten a cada quien. 0 = las que quiera. */
+  const [recomprasMax, setRecomprasMax] = useState(0)
+  const [addOnsMax, setAddOnsMax] = useState(1)
 
   const [horaInicio, setHoraInicio] = useState('20:00')
   const [horaFin, setHoraFin] = useState('01:00')
@@ -268,6 +271,8 @@ export default function CrearTorneo({
     addOnsEsperados,
     recomprasHastaDescanso,
     addOnsHastaDescanso,
+    recomprasMax,
+    addOnsMax,
     cenaPorPersona,
     horaInicio,
     horaFin,
@@ -385,15 +390,10 @@ export default function CrearTorneo({
       `Arranca ${horaInicio}, se acaba cerca de las ${horaMas(horaInicio, estructura.duracionMinutos)}`,
       `Entrada ${money(buyIn)} → ${miles(stack)} fichas`,
     ]
-    const hasta = (descanso: number) =>
-      descanso > 0 ? ` (hasta ${nombreDelDescanso(descanso)})` : ''
-    if (num(rebuyPrice) > 0)
+    const reglas = resumenDeTorneo(torneoArmado)
+    for (const c of reglas.compras.slice(1))
       lineas.push(
-        `Recompra ${money(rebuyPrice)} → ${miles(fichasRecompra)} fichas${hasta(recomprasHastaDescanso)}`,
-      )
-    if (num(addOnPrice) > 0)
-      lineas.push(
-        `Add-on ${money(addOnPrice)} → ${miles(fichasAddOn)} fichas${hasta(addOnsHastaDescanso)}`,
+        `${c.que} ${money(c.dinero)} → ${miles(c.fichas)} fichas (${c.cuantas}, ${c.hasta})`,
       )
     lineas.push('', 'Premios:')
     payouts.forEach((po, i) => lineas.push(`  ${i + 1}º · ${num(po.pct)}%`))
@@ -598,8 +598,15 @@ export default function CrearTorneo({
               leyó. Los descansos se definen en el paso que sigue.
             </p>
             {num(rebuyPrice) > 0 && (
-              <div className="mb-2">
-                <span className="mb-1 block text-[12px] text-ink-soft">Recompras</span>
+              <div className="mb-3">
+                <span className="mb-1 block text-[12px] font-semibold text-ink">Recompras</span>
+                <span className="mb-1 block text-[11.5px] text-ink-soft">
+                  Cuántas por persona
+                </span>
+                <CuantasSePueden valor={recomprasMax} onElegir={setRecomprasMax} />
+                <span className="mt-1.5 mb-1 block text-[11.5px] text-ink-soft">
+                  Hasta cuándo
+                </span>
                 <HastaDescanso
                   valor={recomprasHastaDescanso}
                   onElegir={setRecomprasHastaDescanso}
@@ -608,7 +615,12 @@ export default function CrearTorneo({
             )}
             {num(addOnPrice) > 0 && (
               <div className="mb-4">
-                <span className="mb-1 block text-[12px] text-ink-soft">Add-on</span>
+                <span className="mb-1 block text-[12px] font-semibold text-ink">Add-on</span>
+                <span className="mb-1 block text-[11.5px] text-ink-soft">Cuántos por persona</span>
+                <CuantasSePueden valor={addOnsMax} onElegir={setAddOnsMax} />
+                <span className="mt-1.5 mb-1 block text-[11.5px] text-ink-soft">
+                  Hasta cuándo
+                </span>
                 <HastaDescanso valor={addOnsHastaDescanso} onElegir={setAddOnsHastaDescanso} />
               </div>
             )}
@@ -944,6 +956,7 @@ export default function CrearTorneo({
         datos={tablaDeReglas(torneoArmado, {
           titulo: nombre.trim() || fechaLarga(fecha),
           liga: nombreLiga,
+          foto,
         })}
         texto={textoReglas}
         alt="Reglas del torneo"

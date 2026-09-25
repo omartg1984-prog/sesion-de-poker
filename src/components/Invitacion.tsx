@@ -208,6 +208,7 @@ export default function Invitacion() {
     : null
 
   const miles = (n: number) => Math.round(n).toLocaleString('es-MX')
+  const enMayuscula = (t: string) => t.charAt(0).toUpperCase() + t.slice(1)
 
   return (
     <Sheet
@@ -295,8 +296,10 @@ export default function Invitacion() {
                     <b className="text-ink">{money(c.dinero)}</b> → {miles(c.fichas)} fichas
                   </span>
                 </div>
-                {c.hasta && (
-                  <div className="mt-0.5 text-[11.5px] text-ink-soft">Se puede {c.hasta}.</div>
+                {(c.cuantas || c.hasta) && (
+                  <div className="mt-0.5 text-[11.5px] text-ink-soft">
+                    {enMayuscula([c.cuantas, c.hasta].filter(Boolean).join(', '))}.
+                  </div>
                 )}
               </li>
             ))}

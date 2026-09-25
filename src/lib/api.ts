@@ -138,6 +138,15 @@ export interface ConfigTorneo {
   recomprasHastaDescanso?: number
   addOnsHastaDescanso?: number
   /*
+   * Cuántas se le permiten a cada quien. 0 o sin poner = las que quiera.
+   *
+   * No es lo mismo que `recomprasEsperadas`, que es un cálculo para saber si alcanzan
+   * las fichas. Esto es la regla: el add-on casi siempre es uno solo por persona, y hay
+   * casas donde también se topan las recompras.
+   */
+  recomprasMax?: number
+  addOnsMax?: number
+  /*
    * Lo que se le cobra a cada quien de cena, y que sale de la bolsa antes de repartir
    * premios. "Entrada $500, cena incluida" es lo normal en la mesa, y si no se aparta,
    * el que lleva el banco reparte porcentajes de un dinero que ya pagó la comida.

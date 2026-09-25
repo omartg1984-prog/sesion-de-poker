@@ -1,6 +1,7 @@
 import { moneyShort, signed, textOn } from './money'
 import {
   CREAM,
+  cargarImagen,
   cargarImagenes,
   dibujarAvatar,
   MARCA,
@@ -235,11 +236,14 @@ export interface DatosTabla {
   filas: string[][]
   /** Foto de cada fila, para la primera columna. */
   fotos?: (string | null)[]
+  /** La cara de la noche, difuminada al fondo. */
+  fondo?: string | null
   pie: string
 }
 
 export async function dibujarTabla(d: DatosTabla): Promise<HTMLCanvasElement> {
   const caras = await cargarImagenes(d.fotos ?? d.filas.map(() => null))
+  const fondo = d.fondo ? await cargarImagen(d.fondo) : null
   const W = 1000
   const pad = 44
   const headerH = 176
@@ -249,16 +253,47 @@ export async function dibujarTabla(d: DatosTabla): Promise<HTMLCanvasElement> {
   const H = headerH + theadH + rowH * Math.max(d.filas.length, 1) + footerH + pad
 
   const { cv, ctx } = makeCanvas(W, H)
-  pintarMesa(ctx, W, H, d.titulo, d.subtitulo, d.gorro)
+  pintarMesa(ctx, W, H, d.titulo, d.subtitulo, d.gorro, fondo)
 
-  /* La primera columna lleva el nombre y va a la izquierda; las demás son números y
-     van a la derecha, que es como se leen las cifras. */
+  /*
+   * Las columnas se miden, no se reparten a ojo.
+   *
+   * Antes iban a intervalos iguales y alineadas a la derecha, con lo que una celda larga
+   * —"800 fichas · hasta el primer descanso"— se metía encima de la de al lado y las
+   * letras salían amontonadas. Ahora se mide lo más ancho de cada columna y se acomodan
+   * de derecha a izquierda; si aun así no caben, la letra encoge hasta que quepan.
+   */
   const colName = pad + 26
   const anchoNombre = 300
-  const restantes = d.columnas.length - 1
-  const sobra = W - pad - (colName + anchoNombre)
-  const paso = restantes > 0 ? sobra / restantes : 0
-  const xDe = (i: number) => (i === 0 ? colName : colName + anchoNombre + paso * i)
+  const primeraX = d.fotos ? colName + 42 : colName
+  const hueco = 26
+
+  const FUENTE_DATO = (px: number) => `500 ${px}px 'Inter',Arial,sans-serif`
+  const anchoDe = (i: number, px: number) => {
+    ctx.font = FUENTE_DATO(px)
+    const celdas = d.filas.map((f) => ctx.measureText(f[i] ?? '').width)
+    ctx.font = "600 16px 'Inter',Arial,sans-serif"
+    celdas.push(ctx.measureText((d.columnas[i] ?? '').toUpperCase()).width)
+    return Math.max(0, ...celdas)
+  }
+
+  const disponible = W - pad - (primeraX + anchoNombre)
+  let px = 21
+  while (
+    px > 14 &&
+    d.columnas.slice(1).reduce((s, _, k) => s + anchoDe(k + 1, px) + hueco, 0) > disponible
+  )
+    px -= 1
+  const anchos = d.columnas.slice(1).map((_, k) => anchoDe(k + 1, px))
+
+  /* Cada columna termina donde empieza la siguiente: así ninguna puede pisar a otra. */
+  const derechaDe: number[] = []
+  let borde = W - pad
+  for (let k = anchos.length - 1; k >= 0; k--) {
+    derechaDe[k] = borde
+    borde -= anchos[k] + hueco
+  }
+  const xDe = (i: number) => (i === 0 ? colName : derechaDe[i - 1])
 
   ctx.font = "600 16px 'Inter',Arial,sans-serif"
   ctx.fillStyle = 'rgba(255,255,255,.65)'
@@ -287,7 +322,7 @@ export async function dibujarTabla(d: DatosTabla): Promise<HTMLCanvasElement> {
     fila.forEach((celda, c) => {
       ctx.textAlign = c === 0 ? 'left' : 'right'
       ctx.fillStyle = '#ffffff'
-      ctx.font = c === 0 ? "600 23px 'Khand',Arial,sans-serif" : "500 21px 'Inter',Arial,sans-serif"
+      ctx.font = c === 0 ? "600 23px 'Khand',Arial,sans-serif" : FUENTE_DATO(px)
       ctx.fillText(c === 0 ? ellipsis(celda, 16) : celda, c === 0 ? nombreX : xDe(c), midY)
     })
     ry += rowH

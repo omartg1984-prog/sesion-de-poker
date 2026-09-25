@@ -54,6 +54,33 @@ export function makeCanvas(w: number, h: number) {
 }
 
 /** Fondo oscuro con marco rojo y encabezado, común a todas las imágenes. */
+/*
+ * La foto de la noche, difuminada al fondo del lienzo.
+ *
+ * El difuminado se hace encogiendo la foto a un puñado de pixeles y volviéndola a
+ * estirar, no con `ctx.filter`: el filtro no existe en todos los WebView y ahí la foto
+ * saldría nítida, comiéndose las letras. Encoger y estirar funciona en cualquier lado.
+ *
+ * Encima va un velo oscuro. Sin él, una foto clara deja el texto ilegible, que es peor
+ * que no poner foto.
+ */
+function pintarFondo(ctx: CanvasRenderingContext2D, w: number, h: number, foto: HTMLImageElement) {
+  const chico = makeCanvas(24, Math.max(1, Math.round((24 * h) / w)))
+  chico.ctx.drawImage(foto, 0, 0, chico.cv.width, chico.cv.height)
+
+  ctx.save()
+  ctx.imageSmoothingEnabled = true
+  ctx.globalAlpha = 0.85
+  ctx.drawImage(chico.cv, 0, 0, w, h)
+  ctx.restore()
+
+  const velo = ctx.createLinearGradient(0, 0, w, h)
+  velo.addColorStop(0, 'rgba(42,16,22,.64)')
+  velo.addColorStop(1, 'rgba(16,14,18,.78)')
+  ctx.fillStyle = velo
+  ctx.fillRect(0, 0, w, h)
+}
+
 export function pintarMesa(
   ctx: CanvasRenderingContext2D,
   w: number,
@@ -61,12 +88,14 @@ export function pintarMesa(
   titulo: string,
   subtitulo: string,
   gorro: string,
+  fondo?: HTMLImageElement | null,
 ) {
   const g = ctx.createRadialGradient(w / 2, 60, 80, w / 2, h * 0.4, h)
   g.addColorStop(0, NOCHE_ALTO)
   g.addColorStop(1, NOCHE_HONDO)
   ctx.fillStyle = g
   ctx.fillRect(0, 0, w, h)
+  if (fondo) pintarFondo(ctx, w, h, fondo)
   ctx.strokeStyle = 'rgba(223,31,46,.95)'
   ctx.lineWidth = 5
   roundRect(ctx, 16, 16, w - 32, h - 32, 26)

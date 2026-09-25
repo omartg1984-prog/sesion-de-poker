@@ -18,6 +18,8 @@ export interface CompraDelTorneo {
   que: string
   dinero: number
   fichas: number
+  /** Cuántas se permiten, ya dicho en palabras. '' en la entrada. */
+  cuantas: string
   /** Hasta cuándo se puede comprar, ya dicho en palabras. */
   hasta: string
 }
@@ -46,6 +48,13 @@ export function nombreDelDescanso(n: number): string {
   return o ? `el ${o} descanso` : `el descanso ${n}`
 }
 
+/** 'sin límite', 'una sola', 'máximo 3'. El género lo pone quien llama. */
+const cuantasSePueden = (tope: unknown, una: string) => {
+  const n = Math.max(0, Math.floor(num(tope)))
+  if (n <= 0) return 'sin límite'
+  return n === 1 ? una : `máximo ${n}`
+}
+
 const hastaCuando = (descanso: unknown) => {
   const n = Math.max(0, Math.floor(num(descanso)))
   return n > 0 ? `hasta ${nombreDelDescanso(n)}` : 'toda la noche'
@@ -55,13 +64,14 @@ export function resumenDeTorneo(t: ConfigTorneo, apuntados = 0): ResumenTorneo {
   const stack = num(t.stack) || num(t.buyIn)
 
   const compras: CompraDelTorneo[] = [
-    { que: 'Entrada', dinero: num(t.buyIn), fichas: stack, hasta: '' },
+    { que: 'Entrada', dinero: num(t.buyIn), fichas: stack, cuantas: '', hasta: '' },
   ]
   if (num(t.rebuyPrice) > 0)
     compras.push({
       que: 'Recompra',
       dinero: num(t.rebuyPrice),
       fichas: fichasDe(t.rebuyChips, stack),
+      cuantas: cuantasSePueden(t.recomprasMax, 'una sola'),
       hasta: hastaCuando(t.recomprasHastaDescanso),
     })
   if (num(t.addOnPrice) > 0)
@@ -69,6 +79,7 @@ export function resumenDeTorneo(t: ConfigTorneo, apuntados = 0): ResumenTorneo {
       que: 'Add-on',
       dinero: num(t.addOnPrice),
       fichas: fichasDe(t.addOnChips, stack),
+      cuantas: cuantasSePueden(t.addOnsMax, 'uno solo'),
       hasta: hastaCuando(t.addOnsHastaDescanso),
     })
 
@@ -95,7 +106,7 @@ export function resumenDeTorneo(t: ConfigTorneo, apuntados = 0): ResumenTorneo {
  */
 export function tablaDeReglas(
   t: ConfigTorneo,
-  datos: { titulo: string; liga: string },
+  datos: { titulo: string; liga: string; foto?: string | null },
 ): DatosTabla {
   const { compras, premios, cenaPorPersona } = resumenDeTorneo(t)
   const miles = (n: number) => Math.round(n).toLocaleString('es-MX')
@@ -103,14 +114,15 @@ export function tablaDeReglas(
   const filas = compras.map((c) => [
     c.que,
     money(c.dinero),
-    [`${miles(c.fichas)} fichas`, c.hasta].filter(Boolean).join(' · '),
+    [`${miles(c.fichas)} fichas`, c.cuantas, c.hasta].filter(Boolean).join(' · '),
   ])
 
   if (cenaPorPersona > 0)
     filas.push(['Cena', money(cenaPorPersona), 'por persona, sale de la bolsa'])
 
+  /* "Lugar 1" y no "1º": la tipografía del título no trae la o volada y sale un cero. */
   for (const pr of premios)
-    filas.push([`${pr.lugar}º lugar`, `${pr.pct}%`, 'de la bolsa a repartir'])
+    filas.push([`Lugar ${pr.lugar}`, `${pr.pct}%`, 'de la bolsa a repartir'])
 
   const horas = [
     t.horaInicio && `Empieza ${t.horaInicio}`,
@@ -124,6 +136,7 @@ export function tablaDeReglas(
     gorro: datos.liga,
     columnas: ['Qué', 'Cuánto', 'Detalle'],
     filas,
+    fondo: datos.foto ?? null,
     pie: horas.join(' · ') || 'La bolsa sube con cada recompra',
   }
 }

@@ -12,15 +12,29 @@ const BASE: ConfigTorneo = {
   addOnChips: 6000,
   recomprasHastaDescanso: 1,
   addOnsHastaDescanso: 1,
+  recomprasMax: 2,
+  addOnsMax: 1,
 }
 
 describe('de qué consta el torneo', () => {
   it('dice cada compra con su dinero, sus fichas y hasta cuándo', () => {
     const { compras } = resumenDeTorneo(BASE)
     expect(compras).toEqual([
-      { que: 'Entrada', dinero: 500, fichas: 10000, hasta: '' },
-      { que: 'Recompra', dinero: 400, fichas: 8000, hasta: 'hasta el primer descanso' },
-      { que: 'Add-on', dinero: 300, fichas: 6000, hasta: 'hasta el primer descanso' },
+      { que: 'Entrada', dinero: 500, fichas: 10000, cuantas: '', hasta: '' },
+      {
+        que: 'Recompra',
+        dinero: 400,
+        fichas: 8000,
+        cuantas: 'máximo 2',
+        hasta: 'hasta el primer descanso',
+      },
+      {
+        que: 'Add-on',
+        dinero: 300,
+        fichas: 6000,
+        cuantas: 'uno solo',
+        hasta: 'hasta el primer descanso',
+      },
     ])
   })
 
@@ -74,8 +88,8 @@ describe('las reglas como imagen', () => {
     expect(t.columnas).toEqual(['Qué', 'Cuánto', 'Detalle'])
     expect(t.filas.slice(0, 3)).toEqual([
       ['Entrada', '$500', '10,000 fichas'],
-      ['Recompra', '$400', '8,000 fichas · hasta el primer descanso'],
-      ['Add-on', '$300', '6,000 fichas · hasta el primer descanso'],
+      ['Recompra', '$400', '8,000 fichas · máximo 2 · hasta el primer descanso'],
+      ['Add-on', '$300', '6,000 fichas · uno solo · hasta el primer descanso'],
     ])
   })
 
@@ -95,9 +109,28 @@ describe('las reglas como imagen', () => {
   it('cierra con los premios, uno por lugar que cobra', () => {
     const t = tablaDeReglas(BASE, { titulo: 'x', liga: 'y' })
     expect(t.filas.slice(-3)).toEqual([
-      ['1º lugar', '50%', 'de la bolsa a repartir'],
-      ['2º lugar', '30%', 'de la bolsa a repartir'],
-      ['3º lugar', '20%', 'de la bolsa a repartir'],
+      ['Lugar 1', '50%', 'de la bolsa a repartir'],
+      ['Lugar 2', '30%', 'de la bolsa a repartir'],
+      ['Lugar 3', '20%', 'de la bolsa a repartir'],
     ])
+  })
+})
+
+describe('cuántas se pueden', () => {
+  it('sin tope, las que quiera', () => {
+    const { compras } = resumenDeTorneo({ ...BASE, recomprasMax: 0, addOnsMax: undefined })
+    expect(compras[1].cuantas).toBe('sin límite')
+    expect(compras[2].cuantas).toBe('sin límite')
+  })
+
+  it('con tope de una, se dice en singular y con su género', () => {
+    const { compras } = resumenDeTorneo({ ...BASE, recomprasMax: 1, addOnsMax: 1 })
+    expect(compras[1].cuantas).toBe('una sola')
+    expect(compras[2].cuantas).toBe('uno solo')
+  })
+
+  it('con tope de varias, dice hasta cuántas', () => {
+    const { compras } = resumenDeTorneo({ ...BASE, recomprasMax: 3 })
+    expect(compras[1].cuantas).toBe('máximo 3')
   })
 })

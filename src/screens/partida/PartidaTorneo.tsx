@@ -169,10 +169,12 @@ export default function PartidaTorneo({
         `🏆 ${datos.liga.nombre} — ${datos.partida.nombre || datos.partida.fecha}`,
         '',
       ]
-      for (const c of r.compras)
+      for (const c of r.compras) {
+        const regla = [c.cuantas, c.hasta].filter(Boolean).join(', ')
         lineas.push(
-          `${c.que}: ${money(c.dinero)} → ${enFichas(c.fichas)} fichas${c.hasta ? ` (${c.hasta})` : ''}`,
+          `${c.que}: ${money(c.dinero)} → ${enFichas(c.fichas)} fichas${regla ? ` (${regla})` : ''}`,
         )
+      }
       if (r.cenaPorPersona > 0)
         lineas.push(`Cena: ${money(r.cenaPorPersona)} por persona, sale de la bolsa`)
       lineas.push('', 'Se reparte:')
@@ -253,6 +255,7 @@ export default function PartidaTorneo({
             datos={tablaDeReglas(torneo, {
               titulo: datos.partida.nombre || datos.partida.fecha,
               liga: datos.liga.nombre,
+              foto: datos.partida.foto ?? null,
             })}
             texto={textoReglas}
             alt="Reglas del torneo"
@@ -316,7 +319,9 @@ export default function PartidaTorneo({
     const { compras } = resumenDeTorneo(torneo, ps.length)
     const conHasta = (que: string) => {
       const c = compras.find((x) => x.que === que)
-      return c ? `Se puede ${c.hasta}.` : ''
+      if (!c) return ''
+      const t = [c.cuantas, c.hasta].filter(Boolean).join(', ')
+      return t ? `${t.charAt(0).toUpperCase()}${t.slice(1)}.` : ''
     }
     const reglaRecompras = conHasta('Recompra')
     const reglaAddOns = conHasta('Add-on')

@@ -28,6 +28,38 @@ const miles = (n: number) => Math.round(n).toLocaleString('es-MX')
  * Son botones y no una casilla de número porque un torneo tiene dos o tres descansos,
  * no veinte: escoger de una lista corta es más rápido y no deja teclear un disparate.
  */
+/** Cuántas se permiten por persona. 0 = sin límite. */
+export function CuantasSePueden({
+  valor,
+  onElegir,
+}: {
+  valor: number
+  onElegir: (v: number) => void
+}) {
+  const opciones = [
+    { v: 0, texto: 'Sin límite' },
+    { v: 1, texto: '1' },
+    { v: 2, texto: '2' },
+    { v: 3, texto: '3' },
+  ]
+  return (
+    <div className="flex gap-1.5">
+      {opciones.map((o) => (
+        <button
+          key={o.v}
+          type="button"
+          onClick={() => onElegir(o.v)}
+          className={`flex-1 cursor-pointer rounded-lg border-none px-1 py-2 text-[12px] font-bold whitespace-nowrap transition-colors ${
+            valor === o.v ? 'bg-marca text-white' : 'bg-[#e6e1d8] text-ink-soft'
+          }`}
+        >
+          {o.texto}
+        </button>
+      ))}
+    </div>
+  )
+}
+
 export function HastaDescanso({
   valor,
   onElegir,
@@ -154,8 +186,14 @@ export default function PasosTorneo({
         <>
           <p className="field-label mt-1 mb-1">Hasta cuándo se puede comprar</p>
           {num(torneo.rebuyPrice) > 0 && (
-            <div className="mb-2">
-              <span className="mb-1 block text-[12px] text-ink-soft">Recompras</span>
+            <div className="mb-3">
+              <span className="mb-1 block text-[12px] font-semibold text-ink">Recompras</span>
+              <span className="mb-1 block text-[11.5px] text-ink-soft">Cuántas por persona</span>
+              <CuantasSePueden
+                valor={num(torneo.recomprasMax)}
+                onElegir={(v) => aplicar({ recomprasMax: v })}
+              />
+              <span className="mt-1.5 mb-1 block text-[11.5px] text-ink-soft">Hasta cuándo</span>
               <HastaDescanso
                 valor={num(torneo.recomprasHastaDescanso)}
                 onElegir={(v) => aplicar({ recomprasHastaDescanso: v })}
@@ -163,8 +201,14 @@ export default function PasosTorneo({
             </div>
           )}
           {num(torneo.addOnPrice) > 0 && (
-            <div className="mb-2">
-              <span className="mb-1 block text-[12px] text-ink-soft">Add-on</span>
+            <div className="mb-3">
+              <span className="mb-1 block text-[12px] font-semibold text-ink">Add-on</span>
+              <span className="mb-1 block text-[11.5px] text-ink-soft">Cuántos por persona</span>
+              <CuantasSePueden
+                valor={num(torneo.addOnsMax)}
+                onElegir={(v) => aplicar({ addOnsMax: v })}
+              />
+              <span className="mt-1.5 mb-1 block text-[11.5px] text-ink-soft">Hasta cuándo</span>
               <HastaDescanso
                 valor={num(torneo.addOnsHastaDescanso)}
                 onElegir={(v) => aplicar({ addOnsHastaDescanso: v })}
