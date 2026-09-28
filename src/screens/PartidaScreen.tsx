@@ -1,4 +1,4 @@
-import Avatar, { AvatarEditable } from '../components/Avatar'
+import Avatar from '../components/Avatar'
 import Esqueleto from '../components/Esqueleto'
 import {
   AlertTriangle,
@@ -41,6 +41,7 @@ import { calcularRepartoCash, invertidoDe } from './partida/comun'
 import { dineroDeLaCaja } from '../lib/distribution'
 import { RELOJ_PARADO, pausarReloj, type Estructura, type RelojTorneo } from '../lib/torneo'
 import TiempoDeJuego from './partida/TiempoDeJuego'
+import LaPartida from './partida/LaPartida'
 import PartidaCash, { PESTANAS_CASH, type PestanaCash } from './partida/PartidaCash'
 import PartidaTorneo, {
   PESTANAS_TORNEO,
@@ -96,6 +97,8 @@ export default function PartidaScreen() {
   const [borrando, setBorrando] = useState(false)
   const [cerrando, setCerrando] = useState(false)
   const [refrescando, setRefrescando] = useState(false)
+  /** La ficha de la noche, que se abre al tocar su nombre en la barra. */
+  const [ficha, setFicha] = useState(false)
 
   const diferido = useGuardadoDiferido()
   /** Para saber si la pestaña de arranque ya se eligió o es la primera vez que se abre. */
@@ -376,6 +379,12 @@ export default function PartidaScreen() {
     if (r) avisar(foto ? 'Foto de la partida actualizada' : 'Foto quitada')
   }
 
+  /* El nombre de la noche. Vacío la deja con su fecha, que es como nace. */
+  const cambiarNombre = (nombre: string) => {
+    setDatos((d) => (d ? { ...d, partida: { ...d.partida, nombre: nombre || null } } : d))
+    void conAviso(() => api.guardarPartida(partidaId, { nombre }))
+  }
+
   /* Refrescar a mano: en la mesa hay varios teléfonos tocando la misma partida y lo
      que tienes en pantalla puede ser de hace rato. */
   const refrescar = async () => {
@@ -429,36 +438,30 @@ export default function PartidaScreen() {
             <ArrowLeft size={18} strokeWidth={2.4} />
           </button>
 
-          {/* La foto de la noche. La cambia un admin; los demás sólo la ven, y si no
-              hay, no se ocupa el hueco. */}
-          {puedeEditar ? (
-            <AvatarEditable
+          {/* La foto y el nombre abren la ficha de la noche: de qué consta, a qué hora,
+              quién lleva el banco. Tocar es ver; cambiar la foto está adentro, para que
+              rozar el nombre no abra el carrete del teléfono. */}
+          <button
+            type="button"
+            onClick={() => setFicha(true)}
+            aria-label="Ver la ficha de la partida"
+            className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 border-none bg-transparent p-0 text-left active:scale-[.99]"
+          >
+            <Avatar
               foto={datos.partida.foto ?? null}
               nombre={datos.partida.nombre || datos.partida.fecha}
               size={34}
-              etiqueta="Cambiar la foto de la partida"
-              onCambiar={(f) => void cambiarFoto(f)}
-              onError={avisar}
+              oscuro
             />
-          ) : (
-            datos.partida.foto && (
-              <Avatar
-                foto={datos.partida.foto}
-                nombre={datos.partida.nombre || datos.partida.fecha}
-                size={34}
-                oscuro
-              />
-            )
-          )}
-
-          <div className="min-w-0 flex-1">
-            <h1 className="m-0 truncate font-display text-[17px] leading-tight font-bold tracking-[.5px] text-white uppercase">
-              {datos.partida.nombre || datos.partida.fecha}
-            </h1>
-            <span className="text-[11px] text-white">
-              {esTorneo ? 'Torneo' : 'Cash'} · {datos.liga.nombre}
+            <span className="min-w-0 flex-1">
+              <span className="m-0 block truncate font-display text-[17px] leading-tight font-bold tracking-[.5px] text-white uppercase">
+                {datos.partida.nombre || datos.partida.fecha}
+              </span>
+              <span className="block text-[11px] text-white">
+                {esTorneo ? 'Torneo' : 'Cash'} · {datos.liga.nombre}
+              </span>
             </span>
-          </div>
+          </button>
           {cerrada && <Lock size={15} className="shrink-0 text-white/85" />}
 
           {/* En la mesa hay varios teléfonos tocando la misma partida. Esto trae lo que
@@ -683,6 +686,20 @@ export default function PartidaScreen() {
           Borrar esta partida
         </button>
       )}
+
+      {/* ---- la ficha de la noche ---- */}
+      <LaPartida
+        abierta={ficha}
+        datos={datos}
+        torneo={torneo}
+        jefe={miembros.find((m) => m.id === datos.partida.jefe_id)?.nombre ?? null}
+        puedeEditar={puedeEditar}
+        onCerrar={() => setFicha(false)}
+        onGuardarNombre={cambiarNombre}
+        onFoto={(f) => void cambiarFoto(f)}
+        onCompartir={() => void compartirPartida()}
+        onError={avisar}
+      />
 
       {/* ---- terminar la partida ---- */}
       <Sheet abierta={cerrando} onCerrar={() => setCerrando(false)} titulo="Terminar la partida">
