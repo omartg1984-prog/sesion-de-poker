@@ -217,6 +217,9 @@ export async function rutas(
     // Mismo mensaje exista o no el usuario: no se confirma quién está registrado.
     const generico = json({ error: 'Usuario o PIN incorrecto' }, 401)
     if (!fila || !pinValido(pin)) return generico
+    /* Un invitado no tiene PIN que pueda coincidir, pero más vale decirlo aquí: de un
+       vistazo se ve que esas cuentas no son una puerta de entrada. */
+    if (fila.es_invitado === 1) return generico
 
     if (fila.bloqueado_hasta && fila.bloqueado_hasta > ahora()) {
       const faltan = Math.ceil((Date.parse(fila.bloqueado_hasta) - Date.now()) / 60000)
@@ -374,7 +377,7 @@ export async function rutas(
         const liga = await env.DB.prepare('SELECT * FROM ligas WHERE id = ?').bind(ligaId).first()
         if (!liga) return json({ error: 'Liga no encontrada' }, 404)
         const { results: miembros } = await env.DB.prepare(
-          `SELECT u.id, u.usuario, u.nombre, u.foto, m.es_admin
+          `SELECT u.id, u.usuario, u.nombre, u.foto, u.es_invitado, m.es_admin
            FROM miembros m JOIN usuarios u ON u.id = m.usuario_id
            WHERE m.liga_id = ? ORDER BY u.nombre COLLATE NOCASE`,
         )
@@ -423,6 +426,43 @@ export async function rutas(
         return json({ ok: true })
       }
 
+      /*
+       * POST /api/ligas/:id/invitados — meter a alguien que no tiene la app.
+       *
+       * Se le hace una cuenta de verdad, para que sirva igual que cualquier otra en las
+       * partidas y en la tabla de la liga, pero marcada como invitada y con un PIN que
+       * no existe: nadie va a entrar con ella. Quien la crea queda a cargo de moverla.
+       */
+      if (partes[2] === 'invitados' && metodo === 'POST') {
+        if (!esAdminLiga)
+          return json({ error: 'Solo un admin de la liga puede meter invitados' }, 403)
+        const { nombre, foto } = await cuerpo<Record<string, unknown>>()
+        const nom = String(nombre ?? '').trim()
+        if (!nom) return json({ error: 'Falta el nombre del invitado' }, 400)
+
+        /* El usuario nunca se teclea, pero la columna es única: se arma uno que no
+           pueda chocar con el de nadie ni parecerse al que alguien elegiría. */
+        const id = nuevoId()
+        const handle = `invitado.${id.replace(/-/g, '').slice(0, 10)}`
+        /* Un PIN al azar que nadie sabe. El candado de verdad es `es_invitado`; esto
+           es para que no quede un hueco si algún día se olvida esa comprobación. */
+        const { hash, sal } = await hashearPin(nuevoId().slice(0, 8))
+
+        await env.DB.prepare(
+          `INSERT INTO usuarios (id, usuario, nombre, foto, pin_hash, pin_sal, es_admin_app, es_invitado, creado_en)
+           VALUES (?, ?, ?, ?, ?, ?, 0, 1, ?)`,
+        )
+          .bind(id, handle, nom, foto ? String(foto) : null, hash, sal, ahora())
+          .run()
+        await env.DB.prepare(
+          'INSERT INTO miembros (liga_id, usuario_id, es_admin, entro_en) VALUES (?, ?, 0, ?)',
+        )
+          .bind(ligaId, id, ahora())
+          .run()
+
+        return json({ invitado: { id, nombre: nom, foto: foto ? String(foto) : null } }, 201)
+      }
+
       // POST /api/ligas/:id/admin — dar o quitar admin de liga
       if (partes[2] === 'admin' && metodo === 'POST') {
         if (!esAdminLiga) return json({ error: 'Solo un admin de la liga puede cambiar esto' }, 403)
@@ -430,6 +470,16 @@ export async function rutas(
         const objetivo = String(usuarioId ?? '')
         if (!(await membresia(env, ligaId, objetivo)))
           return json({ error: 'Esa persona no está en la liga' }, 404)
+
+        /* Un invitado no puede ser admin: administrar se hace desde la app y él no
+           entra. Darle el escudo dejaría una liga con un admin que no existe. */
+        const esElInvitado = await env.DB.prepare(
+          'SELECT es_invitado FROM usuarios WHERE id = ?',
+        )
+          .bind(objetivo)
+          .first<{ es_invitado: number }>()
+        if (esElInvitado?.es_invitado === 1)
+          return json({ error: 'Un invitado no entra a la app, así que no puede ser admin' }, 409)
 
         // No se permite quedarse sin ningún admin.
         if (!esAdmin) {

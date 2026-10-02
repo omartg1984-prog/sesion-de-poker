@@ -14,6 +14,7 @@ import {
   Trash2,
   Trophy,
   UserMinus,
+  UserPlus,
   Users,
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
@@ -104,6 +105,14 @@ export default function LigaScreen() {
   /* La cara de la noche. Se elige al crearla, que es cuando se tiene a la mano el
      cartel o la foto del lugar; después se puede cambiar desde la partida. */
   const [fotoPartida, setFotoPartida] = useState<string | null>(null)
+  /*
+   * El invitado que se está dando de alta: alguien de la mesa que no va a instalar
+   * nada. Se le hace cuenta para que cuente igual que los demás en las partidas y en
+   * la tabla, pero no entra a la app: lo mueve un admin.
+   */
+  const [invitando, setInvitando] = useState(false)
+  const [nombreInvitado, setNombreInvitado] = useState('')
+  const [fotoInvitado, setFotoInvitado] = useState<string | null>(null)
   const [tipo, setTipo] = useState<TipoPartida>('cash')
   /* Quién funge de banco esa noche. Por defecto, quien está creando la partida. */
   const [jefe, setJefe] = useState<string>(yo.id)
@@ -162,6 +171,20 @@ export default function LigaScreen() {
       setFotoPartida(null)
       irAPartida(r.partida.id, ligaId)
     }
+  }
+
+  const agregarInvitado = async () => {
+    const nom = nombreInvitado.trim()
+    if (ocupado || !nom) return
+    setOcupado(true)
+    const r = await conAviso(() => api.agregarInvitado(ligaId, { nombre: nom, foto: fotoInvitado }))
+    setOcupado(false)
+    if (!r) return
+    setInvitando(false)
+    setNombreInvitado('')
+    setFotoInvitado(null)
+    avisar(`${nom} ya está en la liga`)
+    void cargar()
   }
 
   /*
@@ -676,6 +699,67 @@ ${link}`
           Se unen con el código de la liga.{' '}
           {soyAdmin && 'Toca el escudo para dar o quitar permisos de admin.'}
         </p>
+
+        {/* Los que no van a instalar nada. Sin esto quedaban fuera de la app entera y
+            la noche se llevaba a medias entre la app y una libreta. */}
+        {soyAdmin && !invitando && (
+          <button type="button" className="btn btn-ghost mb-3" onClick={() => setInvitando(true)}>
+            <UserPlus size={17} strokeWidth={2.4} />
+            Meter a alguien sin app
+          </button>
+        )}
+
+        {soyAdmin && invitando && (
+          <div className="mb-3 rounded-xl border border-paper-line bg-paper-soft px-3 py-3">
+            <p className="field-label mt-0 mb-1">Jugador invitado</p>
+            <p className="mt-0 mb-2.5 text-[12px] leading-snug text-ink-soft">
+              Para el que no va a bajar la app. Cuenta igual que los demás en las partidas
+              y en la tabla, pero no entra: tú le apuntas sus fichas y su dinero.
+            </p>
+            <div className="flex items-end gap-3">
+              <label className="block min-w-0 flex-1">
+                <span className="field-label">Cómo se llama</span>
+                <input
+                  type="text"
+                  value={nombreInvitado}
+                  maxLength={40}
+                  placeholder="ej. El Compadre"
+                  onChange={(e) => setNombreInvitado(e.target.value)}
+                  className="mt-1 w-full rounded-xl border border-paper-line bg-white px-3 py-3 text-base font-semibold text-ink outline-none focus:border-marca"
+                />
+              </label>
+              <AvatarEditable
+                foto={fotoInvitado}
+                nombre={nombreInvitado || 'Invitado'}
+                size={52}
+                etiqueta="Foto del invitado"
+                onCambiar={setFotoInvitado}
+                onError={avisar}
+              />
+            </div>
+            <button
+              type="button"
+              className="btn btn-marca mt-3 mb-2 disabled:opacity-45"
+              disabled={ocupado || !nombreInvitado.trim()}
+              onClick={() => void agregarInvitado()}
+            >
+              <UserPlus size={17} strokeWidth={2.4} />
+              Meterlo a la liga
+            </button>
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={() => {
+                setInvitando(false)
+                setNombreInvitado('')
+                setFotoInvitado(null)
+              }}
+            >
+              Mejor no
+            </button>
+          </div>
+        )}
+
         <ul className="m-0 list-none p-0">
           {miembros.map((m) => (
             <li
@@ -696,21 +780,27 @@ ${link}`
                   {m.nombre}
                   {m.id === yo.id && <span className="font-normal text-ink-soft"> (tú)</span>}
                 </b>
-                <span className="block truncate text-xs text-ink-soft">{m.usuario}</span>
+                {/* Del invitado no hay usuario que enseñar: lo que hace falta saber es
+                    que no tiene la app, para que nadie espere que se apunte solo. */}
+                <span className="block truncate text-xs text-ink-soft">
+                  {m.es_invitado === 1 ? 'Invitado · sin app' : m.usuario}
+                </span>
               </span>
-              <button
-                type="button"
-                disabled={!soyAdmin}
-                onClick={() => void alternarAdmin(m)}
-                aria-label={
-                  m.es_admin === 1 ? `Quitar admin a ${m.nombre}` : `Hacer admin a ${m.nombre}`
-                }
-                className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border-none transition-colors ${
-                  m.es_admin === 1 ? 'bg-marca/22 text-marca-tinta' : 'bg-ink/8 text-ink-soft/45'
-                } ${soyAdmin ? 'cursor-pointer active:scale-95' : 'cursor-default'}`}
-              >
-                <Shield size={15} strokeWidth={2.6} />
-              </button>
+              {m.es_invitado !== 1 && (
+                <button
+                  type="button"
+                  disabled={!soyAdmin}
+                  onClick={() => void alternarAdmin(m)}
+                  aria-label={
+                    m.es_admin === 1 ? `Quitar admin a ${m.nombre}` : `Hacer admin a ${m.nombre}`
+                  }
+                  className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border-none transition-colors ${
+                    m.es_admin === 1 ? 'bg-marca/22 text-marca-tinta' : 'bg-ink/8 text-ink-soft/45'
+                  } ${soyAdmin ? 'cursor-pointer active:scale-95' : 'cursor-default'}`}
+                >
+                  <Shield size={15} strokeWidth={2.6} />
+                </button>
+              )}
               {(soyAdmin || m.id === yo.id) && (
                 <button
                   type="button"

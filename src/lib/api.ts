@@ -65,6 +65,7 @@ export interface Usuario {
   nombre: string
   foto: string | null
   esAdminApp: boolean
+  esInvitado?: boolean
 }
 
 export interface LigaResumen {
@@ -84,6 +85,8 @@ export interface Miembro {
   nombre: string
   foto: string | null
   es_admin: number
+  /** 1 = está en la liga pero no tiene la app; lo mueve un admin. */
+  es_invitado?: number
 }
 
 export interface Liga {
@@ -415,6 +418,12 @@ export const api = {
   cambiarAdminLiga: (ligaId: string, usuarioId: string, esAdmin: boolean) =>
     post<{ ok: true }>(`ligas/${ligaId}/admin`, { usuarioId, esAdmin }),
   borrarLiga: (id: string) => borrar<{ ok: true }>(`ligas/${id}`),
+  /** Mete a la liga a alguien que no va a instalar la app. */
+  agregarInvitado: (ligaId: string, datos: { nombre: string; foto?: string | null }) =>
+    post<{ invitado: { id: string; nombre: string; foto: string | null } }>(
+      `ligas/${ligaId}/invitados`,
+      datos,
+    ),
   sacarMiembro: (ligaId: string, usuarioId: string) =>
     borrar<{ ok: true }>(`ligas/${ligaId}/miembros/${usuarioId}`),
 

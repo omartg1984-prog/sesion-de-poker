@@ -1,0 +1,14 @@
+-- Jugadores invitados: están en la liga pero no tienen la app.
+--
+-- En toda mesa hay dos o tres que no van a instalar nada. Hasta ahora quedaban fuera de
+-- la app entera —no se les podía apuntar, ni contarles las fichas, ni aparecían en la
+-- tabla de la liga— así que la noche se llevaba a medias entre la app y una libreta.
+--
+-- Un invitado es un usuario como los demás para todo lo que importa: se le apunta a una
+-- partida, se le cuentan las fichas y suma en la tabla. Lo único que no puede es entrar:
+-- no hay nadie del otro lado tecleando un PIN. Lo crea un admin de la liga y lo mueve
+-- un admin de la liga.
+--
+-- Aditiva y con valor por omisión: todas las cuentas que ya existen quedan en 0, que es
+-- "esta persona sí entra con su usuario y su PIN".
+ALTER TABLE usuarios ADD COLUMN es_invitado INTEGER NOT NULL DEFAULT 0;
