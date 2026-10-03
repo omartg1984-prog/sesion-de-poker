@@ -164,6 +164,12 @@ export interface PeticionSimulacion {
   mesa: number[]
   /** Contra cuántos juegas. */
   rivales: number
+  /*
+   * Las manos que sí se conocen, para repasar una mano después de jugada: cada entrada
+   * son las dos cartas de un rival. Los rivales que no vengan aquí se reparten al azar,
+   * así que se puede saber la de uno y no la de los otros.
+   */
+  manosRivales?: number[][]
   iteraciones?: number
   azar?: () => number
 }
@@ -177,17 +183,25 @@ export interface PeticionSimulacion {
  */
 export function simular(p: PeticionSimulacion): Simulacion {
   const rivales = Math.max(1, Math.min(9, Math.floor(p.rivales)))
-  const iteraciones = Math.max(200, Math.floor(p.iteraciones ?? 20000))
   const azar = p.azar ?? Math.random
 
-  const conocidas = [...p.mano, ...p.mesa]
+  /* Sólo cuentan las manos completas: un rival con una sola carta puesta se reparte al
+     azar, como si no se supiera nada de él. */
+  const sabidas = (p.manosRivales ?? []).filter((m) => m.length === 2).slice(0, rivales)
+  const alAzar = rivales - sabidas.length
+
+  const conocidas = [...p.mano, ...p.mesa, ...sabidas.flat()]
   const mazo: number[] = []
   const usada = new Array<boolean>(52).fill(false)
   for (const c of conocidas) usada[c] = true
   for (let c = 0; c < 52; c++) if (!usada[c]) mazo.push(c)
 
   const faltanMesa = 5 - p.mesa.length
-  const aRepartir = faltanMesa + rivales * 2
+  const aRepartir = faltanMesa + alAzar * 2
+
+  /* Si no queda nada por repartir, la mano ya está jugada: una vuelta basta y todas las
+     demás darían lo mismo. */
+  const iteraciones = aRepartir === 0 ? 1 : Math.max(200, Math.floor(p.iteraciones ?? 20000))
 
   let gano = 0
   let empate = 0
@@ -210,11 +224,15 @@ export function simular(p: PeticionSimulacion): Simulacion {
     const mia = evaluar(siete)
 
     let mejorRival = -1
-    for (let r = 0; r < rivales; r++) {
-      const a = mazo[faltanMesa + r * 2]
-      const b = mazo[faltanMesa + r * 2 + 1]
-      siete[0] = a
-      siete[1] = b
+    for (const suyas of sabidas) {
+      siete[0] = suyas[0]
+      siete[1] = suyas[1]
+      const suya = evaluar(siete)
+      if (suya > mejorRival) mejorRival = suya
+    }
+    for (let r = 0; r < alAzar; r++) {
+      siete[0] = mazo[faltanMesa + r * 2]
+      siete[1] = mazo[faltanMesa + r * 2 + 1]
       const suya = evaluar(siete)
       if (suya > mejorRival) mejorRival = suya
     }
@@ -238,4 +256,108 @@ export function nombreDeLaMano(mano: number[], mesa: number[]): string {
   const cartas = [...mano, ...mesa]
   if (cartas.length < 5) return ''
   return CATEGORIAS[categoriaDe(evaluar(cartas))]
+}
+
+/* ---- la mesa y el lugar donde te sientas ---- */
+
+export type Posicion = 'ciega' | 'temprana' | 'media' | 'tardia'
+
+export interface Asiento {
+  /** 0 es el botón, y de ahí se reparte en el sentido de las manecillas. */
+  indice: number
+  /** 'D', 'CG', 'CCH' o vacío: lo que se pinta dentro del asiento. */
+  marca: string
+  posicion: Posicion
+  /** Cómo se llama esa posición en la mesa. */
+  nombre: string
+}
+
+/**
+ * Los asientos de una mesa de `jugadores`, en orden desde el botón.
+ *
+ * Las posiciones no son un gusto: salen de a cuántos les hablas antes de que te toque.
+ * El botón habla al último todas las rondas —por eso es la mejor silla—, las ciegas ya
+ * pusieron dinero y hablan primero del flop en adelante, y entre una cosa y otra están
+ * los que entran temprano, que hablan casi a ciegas.
+ *
+ * Con dos jugadores no hay medias tintas: el botón es la ciega chica y el otro la grande.
+ */
+export function asientosDe(jugadores: number): Asiento[] {
+  const n = Math.max(2, Math.min(10, Math.floor(jugadores)))
+  const salida: Asiento[] = []
+
+  for (let i = 0; i < n; i++) {
+    if (i === 0) {
+      salida.push({
+        indice: 0,
+        marca: 'D',
+        posicion: 'tardia',
+        nombre: n === 2 ? 'Botón y ciega chica' : 'Botón',
+      })
+      continue
+    }
+    if (n === 2) {
+      salida.push({ indice: 1, marca: 'CG', posicion: 'ciega', nombre: 'Ciega grande' })
+      continue
+    }
+    if (i === 1) {
+      salida.push({ indice: 1, marca: 'CCH', posicion: 'ciega', nombre: 'Ciega chica' })
+      continue
+    }
+    if (i === 2) {
+      salida.push({ indice: 2, marca: 'CG', posicion: 'ciega', nombre: 'Ciega grande' })
+      continue
+    }
+
+    /* Los que quedan después de las ciegas se parten en tres: los primeros hablan casi
+       sin información y el último antes del botón ya vio a casi toda la mesa. */
+    const cuantos = n - 3
+    const sitio = i - 3
+    const ultimo = sitio === cuantos - 1
+    if (ultimo && cuantos >= 2) {
+      salida.push({ indice: i, marca: '', posicion: 'tardia', nombre: 'Antes del botón' })
+    } else if (sitio < Math.ceil(cuantos / 2)) {
+      salida.push({ indice: i, marca: '', posicion: 'temprana', nombre: 'Entra temprano' })
+    } else {
+      salida.push({ indice: i, marca: '', posicion: 'media', nombre: 'A media mesa' })
+    }
+  }
+  return salida
+}
+
+/** Cuánto margen de más se le pide a una mano según desde dónde se juegue. */
+export const EXIGENCIA: Record<Posicion, number> = {
+  temprana: 1.6,
+  media: 1.35,
+  ciega: 1.25,
+  tardia: 1.15,
+}
+
+export interface Banda {
+  id: 'fuerte' | 'buena' | 'limite' | 'floja'
+  etiqueta: string
+  /** Para pintar: 'win', 'ambar' o 'loss'. */
+  tono: 'win' | 'ambar' | 'loss'
+}
+
+/**
+ * Qué tan factible es jugarla, en cuatro cajones.
+ *
+ * Se mide contra lo que te tocaría por puro reparto —con cuatro en la mesa, 25%— y no
+ * contra un número fijo: una mano que gana el 30% es excelente contra siete y mala
+ * contra uno. Encima se le pide más margen cuanto peor sea la posición.
+ */
+export function bandaDeJugabilidad(
+  equidad: number,
+  jugadores: number,
+  posicion: Posicion,
+): Banda {
+  const justo = 100 / Math.max(2, jugadores)
+  const razon = justo > 0 ? equidad / justo : 0
+  const exige = EXIGENCIA[posicion]
+
+  if (razon >= exige * 1.3) return { id: 'fuerte', etiqueta: 'Mano fuerte', tono: 'win' }
+  if (razon >= exige) return { id: 'buena', etiqueta: 'Da para jugarla', tono: 'win' }
+  if (razon >= 1) return { id: 'limite', etiqueta: 'Al límite', tono: 'ambar' }
+  return { id: 'floja', etiqueta: 'Para tirarla', tono: 'loss' }
 }
