@@ -62,6 +62,34 @@ const ORDENES: { id: Orden; label: string; ayuda: string }[] = [
 ]
 
 const claseSaldo = (v: number) => (v > EPS ? 'text-win' : v < -EPS ? 'text-loss' : 'text-ink-soft')
+/* La vista de tabla va sobre el fondo oscuro de la liga: ahí el verde y el rojo de las
+   tarjetas crema no se leen. */
+const tonoOscuro = (v: number) =>
+  v > EPS ? '!text-win-alto' : v < -EPS ? '!text-loss-alto' : ''
+
+/** Las columnas de la vista de tabla. El `id` es el mismo con el que se ordena. */
+const COLUMNAS: {
+  id: Orden
+  corto: string
+  dinero?: boolean
+  valor: (p: Posicion) => { texto: string; n: number }
+}[] = [
+  { id: 'partidas', corto: 'PJ', valor: (p) => ({ texto: String(p.partidas), n: 0 }) },
+  { id: 'puntos', corto: 'Pts', valor: (p) => ({ texto: String(p.puntos), n: 0 }) },
+  {
+    id: 'puntosNoche',
+    corto: 'Pts/n',
+    valor: (p) => ({ texto: p.puntosPorNoche.toFixed(1), n: 0 }),
+  },
+  { id: 'balance', corto: 'Saldo', dinero: true, valor: (p) => ({ texto: signed(p.balance), n: p.balance }) },
+  { id: 'roi', corto: 'Rend.', dinero: true, valor: (p) => ({ texto: pct(p.roi), n: p.roi }) },
+  {
+    id: 'promedio',
+    corto: 'Por noche',
+    dinero: true,
+    valor: (p) => ({ texto: signed(p.promedio), n: p.promedio }),
+  },
+]
 const pct = (v: number) => `${v > 0 ? '+' : ''}${v.toFixed(0)}%`
 
 function fechaCorta(iso: string) {
@@ -229,6 +257,7 @@ interface Props {
 export default function TablaPosiciones({ tabla, nombreLiga, partidas }: Props) {
   const [modo, setModo] = useState<'liga' | 'noche'>('liga')
   const [orden, setOrden] = useState<Orden>('puntos')
+  const [vista, setVista] = useState<'tarjetas' | 'tabla'>('tabla')
 
   /* Sólo las cerradas tienen resultado: en una abierta las fichas no están contadas. */
   const jugadas = partidas.filter((p) => p.estado === 'cerrada')
@@ -495,6 +524,29 @@ export default function TablaPosiciones({ tabla, nombreLiga, partidas }: Props) 
         }))}
       />
 
+      {/* Dos maneras de mirar lo mismo: las tarjetas cuentan la historia de cada quien y
+          la tabla sirve para comparar a todos de un vistazo. */}
+      <div className="mb-2 flex gap-1 rounded-xl bg-black/30 p-1">
+        {(
+          [
+            ['tarjetas', 'Tarjetas'],
+            ['tabla', 'Tabla'],
+          ] as const
+        ).map(([id, texto]) => (
+          <button
+            key={id}
+            type="button"
+            aria-pressed={vista === id}
+            onClick={() => setVista(id)}
+            className={`flex-1 cursor-pointer rounded-[9px] border-none py-1.5 text-[12.5px] font-bold transition-colors ${
+              vista === id ? 'bg-white text-marca-tinta' : 'bg-transparent text-tiza-suave'
+            }`}
+          >
+            {texto}
+          </button>
+        ))}
+      </div>
+
       <div className="no-scrollbar -mx-1 mb-1 flex gap-1.5 overflow-x-auto px-1">
         {ORDENES.map((o) => (
           <button
@@ -514,32 +566,92 @@ export default function TablaPosiciones({ tabla, nombreLiga, partidas }: Props) 
       </div>
       <p className="mt-1 mb-3 px-1 text-[11px] leading-snug text-tiza-suave">{ayuda}</p>
 
-      {ordenadas.map((p, i) => (
-        <Tarjeta
-          key={p.usuarioId}
-          puesto={i + 1}
-          nombre={p.nombre}
-          foto={p.foto}
-          cifra={cifraDe(p).texto}
-          tono={cifraDe(p).tono}
-          bajo={
-            <>
-              <span className="truncate">
-                {p.partidas} {p.partidas === 1 ? 'partida' : 'partidas'} · ganó {p.ganadas}
-                {!p.esMiembro && ' · ya no está'}
-              </span>
-              <Racha n={p.rachaActual} />
-              <Titulos titulos={p.titulos} max={1} />
-            </>
-          }
-          pies={[
-            { k: 'Rendim.', v: pct(p.roi), clase: claseSaldo(p.roi) },
-            { k: 'Por noche', v: signed(p.promedio), clase: claseSaldo(p.promedio) },
-            { k: 'Mejor', v: signed(p.mejor), clase: 'text-win' },
-            { k: 'Podios', v: String(p.podios) },
-          ]}
-        />
-      ))}
+      {vista === 'tabla' ? (
+        /*
+         * Todo de un vistazo, en columnas.
+         *
+         * Las tarjetas enseñan una cifra grande y el resto chiquito abajo, así que para
+         * comparar a cuatro personas hay que ir y venir. Aquí cada columna es un dato y
+         * cada renglón una persona, que es como se lee una tabla de liga de toda la
+         * vida. La columna por la que se está ordenando va resaltada.
+         */
+        <div className="no-scrollbar -mx-1 mb-3 overflow-x-auto px-1">
+          <table className="w-full border-collapse text-[13px] whitespace-nowrap">
+            <thead>
+              <tr className="text-[9.5px] tracking-[.4px] text-tiza-suave uppercase">
+                <th className="px-1 pb-2 text-left font-semibold">#</th>
+                <th className="px-1 pb-2 text-left font-semibold">Jugador</th>
+                {COLUMNAS.map((c) => (
+                  <th
+                    key={c.id}
+                    className={`cursor-pointer px-1.5 pb-2 text-right font-semibold ${
+                      orden === c.id ? 'text-white' : ''
+                    }`}
+                    onClick={() => setOrden(c.id)}
+                  >
+                    {c.corto}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {ordenadas.map((p, i) => (
+                <tr key={p.usuarioId} className="border-t border-white/10">
+                  <td className="px-1 py-2 font-display text-[13px] font-bold text-tiza-suave">
+                    {i + 1}
+                  </td>
+                  <td className="max-w-[112px] px-1 py-2">
+                    <span className="flex items-center gap-1.5">
+                      <Cara nombre={p.nombre} foto={p.foto} size={22} />
+                      <span className="truncate font-semibold text-white">{p.nombre}</span>
+                    </span>
+                  </td>
+                  {COLUMNAS.map((c) => {
+                    const v = c.valor(p)
+                    return (
+                      <td
+                        key={c.id}
+                        className={`px-1.5 py-2 text-right font-display tabular-nums ${
+                          orden === c.id ? 'font-bold text-white' : 'text-tiza-suave'
+                        } ${c.dinero ? tonoOscuro(v.n) : ''}`}
+                      >
+                        {v.texto}
+                      </td>
+                    )
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        ordenadas.map((p, i) => (
+          <Tarjeta
+            key={p.usuarioId}
+            puesto={i + 1}
+            nombre={p.nombre}
+            foto={p.foto}
+            cifra={cifraDe(p).texto}
+            tono={cifraDe(p).tono}
+            bajo={
+              <>
+                <span className="truncate">
+                  {p.partidas} {p.partidas === 1 ? 'partida' : 'partidas'} · ganó {p.ganadas}
+                  {!p.esMiembro && ' · ya no está'}
+                </span>
+                <Racha n={p.rachaActual} />
+                <Titulos titulos={p.titulos} max={1} />
+              </>
+            }
+            pies={[
+              { k: 'Rendim.', v: pct(p.roi), clase: claseSaldo(p.roi) },
+              { k: 'Por noche', v: signed(p.promedio), clase: claseSaldo(p.promedio) },
+              { k: 'Mejor', v: signed(p.mejor), clase: 'text-win' },
+              { k: 'Podios', v: String(p.podios) },
+            ]}
+          />
+        ))
+      )}
 
       <section className="panel">
         <p className="panel-title">

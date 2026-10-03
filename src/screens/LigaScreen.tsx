@@ -43,7 +43,7 @@ import {
   type TablaPosiciones as Tabla,
   type TipoPartida,
   leerJson,
-  PUNTOS_POR_DEFECTO,
+  esquemaGuardado,
   type EsquemaPuntos,
 } from '../lib/api'
 import TablaPosiciones from './liga/TablaPosiciones'
@@ -868,7 +868,7 @@ ${link}`
       {/* ---- cómo se reparten los puntos ---- */}
       <Puntos
         abierta={puntosAbierto}
-        esquema={leerJson<EsquemaPuntos>(liga.puntos, PUNTOS_POR_DEFECTO)}
+        esquema={esquemaGuardado(liga.puntos)}
         soyAdmin={soyAdmin}
         onCerrar={() => setPuntosAbierto(false)}
         onGuardar={guardarPuntos}

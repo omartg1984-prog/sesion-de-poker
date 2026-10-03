@@ -89,33 +89,149 @@ export interface Miembro {
   es_invitado?: number
 }
 
-/** Cómo reparte puntos una liga. En `null` se usan los de siempre. */
+/*
+ * Cómo reparte puntos una liga: una lista de consideraciones, no una fórmula fija.
+ *
+ * El catálogo vive igual aquí y en el servidor. El servidor es el que manda —de ahí
+ * salen los puntos de la tabla—; esta copia sólo sirve para que la hoja enseñe el efecto
+ * sin tener que preguntar en cada tecla. Si se agrega una consideración, va en los dos.
+ */
+
+export interface NocheParaPuntos {
+  lugar: number
+  deCuantos: number
+  /** Lo que ganó o perdió en dinero. */
+  resultado: number
+  recompras: number
+}
+
+export interface Consideracion {
+  id: string
+  etiqueta: string
+  ayuda: string
+  /** Cuántas veces se cobra esa noche. 0 = no aplica. */
+  veces: (n: NocheParaPuntos) => number
+  sugerido: number
+  /** Las que restan se escriben en negativo y se pintan distinto. */
+  castigo?: boolean
+  /** Si depende sólo del lugar: las demás no caben en la tabla de ejemplo. */
+  porLugar?: boolean
+}
+
+export const CONSIDERACIONES: Consideracion[] = [
+  {
+    id: 'base',
+    etiqueta: 'Por presentarte',
+    ayuda: 'Lo que suma venir, aunque te vayas en la primera mano.',
+    veces: () => 1,
+    sugerido: 1,
+    porLugar: true,
+  },
+  {
+    id: 'porJugador',
+    etiqueta: 'Por cada uno al que le ganas',
+    ayuda: 'Es lo que hace que ganarle a siete valga más que ganarle a tres.',
+    veces: (n) => Math.max(0, n.deCuantos - n.lugar),
+    sugerido: 1,
+    porLugar: true,
+  },
+  {
+    id: 'bonoGanar',
+    etiqueta: 'Por ganar la noche',
+    ayuda: 'Un premio aparte para el primer lugar.',
+    veces: (n) => (n.lugar === 1 ? 1 : 0),
+    sugerido: 3,
+    porLugar: true,
+  },
+  {
+    id: 'bonoPodio',
+    etiqueta: 'Por quedar entre los tres primeros',
+    ayuda: 'Sólo en mesas de más de tres: en una de tres, todos estarían en el podio.',
+    veces: (n) => (n.lugar <= 3 && n.deCuantos > 3 ? 1 : 0),
+    sugerido: 2,
+    porLugar: true,
+  },
+  {
+    id: 'bonoPositivo',
+    etiqueta: 'Por salir ganando dinero',
+    ayuda: 'No es lo mismo quedar tercero arriba que tercero abajo.',
+    veces: (n) => (n.resultado > 0 ? 1 : 0),
+    sugerido: 2,
+  },
+  {
+    id: 'sinRecompras',
+    etiqueta: 'Por aguantar sin recomprar',
+    ayuda: 'Premia al que hizo rendir su entrada.',
+    veces: (n) => (n.recompras === 0 ? 1 : 0),
+    sugerido: 2,
+  },
+  {
+    id: 'bonoUltimo',
+    etiqueta: 'Por quedar último',
+    ayuda: 'Para restar. Ponlo en negativo si quieres que duela.',
+    veces: (n) => (n.lugar === n.deCuantos && n.deCuantos > 1 ? 1 : 0),
+    sugerido: -1,
+    castigo: true,
+    porLugar: true,
+  },
+  {
+    id: 'porRecompra',
+    etiqueta: 'Por cada recompra',
+    ayuda: 'Para restar. Castiga al que compra su camino de vuelta.',
+    veces: (n) => Math.max(0, n.recompras),
+    sugerido: -1,
+    castigo: true,
+  },
+]
+
+export interface ReglaPuntos {
+  id: string
+  puntos: number
+}
+
 export interface EsquemaPuntos {
-  /** Por presentarse, aunque se vaya en la primera mano. */
-  base: number
-  /** Por cada jugador al que le ganó esa noche. */
-  porJugador: number
-  /** Extra para el que ganó la noche. */
-  bonoGanar: number
-  /** Extra para los tres primeros, sólo en mesas de más de tres. */
-  bonoPodio: number
+  reglas: ReglaPuntos[]
 }
 
 export const PUNTOS_POR_DEFECTO: EsquemaPuntos = {
-  base: 1,
-  porJugador: 1,
-  bonoGanar: 0,
-  bonoPodio: 0,
+  reglas: [
+    { id: 'base', puntos: 1 },
+    { id: 'porJugador', puntos: 1 },
+  ],
 }
 
 /** Lo que suma una noche. Es la misma cuenta que hace el servidor. */
-export function puntosDeLaNoche(lugar: number, deCuantos: number, e: EsquemaPuntos): number {
-  const superados = Math.max(0, deCuantos - lugar)
-  let total = e.base + superados * e.porJugador
-  if (lugar === 1) total += e.bonoGanar
-  /* Un podio en una mesa de tres no dice nada: los tres estarían en él. */
-  if (lugar <= 3 && deCuantos > 3) total += e.bonoPodio
+export function puntosDeLaNoche(n: NocheParaPuntos, e: EsquemaPuntos): number {
+  let total = 0
+  for (const regla of e.reglas) {
+    const c = CONSIDERACIONES.find((x) => x.id === regla.id)
+    if (c) total += c.veces(n) * regla.puntos
+  }
   return total
+}
+
+/** Lee lo guardado, entendiendo también la forma vieja de cuatro campos sueltos. */
+export function esquemaGuardado(crudo: string | null): EsquemaPuntos {
+  const g = leerJson<Record<string, unknown>>(crudo, {})
+  if (Array.isArray(g.reglas)) {
+    const vistos = new Set<string>()
+    const reglas = (g.reglas as ReglaPuntos[])
+      .filter(
+        (r) =>
+          r &&
+          typeof r.puntos === 'number' &&
+          CONSIDERACIONES.some((c) => c.id === r.id) &&
+          !vistos.has(r.id) &&
+          vistos.add(r.id),
+      )
+      .map((r) => ({ id: r.id, puntos: r.puntos }))
+    return { reglas }
+  }
+  const viejas = ['base', 'porJugador', 'bonoGanar', 'bonoPodio']
+  const convertidas = viejas
+    .map((id) => ({ id, puntos: g[id] }))
+    .filter((r): r is ReglaPuntos => typeof r.puntos === 'number' && r.puntos !== 0)
+  return convertidas.length > 0 ? { reglas: convertidas } : PUNTOS_POR_DEFECTO
 }
 
 export interface Liga {
