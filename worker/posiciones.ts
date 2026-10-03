@@ -72,6 +72,14 @@ export interface Posicion {
   ultimos: number
   /** Campeonato: suma de los puntos de cada noche. Ordena por constancia, no por dinero. */
   puntos: number
+  /*
+   * Los mismos puntos divididos entre las noches que vino.
+   *
+   * El total premia venir; esto premia hacerlo bien. Hacen falta los dos: con sólo el
+   * total, el que no se pierde una le gana siempre al que viene poco y arrasa, y con
+   * sólo el promedio pasa justo al revés.
+   */
+  puntosPorNoche: number
 
   /** Positiva = noches ganando seguidas; negativa = perdiendo. */
   rachaActual: number
@@ -281,6 +289,10 @@ export async function calcularPosiciones(env: Env, ligaId: string): Promise<Tabl
       podios: noches.filter((n) => n.lugarEnLaMesa <= 3 && n.deCuantos > 3).length,
       ultimos: noches.filter((n) => n.lugarEnLaMesa === n.deCuantos && n.deCuantos > 1).length,
       puntos: noches.reduce((a, n) => a + puntosDeLaNoche(n.lugarEnLaMesa, n.deCuantos), 0),
+      puntosPorNoche: noches.length
+        ? noches.reduce((a, n) => a + puntosDeLaNoche(n.lugarEnLaMesa, n.deCuantos), 0) /
+          noches.length
+        : 0,
       rachaActual: rachaAlCierre(noches),
       mejorRacha: mejorRachaDe(noches),
       recompras: noches.reduce((a, n) => a + n.recompras, 0),

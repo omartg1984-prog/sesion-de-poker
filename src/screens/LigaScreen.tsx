@@ -5,6 +5,7 @@ import {
   Banknote,
   CalendarPlus,
   ChevronRight,
+  Calculator,
   Coins,
   Megaphone,
   Pencil,
@@ -23,6 +24,7 @@ import Sheet from '../components/Sheet'
 import Avatar, { AvatarEditable } from '../components/Avatar'
 import LaLiga from './liga/LaLiga'
 import CrearTorneo from './liga/CrearTorneo'
+import Simulador from './liga/Simulador'
 import Reglas from './liga/Reglas'
 import type { SeccionReglas } from '../lib/reglas'
 import { copyText } from '../lib/portapapeles'
@@ -97,6 +99,7 @@ export default function LigaScreen() {
   const [editandoLiga, setEditandoLiga] = useState(false)
   const [creando, setCreando] = useState(false)
   const [fichas, setFichas] = useState(false)
+  const [simulador, setSimulador] = useState(false)
   const [gente, setGente] = useState(false)
   const [ocupado, setOcupado] = useState(false)
 
@@ -376,6 +379,13 @@ ${link}`
           Inventario de fichas
         </button>
       </div>
+
+      {/* Para la discusión de media noche: "¿eso se juega?". En vez de opinar, reparte
+          la mano veinte mil veces y enseña cuántas se gana. */}
+      <button type="button" className="btn btn-ghost mb-3.5" onClick={() => setSimulador(true)}>
+        <Calculator size={17} strokeWidth={2.4} />
+        Simulador de manos
+      </button>
 
       {/* El que ganó la última noche tiene la palabra. Va sobre el fondo oscuro de la
           liga y no sobre una tarjeta crema, por eso el texto es claro: con tinta oscura
@@ -821,6 +831,9 @@ ${link}`
           ))}
         </ul>
       </Sheet>
+
+      {/* ---- el simulador ---- */}
+      <Simulador abierta={simulador} onCerrar={() => setSimulador(false)} />
 
       {/* ---- fichas de la casa ---- */}
       <Sheet abierta={fichas} onCerrar={() => setFichas(false)} titulo="Inventario de fichas">

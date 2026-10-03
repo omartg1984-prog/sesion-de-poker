@@ -26,16 +26,31 @@ import { conAviso } from '../../store/app'
  * lo que pasó ese día.
  */
 
-type Orden = 'balance' | 'puntos' | 'roi' | 'promedio' | 'partidas'
+type Orden = 'puntos' | 'puntosNoche' | 'balance' | 'roi' | 'promedio' | 'partidas'
 
+/*
+ * La tabla no se ordena por dinero de entrada.
+ *
+ * El saldo solo dice quién ganó más pesos, y eso depende tanto de cuántas noches vino
+ * y de cuánto se apostó como de qué tan bien juega: con dos noches contadas, una mano
+ * grande decide la tabla entera. El campeonato mira a cuánta gente le ganaste cada
+ * noche, que es lo único comparable entre una mesa de cuatro y una de ocho. El dinero
+ * sigue ahí, en su propio orden.
+ */
 const ORDENES: { id: Orden; label: string; ayuda: string }[] = [
-  { id: 'balance', label: 'Saldo', ayuda: 'Lo que lleva ganado o perdido en total.' },
   {
     id: 'puntos',
     label: 'Campeonato',
     ayuda:
       'Un punto por cada jugador al que le ganaste esa noche, más uno por presentarte. Aquí no importa cuánto se apostó: gana el más constante, no el que más arriesga.',
   },
+  {
+    id: 'puntosNoche',
+    label: 'Nivel',
+    ayuda:
+      'Los mismos puntos del campeonato, pero divididos entre las noches que vino. Así se ve quién juega bien aunque venga poco —y a quién lo está cargando la asistencia—.',
+  },
+  { id: 'balance', label: 'Saldo', ayuda: 'Lo que lleva ganado o perdido en total.' },
   {
     id: 'roi',
     label: 'Rendimiento',
@@ -102,7 +117,7 @@ function Racha({ n }: { n: number }) {
 function Podio({
   top,
 }: {
-  top: { id: string; nombre: string; foto: string | null; saldo: number }[]
+  top: { id: string; nombre: string; foto: string | null; cifra: string; gana: boolean }[]
 }) {
   const orden = [1, 0, 2].filter((i) => top[i])
   return (
@@ -132,16 +147,10 @@ function Podio({
             <div className="mt-1.5 truncate text-[12px] font-semibold text-white">{p.nombre}</div>
             <div
               className={`font-display text-[17px] font-bold ${
-                primero
-                  ? 'text-white'
-                  : p.saldo > EPS
-                    ? 'text-win-alto'
-                    : p.saldo < -EPS
-                      ? 'text-loss-alto'
-                      : 'text-tiza-suave'
+                primero ? 'text-white' : p.gana ? 'text-win-alto' : 'text-tiza-suave'
               }`}
             >
-              {signed(p.saldo)}
+              {p.cifra}
             </div>
           </div>
         )
@@ -155,14 +164,19 @@ function Tarjeta({
   puesto,
   nombre,
   foto,
-  saldo,
+  cifra,
+  tono,
   bajo,
   pies,
 }: {
   puesto: number
   nombre: string
   foto: string | null
-  saldo: number
+  /* Ya escrita por quien llama: según el orden es dinero, porcentaje o puntos, y
+     cada uno se lee distinto. Un "+14" verde en el campeonato diría que ganó catorce
+     pesos. */
+  cifra: string
+  tono: string
   bajo?: React.ReactNode
   pies: { k: string; v: string; clase?: string }[]
 }) {
@@ -181,8 +195,8 @@ function Tarjeta({
             </span>
           )}
         </span>
-        <span className={`font-display text-[19px] font-bold tabular-nums ${claseSaldo(saldo)}`}>
-          {signed(saldo)}
+        <span className={`font-display text-[19px] font-bold tabular-nums ${tono}`}>
+          {cifra}
         </span>
       </div>
 
@@ -214,7 +228,7 @@ interface Props {
 
 export default function TablaPosiciones({ tabla, nombreLiga, partidas }: Props) {
   const [modo, setModo] = useState<'liga' | 'noche'>('liga')
-  const [orden, setOrden] = useState<Orden>('balance')
+  const [orden, setOrden] = useState<Orden>('puntos')
 
   /* Sólo las cerradas tienen resultado: en una abierta las fichas no están contadas. */
   const jugadas = partidas.filter((p) => p.estado === 'cerrada')
@@ -359,7 +373,8 @@ export default function TablaPosiciones({ tabla, nombreLiga, partidas }: Props) 
                 id: f.usuarioId,
                 nombre: f.nombre,
                 foto: f.foto,
-                saldo: f.resultado,
+                cifra: signed(f.resultado),
+                gana: f.resultado > EPS,
               }))}
             />
 
@@ -369,7 +384,8 @@ export default function TablaPosiciones({ tabla, nombreLiga, partidas }: Props) 
                 puesto={f.lugar}
                 nombre={f.nombre}
                 foto={f.foto}
-                saldo={f.resultado}
+                cifra={signed(f.resultado)}
+                tono={claseSaldo(f.resultado)}
                 bajo={
                   esTorneo && f.lugarTorneo ? (
                     <span>{f.lugarTorneo}º lugar · premio de la bolsa</span>
@@ -410,9 +426,10 @@ export default function TablaPosiciones({ tabla, nombreLiga, partidas }: Props) 
   }
 
   /* ---- toda la liga ---- */
-  const porSaldo = [...tabla.posiciones].sort((a, b) => b.balance - a.balance)
   const ordenadas = [...tabla.posiciones].sort((a, b) => {
     if (orden === 'puntos') return b.puntos - a.puntos || b.balance - a.balance
+    if (orden === 'puntosNoche')
+      return b.puntosPorNoche - a.puntosPorNoche || b.partidas - a.partidas
     if (orden === 'roi') return b.roi - a.roi
     if (orden === 'promedio') return b.promedio - a.promedio
     if (orden === 'partidas') return b.partidas - a.partidas
@@ -423,8 +440,8 @@ export default function TablaPosiciones({ tabla, nombreLiga, partidas }: Props) 
   const datosImagen: DatosLiga = {
     tipo: 'liga',
     titulo: nombreLiga,
-    subtitulo: `${tabla.partidasContadas} ${tabla.partidasContadas === 1 ? 'partida' : 'partidas'} · tabla acumulada`,
-    filas: porSaldo.map((p, i) => ({
+    subtitulo: `${tabla.partidasContadas} ${tabla.partidasContadas === 1 ? 'partida' : 'partidas'} · por ${ORDENES.find((o) => o.id === orden)!.label.toLowerCase()}`,
+    filas: ordenadas.map((p, i) => ({
       puesto: i + 1,
       nombre: p.nombre,
       foto: p.foto,
@@ -439,7 +456,7 @@ export default function TablaPosiciones({ tabla, nombreLiga, partidas }: Props) 
 
   const texto = () => {
     const lineas = [`♠ ${nombreLiga} — tabla de la liga`, '']
-    porSaldo.forEach((p, i) => {
+    ordenadas.forEach((p, i) => {
       const medalla = ['🥇', '🥈', '🥉'][i] ?? `${i + 1}º`
       lineas.push(`${medalla} ${p.nombre}: ${signed(p.balance)} (${pct(p.roi)}, ${p.partidas}p)`)
     })
@@ -448,27 +465,33 @@ export default function TablaPosiciones({ tabla, nombreLiga, partidas }: Props) 
   }
 
   /** El número grande de la derecha cambia con el orden elegido. */
-  const cifraDe = (p: Posicion) =>
-    orden === 'puntos'
-      ? p.puntos
-      : orden === 'roi'
-        ? p.roi
-        : orden === 'partidas'
-          ? p.partidas
-          : orden === 'promedio'
-            ? p.promedio
-            : p.balance
+  /*
+   * Cada orden se lee distinto: el dinero lleva signo y color, el rendimiento lleva %,
+   * y los puntos son puntos —sin signo y sin verde, porque no son pesos que alguien se
+   * llevó a casa—.
+   */
+  const cifraDe = (p: Posicion): { texto: string; tono: string; gana: boolean } => {
+    const dinero = (v: number) => ({ texto: signed(v), tono: claseSaldo(v), gana: v > EPS })
+    if (orden === 'balance') return dinero(p.balance)
+    if (orden === 'promedio') return dinero(p.promedio)
+    if (orden === 'roi') return { texto: pct(p.roi), tono: claseSaldo(p.roi), gana: p.roi > EPS }
+    if (orden === 'puntosNoche')
+      return { texto: p.puntosPorNoche.toFixed(1), tono: 'text-ink', gana: true }
+    if (orden === 'partidas') return { texto: String(p.partidas), tono: 'text-ink', gana: true }
+    return { texto: String(p.puntos), tono: 'text-ink', gana: true }
+  }
 
   return (
     <>
       {Interruptor}
 
       <Podio
-        top={porSaldo.slice(0, 3).map((p) => ({
+        top={ordenadas.slice(0, 3).map((p) => ({
           id: p.usuarioId,
           nombre: p.nombre,
           foto: p.foto,
-          saldo: p.balance,
+          cifra: cifraDe(p).texto,
+          gana: cifraDe(p).gana,
         }))}
       />
 
@@ -497,7 +520,8 @@ export default function TablaPosiciones({ tabla, nombreLiga, partidas }: Props) 
           puesto={i + 1}
           nombre={p.nombre}
           foto={p.foto}
-          saldo={cifraDe(p)}
+          cifra={cifraDe(p).texto}
+          tono={cifraDe(p).tono}
           bajo={
             <>
               <span className="truncate">
