@@ -13,15 +13,63 @@ import type { ColorFicha, Env } from './tipos'
  */
 
 /**
- * Puntos de campeonato de una noche: uno por cada jugador al que le ganaste, más uno
- * por presentarte.
+ * Cómo reparte puntos una liga.
  *
- * Se reparte así y no con una tabla fija (10-7-5-3…) porque las mesas no siempre son
- * del mismo tamaño: ganarle a siete vale más que ganarle a tres, y con una tabla fija
- * las dos noches pagarían igual. El punto por asistir premia al que no falla, que es
- * justo lo que el saldo en dinero no mide.
+ * Se cuenta contra la mesa y no con una tabla fija (10-7-5-3…) porque las mesas no
+ * siempre son del mismo tamaño: ganarle a siete vale más que ganarle a tres, y con una
+ * tabla fija las dos noches pagarían igual.
  */
-export const puntosDeLaNoche = (lugar: number, deCuantos: number) => deCuantos - lugar + 1
+export interface EsquemaPuntos {
+  /** Por presentarse, aunque se vaya en la primera mano. */
+  base: number
+  /** Por cada jugador al que le ganó esa noche. */
+  porJugador: number
+  /** Extra para el que ganó la noche. */
+  bonoGanar: number
+  /** Extra para los tres primeros, sólo en mesas de más de tres. */
+  bonoPodio: number
+}
+
+/* Los de siempre: un punto por venir y uno por cada quien al que le ganaste. Las ligas
+   que nunca toquen esto siguen puntuando exactamente igual que antes. */
+export const PUNTOS_POR_DEFECTO: EsquemaPuntos = {
+  base: 1,
+  porJugador: 1,
+  bonoGanar: 0,
+  bonoPodio: 0,
+}
+
+const limpio = (v: unknown, pordefecto: number) => {
+  /* Sólo un número de verdad cuenta: `Number(null)` y `Number('')` dan 0, y eso
+     convertiría un campo que nadie puso en un cero que sí cambia la tabla. */
+  if (typeof v !== 'number' || !Number.isFinite(v)) return pordefecto
+  return Math.max(0, Math.min(999, Math.round(v)))
+}
+
+/** Lee el esquema guardado, rellenando con los de siempre lo que falte o venga mal. */
+export function esquemaDePuntos(crudo: string | null | undefined): EsquemaPuntos {
+  const g = leerJson<Partial<EsquemaPuntos>>(crudo ?? null, {})
+  return {
+    base: limpio(g.base, PUNTOS_POR_DEFECTO.base),
+    porJugador: limpio(g.porJugador, PUNTOS_POR_DEFECTO.porJugador),
+    bonoGanar: limpio(g.bonoGanar, PUNTOS_POR_DEFECTO.bonoGanar),
+    bonoPodio: limpio(g.bonoPodio, PUNTOS_POR_DEFECTO.bonoPodio),
+  }
+}
+
+/** Lo que suma una noche para el campeonato. */
+export function puntosDeLaNoche(
+  lugar: number,
+  deCuantos: number,
+  esquema: EsquemaPuntos = PUNTOS_POR_DEFECTO,
+): number {
+  const superados = Math.max(0, deCuantos - lugar)
+  let total = esquema.base + superados * esquema.porJugador
+  if (lugar === 1) total += esquema.bonoGanar
+  /* Un podio en una mesa de tres no dice nada: los tres estarían en él. */
+  if (lugar <= 3 && deCuantos > 3) total += esquema.bonoPodio
+  return total
+}
 
 interface FilaParticipacion {
   partida_id: string
@@ -147,10 +195,12 @@ interface Noche {
 }
 
 export async function calcularPosiciones(env: Env, ligaId: string): Promise<TablaLiga> {
-  const liga = await env.DB.prepare('SELECT colores FROM ligas WHERE id = ?')
+  const liga = await env.DB.prepare('SELECT colores, puntos FROM ligas WHERE id = ?')
     .bind(ligaId)
-    .first<{ colores: string }>()
+    .first<{ colores: string; puntos: string | null }>()
   const colores = leerJson<ColorFicha[]>(liga?.colores, [])
+  /* Cómo puntea esta casa. Sin nada guardado, los números de siempre. */
+  const esquema = esquemaDePuntos(liga?.puntos)
 
   // En orden cronológico: las rachas necesitan saber qué pasó antes.
   const { results: partidas } = await env.DB.prepare(
@@ -288,9 +338,9 @@ export async function calcularPosiciones(env: Env, ligaId: string): Promise<Tabl
       // Un podio en una mesa de tres no dice nada: los tres estarían en él.
       podios: noches.filter((n) => n.lugarEnLaMesa <= 3 && n.deCuantos > 3).length,
       ultimos: noches.filter((n) => n.lugarEnLaMesa === n.deCuantos && n.deCuantos > 1).length,
-      puntos: noches.reduce((a, n) => a + puntosDeLaNoche(n.lugarEnLaMesa, n.deCuantos), 0),
+      puntos: noches.reduce((a, n) => a + puntosDeLaNoche(n.lugarEnLaMesa, n.deCuantos, esquema), 0),
       puntosPorNoche: noches.length
-        ? noches.reduce((a, n) => a + puntosDeLaNoche(n.lugarEnLaMesa, n.deCuantos), 0) /
+        ? noches.reduce((a, n) => a + puntosDeLaNoche(n.lugarEnLaMesa, n.deCuantos, esquema), 0) /
           noches.length
         : 0,
       rachaActual: rachaAlCierre(noches),

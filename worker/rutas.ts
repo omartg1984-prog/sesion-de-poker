@@ -1,6 +1,6 @@
 import { json } from './index'
 import { ganadorDe, leerJson, num, podioDe } from './podio'
-import { calcularPosiciones } from './posiciones'
+import { calcularPosiciones, esquemaDePuntos } from './posiciones'
 import {
   DIAS_SESION,
   FALLOS_PERMITIDOS,
@@ -393,7 +393,8 @@ export async function rutas(
       // PATCH /api/ligas/:id — nombre e inventario de fichas
       if (partes.length === 2 && metodo === 'PATCH') {
         if (!esAdminLiga) return json({ error: 'Solo un admin de la liga puede cambiar esto' }, 403)
-        const { nombre, colores, foto, reglas, descripcion } = await cuerpo<Record<string, unknown>>()
+        const { nombre, colores, foto, reglas, descripcion, puntos } =
+          await cuerpo<Record<string, unknown>>()
         const actual = await env.DB.prepare(
           'SELECT nombre, colores, foto, descripcion FROM ligas WHERE id = ?',
         )
@@ -419,9 +420,20 @@ export async function rutas(
             : String(descripcion).trim().slice(0, 400) || null
 
         await env.DB.prepare(
-          'UPDATE ligas SET nombre = ?, colores = ?, foto = ?, descripcion = ?, reglas = COALESCE(?, reglas) WHERE id = ?',
+          `UPDATE ligas SET nombre = ?, colores = ?, foto = ?, descripcion = ?,
+             reglas = COALESCE(?, reglas), puntos = COALESCE(?, puntos) WHERE id = ?`,
         )
-          .bind(nom, cols, img, desc, reglas === undefined ? null : JSON.stringify(reglas), ligaId)
+          .bind(
+            nom,
+            cols,
+            img,
+            desc,
+            reglas === undefined ? null : JSON.stringify(reglas),
+            /* Se guarda ya limpio: así la tabla nunca lee un número imposible de una
+               liga que alguien haya tocado por fuera. */
+            puntos === undefined ? null : JSON.stringify(esquemaDePuntos(JSON.stringify(puntos))),
+            ligaId,
+          )
           .run()
         return json({ ok: true })
       }

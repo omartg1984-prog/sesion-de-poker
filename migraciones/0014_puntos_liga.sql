@@ -1,0 +1,12 @@
+-- Cómo reparte puntos cada liga.
+--
+-- El campeonato venía con una sola fórmula metida en el código: un punto por presentarse
+-- y uno por cada jugador al que le ganaste esa noche. Es una buena base, pero cada casa
+-- tiene su idea de qué premiar —hay quien le da un bono al que gana la noche, y hay quien
+-- quiere que asistir pese más—, y eso no es algo que deba decidir la app.
+--
+-- Se guarda como JSON: { base, porJugador, bonoGanar, bonoPodio }.
+--
+-- Aditiva y anulable: en NULL se usan los números de siempre, así que las ligas que ya
+-- existen siguen puntuando exactamente igual hasta que alguien decida cambiarlo.
+ALTER TABLE ligas ADD COLUMN puntos TEXT;

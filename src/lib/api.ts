@@ -89,6 +89,35 @@ export interface Miembro {
   es_invitado?: number
 }
 
+/** Cómo reparte puntos una liga. En `null` se usan los de siempre. */
+export interface EsquemaPuntos {
+  /** Por presentarse, aunque se vaya en la primera mano. */
+  base: number
+  /** Por cada jugador al que le ganó esa noche. */
+  porJugador: number
+  /** Extra para el que ganó la noche. */
+  bonoGanar: number
+  /** Extra para los tres primeros, sólo en mesas de más de tres. */
+  bonoPodio: number
+}
+
+export const PUNTOS_POR_DEFECTO: EsquemaPuntos = {
+  base: 1,
+  porJugador: 1,
+  bonoGanar: 0,
+  bonoPodio: 0,
+}
+
+/** Lo que suma una noche. Es la misma cuenta que hace el servidor. */
+export function puntosDeLaNoche(lugar: number, deCuantos: number, e: EsquemaPuntos): number {
+  const superados = Math.max(0, deCuantos - lugar)
+  let total = e.base + superados * e.porJugador
+  if (lugar === 1) total += e.bonoGanar
+  /* Un podio en una mesa de tres no dice nada: los tres estarían en él. */
+  if (lugar <= 3 && deCuantos > 3) total += e.bonoPodio
+  return total
+}
+
 export interface Liga {
   id: string
   nombre: string
@@ -98,6 +127,8 @@ export interface Liga {
   descripcion: string | null
   /** JSON con las reglas de la casa. null = todavía no las han tocado. */
   reglas: string | null
+  /** JSON con cómo reparte puntos. null = los de siempre. */
+  puntos: string | null
   colores: ChipColor[]
   creada_por: string
   creada_en: string
@@ -414,6 +445,7 @@ export const api = {
       /** Texto vacío la borra; no mandarla la deja como estaba. */
       descripcion?: string
       reglas?: SeccionReglas[]
+      puntos?: EsquemaPuntos
     },
   ) =>
     patch<{ ok: true }>(`ligas/${id}`, cambios),

@@ -25,6 +25,7 @@ import Avatar, { AvatarEditable } from '../components/Avatar'
 import LaLiga from './liga/LaLiga'
 import CrearTorneo from './liga/CrearTorneo'
 import Simulador from './liga/Simulador'
+import Puntos from './liga/Puntos'
 import Reglas from './liga/Reglas'
 import type { SeccionReglas } from '../lib/reglas'
 import { copyText } from '../lib/portapapeles'
@@ -42,6 +43,8 @@ import {
   type TablaPosiciones as Tabla,
   type TipoPartida,
   leerJson,
+  PUNTOS_POR_DEFECTO,
+  type EsquemaPuntos,
 } from '../lib/api'
 import TablaPosiciones from './liga/TablaPosiciones'
 import { useRecargarAlVolver } from '../lib/recargar'
@@ -100,6 +103,7 @@ export default function LigaScreen() {
   const [creando, setCreando] = useState(false)
   const [fichas, setFichas] = useState(false)
   const [simulador, setSimulador] = useState(false)
+  const [puntosAbierto, setPuntosAbierto] = useState(false)
   const [gente, setGente] = useState(false)
   const [ocupado, setOcupado] = useState(false)
 
@@ -239,6 +243,20 @@ ${link}`
     setLiga({ ...liga, reglas: JSON.stringify(reglas) })
     const r = await conAviso(() => api.guardarLiga(ligaId, { reglas }))
     if (r) avisar('Reglas guardadas')
+  }
+
+  /*
+   * Cambiar cómo se puntea no reescribe nada: los puntos salen de las partidas cada vez
+   * que se abre la tabla, así que al guardar hay que volver a pedirla.
+   */
+  const guardarPuntos = async (puntos: EsquemaPuntos) => {
+    if (!liga) return
+    setLiga({ ...liga, puntos: JSON.stringify(puntos) })
+    const r = await conAviso(() => api.guardarLiga(ligaId, { puntos }))
+    if (!r) return
+    avisar('Puntos guardados')
+    setPuntosAbierto(false)
+    void cargar()
   }
 
   const guardarFichas = async () => {
@@ -427,7 +445,19 @@ ${link}`
       </div>
 
       {pestana === 'posiciones' && (
-        <TablaPosiciones tabla={tabla} nombreLiga={liga.nombre} partidas={partidas} />
+        <>
+          <TablaPosiciones tabla={tabla} nombreLiga={liga.nombre} partidas={partidas} />
+          {/* La fórmula del campeonato estaba metida en el código y nadie de la mesa
+              podía verla —ni discutirla—. Ahora se abre desde donde se mira la tabla. */}
+          <button
+            type="button"
+            className="btn btn-ghost mt-1 mb-2"
+            onClick={() => setPuntosAbierto(true)}
+          >
+            <Calculator size={16} strokeWidth={2.4} />
+            Cómo se reparten los puntos
+          </button>
+        </>
       )}
 
       {pestana === 'reglas' && (
@@ -834,6 +864,15 @@ ${link}`
 
       {/* ---- el simulador ---- */}
       <Simulador abierta={simulador} onCerrar={() => setSimulador(false)} />
+
+      {/* ---- cómo se reparten los puntos ---- */}
+      <Puntos
+        abierta={puntosAbierto}
+        esquema={leerJson<EsquemaPuntos>(liga.puntos, PUNTOS_POR_DEFECTO)}
+        soyAdmin={soyAdmin}
+        onCerrar={() => setPuntosAbierto(false)}
+        onGuardar={guardarPuntos}
+      />
 
       {/* ---- fichas de la casa ---- */}
       <Sheet abierta={fichas} onCerrar={() => setFichas(false)} titulo="Inventario de fichas">
