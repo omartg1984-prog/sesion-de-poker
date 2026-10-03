@@ -446,17 +446,17 @@ ${link}`
 
       {pestana === 'posiciones' && (
         <>
-          <TablaPosiciones tabla={tabla} nombreLiga={liga.nombre} partidas={partidas} />
-          {/* La fórmula del campeonato estaba metida en el código y nadie de la mesa
-              podía verla —ni discutirla—. Ahora se abre desde donde se mira la tabla. */}
+          {/* Arriba de la tabla y no al final: la pregunta —"¿y esto de dónde sale?"—
+              se hace al ver los números, no después de recorrerlos todos. */}
           <button
             type="button"
-            className="btn btn-ghost mt-1 mb-2"
+            className="btn btn-ghost mb-3"
             onClick={() => setPuntosAbierto(true)}
           >
             <Calculator size={16} strokeWidth={2.4} />
             Cómo se reparten los puntos
           </button>
+          <TablaPosiciones tabla={tabla} nombreLiga={liga.nombre} partidas={partidas} />
         </>
       )}
 
