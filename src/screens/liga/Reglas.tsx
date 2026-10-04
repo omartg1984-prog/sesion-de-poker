@@ -1,13 +1,15 @@
-import { Check, Pencil, Plus, X } from 'lucide-react'
+import { Check, Pencil, Plus, Trash2, X } from 'lucide-react'
 import { useState } from 'react'
 import { reglasDeArranque, type SeccionReglas } from '../../lib/reglas'
 
 /*
- * Las reglas de la casa: unas para cash, otras para torneo y otras de cómo portarse.
+ * Las reglas de la casa: el reglamento de la liga y cómo portarse en la mesa.
  *
  * Se ven de corrido y se editan con un botón, en vez de dejar los campos siempre
- * abiertos: casi siempre se entra a leerlas —"¿hasta cuándo se puede recomprar?"— y no
- * a cambiarlas.
+ * abiertos: casi siempre se entra a leerlas —"¿cuántos puntos da el tercer lugar?"— y
+ * no a cambiarlas. Todo se puede cambiar: el texto, el título, y secciones enteras se
+ * agregan o se borran, porque el reglamento de arranque es el de esta liga y otra casa
+ * querrá el suyo.
  */
 
 interface Props {
@@ -28,11 +30,16 @@ export default function Reglas({ reglas, soyAdmin, onGuardar }: Props) {
 
   const guardar = () => {
     /* Los renglones vacíos se caen solos: es la forma natural de borrar uno. */
-    const limpias = borrador.map((s) => ({
-      ...s,
-      titulo: s.titulo.trim() || 'Sin título',
-      reglas: s.reglas.map((r) => r.trim()).filter(Boolean),
-    }))
+    const limpias = borrador
+      .map((s) => ({
+        ...s,
+        titulo: s.titulo.trim(),
+        reglas: s.reglas.map((r) => r.trim()).filter(Boolean),
+      }))
+      /* Una sección sin título y sin reglas se dejó a medias: se cae sola, como los
+         renglones vacíos. */
+      .filter((s) => s.titulo || s.reglas.length > 0)
+      .map((s) => ({ ...s, titulo: s.titulo || 'Sin título' }))
     onGuardar(limpias)
     setEditando(false)
   }
@@ -51,6 +58,12 @@ export default function Reglas({ reglas, soyAdmin, onGuardar }: Props) {
 
   const agregar = (si: number) =>
     setBorrador((b) => b.map((s, i) => (i === si ? { ...s, reglas: [...s.reglas, ''] } : s)))
+
+  /* El id sale del reloj: no se ve en pantalla y sólo tiene que no repetirse. */
+  const agregarSeccion = () =>
+    setBorrador((b) => [...b, { id: `s${Date.now()}`, titulo: '', reglas: [''] }])
+
+  const quitarSeccion = (si: number) => setBorrador((b) => b.filter((_, i) => i !== si))
 
   if (!editando) {
     return (
@@ -100,16 +113,29 @@ export default function Reglas({ reglas, soyAdmin, onGuardar }: Props) {
     <>
       {borrador.map((s, si) => (
         <section key={s.id} className="panel">
-          <input
-            type="text"
-            value={s.titulo}
-            aria-label="Título de la sección"
-            onChange={(e) =>
-              setBorrador((b) => b.map((x, i) => (i === si ? { ...x, titulo: e.target.value } : x)))
-            }
-            className="mb-2 w-full border-none border-b-2 border-paper-line bg-transparent px-0.5 py-1 font-display text-lg font-semibold text-ink outline-none focus:border-b-marca"
-            style={{ borderBottomStyle: 'solid', borderBottomWidth: 2 }}
-          />
+          <div className="mb-2 flex items-center gap-1.5">
+            <input
+              type="text"
+              value={s.titulo}
+              aria-label="Título de la sección"
+              placeholder="De qué va esta sección"
+              onChange={(e) =>
+                setBorrador((b) =>
+                  b.map((x, i) => (i === si ? { ...x, titulo: e.target.value } : x)),
+                )
+              }
+              className="min-w-0 flex-1 border-none border-b-2 border-paper-line bg-transparent px-0.5 py-1 font-display text-lg font-semibold text-ink outline-none focus:border-b-marca"
+              style={{ borderBottomStyle: 'solid', borderBottomWidth: 2 }}
+            />
+            <button
+              type="button"
+              aria-label={`Borrar la sección ${s.titulo || si + 1}`}
+              onClick={() => quitarSeccion(si)}
+              className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-lg border-none bg-ink/8 text-ink-soft hover:bg-loss/12 hover:text-loss active:scale-95"
+            >
+              <Trash2 size={14} strokeWidth={2.4} />
+            </button>
+          </div>
 
           {s.reglas.map((r, ri) => (
             <div key={ri} className="mb-2 flex items-start gap-1.5">
@@ -142,6 +168,15 @@ export default function Reglas({ reglas, soyAdmin, onGuardar }: Props) {
           </button>
         </section>
       ))}
+
+      <button
+        type="button"
+        className="btn-dashed mb-3 flex items-center justify-center gap-1.5"
+        onClick={agregarSeccion}
+      >
+        <Plus size={15} strokeWidth={2.6} />
+        Agregar una sección
+      </button>
 
       <button type="button" className="btn btn-marca mb-2" onClick={guardar}>
         <Check size={17} strokeWidth={2.6} />

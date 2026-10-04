@@ -120,9 +120,22 @@ export function podioDe<T extends JugadorDeLaNoche>(
     }
   })
 
+  /*
+   * Los empates comparten lugar y el siguiente se salta los puestos ocupados: 1, 2, 3,
+   * 3, 5… Es como se cuenta en cualquier tabla y es lo que dice el reglamento de la
+   * liga; sin esto, dos que acabaron exactamente igual cobraban distinto por el orden
+   * en que vinieran en la lista, que no es un criterio.
+   */
+  let lugar = 0
+  let anterior: number | null = null
   return sinOrdenar
     .sort((a, b) => b.saco - b.puso - (a.saco - a.puso))
-    .map((n, i) => ({ ...n, resultado: n.saco - n.puso, lugar: i + 1 }))
+    .map((n, i) => {
+      const resultado = n.saco - n.puso
+      if (anterior === null || Math.abs(resultado - anterior) > 1e-9) lugar = i + 1
+      anterior = resultado
+      return { ...n, resultado, lugar }
+    })
 }
 
 /**

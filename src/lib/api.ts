@@ -191,6 +191,8 @@ export interface ReglaPuntos {
 
 export interface EsquemaPuntos {
   reglas: ReglaPuntos[]
+  /** Puntos por lugar: [1º, 2º, 3º…]. Vacía o ausente = no se usa. */
+  tabla?: number[]
 }
 
 export const PUNTOS_POR_DEFECTO: EsquemaPuntos = {
@@ -200,6 +202,15 @@ export const PUNTOS_POR_DEFECTO: EsquemaPuntos = {
   ],
 }
 
+/** Lo que dice el reglamento de la liga: asistencia, bono por positivo y tabla fija. */
+export const PUNTOS_DEL_REGLAMENTO: EsquemaPuntos = {
+  reglas: [
+    { id: 'base', puntos: 5 },
+    { id: 'bonoPositivo', puntos: 5 },
+  ],
+  tabla: [25, 20, 15, 10, 5],
+}
+
 /** Lo que suma una noche. Es la misma cuenta que hace el servidor. */
 export function puntosDeLaNoche(n: NocheParaPuntos, e: EsquemaPuntos): number {
   let total = 0
@@ -207,6 +218,8 @@ export function puntosDeLaNoche(n: NocheParaPuntos, e: EsquemaPuntos): number {
     const c = CONSIDERACIONES.find((x) => x.id === regla.id)
     if (c) total += c.veces(n) * regla.puntos
   }
+  /* Del largo de la tabla en adelante no se suman puntos de lugar. */
+  if (e.tabla && e.tabla.length > 0) total += e.tabla[n.lugar - 1] ?? 0
   return total
 }
 
@@ -225,13 +238,44 @@ export function esquemaGuardado(crudo: string | null): EsquemaPuntos {
           vistos.add(r.id),
       )
       .map((r) => ({ id: r.id, puntos: r.puntos }))
-    return { reglas }
+    const tabla = Array.isArray(g.tabla)
+      ? (g.tabla as unknown[]).map((v) => (typeof v === 'number' ? v : 0))
+      : []
+    return tabla.length > 0 ? { reglas, tabla } : { reglas }
   }
   const viejas = ['base', 'porJugador', 'bonoGanar', 'bonoPodio']
   const convertidas = viejas
     .map((id) => ({ id, puntos: g[id] }))
     .filter((r): r is ReglaPuntos => typeof r.puntos === 'number' && r.puntos !== 0)
   return convertidas.length > 0 ? { reglas: convertidas } : PUNTOS_POR_DEFECTO
+}
+
+/*
+ * La calificación del reglamento: no mide cuánto ganaste sino qué tan bien rindió lo que
+ * pusiste. Dos personas pueden ir +$500 y una haber metido el triple; el rendimiento las
+ * separa y es lo que la liga decidió mirar.
+ */
+export interface Calificacion {
+  /** Mínimo de rendimiento para tenerla, en por ciento. */
+  desde: number
+  emoji: string
+  nombre: string
+  ayuda: string
+}
+
+/** De mejor a peor: la primera que alcances es la tuya. */
+export const CALIFICACIONES: Calificacion[] = [
+  { desde: 50, emoji: '🦈', nombre: 'Shark', ayuda: 'Rinde la mitad o más de lo que mete' },
+  { desde: 20, emoji: '🔥', nombre: 'Pro', ayuda: 'Gana parejo noche con noche' },
+  { desde: 0, emoji: '💪', nombre: 'Solid', ayuda: 'Sale a mano o arriba' },
+  { desde: -20, emoji: '🎲', nombre: 'Rookie', ayuda: 'Pierde poco, va aprendiendo' },
+  { desde: -Infinity, emoji: '🐟', nombre: 'Fish', ayuda: 'Paga la cena de los demás' },
+]
+
+/** La calificación que le toca a un rendimiento. Sin partidas no hay nada que calificar. */
+export function calificacionDe(roi: number | null, partidas: number): Calificacion | null {
+  if (partidas <= 0 || roi === null || !Number.isFinite(roi)) return null
+  return CALIFICACIONES.find((c) => roi >= c.desde) ?? null
 }
 
 export interface Liga {

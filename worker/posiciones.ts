@@ -113,6 +113,14 @@ export interface ReglaPuntos {
 
 export interface EsquemaPuntos {
   reglas: ReglaPuntos[]
+  /*
+   * Puntos por lugar: [1º, 2º, 3º…]. Vacía = no se usa.
+   *
+   * Es la otra forma de puntuar, y la que usan casi todas las ligas de casa: una tabla
+   * fija —25, 20, 15, 10, 5— en vez de contar a cuántos les ganaste. Las dos pueden
+   * estar encendidas a la vez, aunque normalmente se usa una.
+   */
+  tabla?: number[]
 }
 
 /* Los de siempre: un punto por venir y uno por cada quien al que le ganaste. Las ligas
@@ -122,6 +130,15 @@ export const PUNTOS_POR_DEFECTO: EsquemaPuntos = {
     { id: 'base', puntos: 1 },
     { id: 'porJugador', puntos: 1 },
   ],
+}
+
+/** Lo que dice el reglamento de la liga: asistencia, bono por positivo y tabla fija. */
+export const PUNTOS_DEL_REGLAMENTO: EsquemaPuntos = {
+  reglas: [
+    { id: 'base', puntos: 5 },
+    { id: 'bonoPositivo', puntos: 5 },
+  ],
+  tabla: [25, 20, 15, 10, 5],
 }
 
 const limpio = (v: unknown) => {
@@ -152,11 +169,18 @@ export function esquemaDePuntos(crudo: string | null | undefined): EsquemaPuntos
         })
         .filter((r): r is ReglaPuntos => r !== null)
     : null
+  /* La tabla se limpia como todo lo demás, y se corta en doce: más lugares que eso no
+     los llena nadie y un guardado raro no va a inflar la cuenta. */
+  const tabla = Array.isArray(g.tabla)
+    ? (g.tabla as unknown[]).map((v) => limpio(v) ?? 0).slice(0, 12)
+    : undefined
+
   if (deLista) {
     /* Una lista vacía es una decisión válida —nadie suma nada—, pero repetir un id no:
        se queda el primero. */
     const vistos = new Set<string>()
-    return { reglas: deLista.filter((r) => !vistos.has(r.id) && vistos.add(r.id)) }
+    const reglas = deLista.filter((r) => !vistos.has(r.id) && vistos.add(r.id))
+    return tabla && tabla.length > 0 ? { reglas, tabla } : { reglas }
   }
 
   /* La forma vieja: { base, porJugador, bonoGanar, bonoPodio }. */
@@ -177,6 +201,9 @@ export function puntosDeLaNoche(
     const c = CONSIDERACIONES.find((x) => x.id === regla.id)
     if (c) total += c.veces(noche) * regla.puntos
   }
+  /* Del largo de la tabla en adelante no se suman puntos de lugar, pero lo de asistir
+     se cobra igual: es justo lo que dice el reglamento. */
+  if (esquema.tabla && esquema.tabla.length > 0) total += esquema.tabla[noche.lugar - 1] ?? 0
   return total
 }
 

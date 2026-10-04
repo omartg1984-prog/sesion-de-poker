@@ -6,6 +6,8 @@ import {
   bandaDeJugabilidad,
   carta,
   categoriaDe,
+  cuentasDeLaApuesta,
+  equidadDe,
   evaluar,
   nombreDeLaMano,
   simular,
@@ -273,5 +275,152 @@ describe('qué tan factible es jugarla', () => {
     expect(bandaDeJugabilidad(90, 4, 'media').tono).toBe('win')
     expect(bandaDeJugabilidad(26, 4, 'media').tono).toBe('ambar')
     expect(bandaDeJugabilidad(10, 4, 'media').tono).toBe('loss')
+  })
+})
+
+/*
+ * Los porcentajes de los demás. Es la parte que se usa para repasar una mano después de
+ * jugada: "con lo que yo traía y lo que traías tú, ¿quién iba ganando?".
+ */
+describe('cuánto gana cada quien', () => {
+  it('reparte el 100% entre todos los de la mesa', () => {
+    const s = simular({
+      mano: mano('Ah Ad'),
+      mesa: [],
+      rivales: 3,
+      iteraciones: 4000,
+      azar: azarCon(7),
+    })
+    const suma = s.parte + s.porRival.reduce((a, r) => a + r.parte, 0)
+    /* Cada bote se lo lleva alguien, y el que se parte se reparte: no se pierde nada. */
+    expect(suma).toBeCloseTo(100, 6)
+  })
+
+  it('trae un número por rival, en su asiento', () => {
+    const s = simular({
+      mano: mano('7h 2d'),
+      mesa: [],
+      rivales: 5,
+      iteraciones: 1000,
+      azar: azarCon(1),
+    })
+    expect(s.porRival).toHaveLength(5)
+  })
+
+  it('al rival al que se le sabe la mano se le ve su número de verdad', () => {
+    /* Yo con un par de reyes, el rival 1 con ases y el 2 a ciegas: el de los ases
+       tiene que ir mejor que yo y yo mejor que el que no se sabe. */
+    const s = simular({
+      mano: mano('Kh Kd'),
+      mesa: [],
+      rivales: 2,
+      manosRivales: [mano('As Ac'), []],
+      iteraciones: 6000,
+      azar: azarCon(3),
+    })
+    expect(equidadDe(s.porRival[0])).toBeGreaterThan(equidadDe(s))
+    expect(equidadDe(s)).toBeGreaterThan(equidadDe(s.porRival[1]))
+  })
+
+  it('la mano sabida se queda en su asiento aunque las de antes no se sepan', () => {
+    const s = simular({
+      mano: mano('Kh Kd'),
+      mesa: [],
+      rivales: 3,
+      /* Sólo se sabe la del tercero. */
+      manosRivales: [[], [], mano('As Ac')],
+      iteraciones: 6000,
+      azar: azarCon(4),
+    })
+    expect(equidadDe(s.porRival[2])).toBeGreaterThan(equidadDe(s.porRival[0]))
+    expect(equidadDe(s.porRival[2])).toBeGreaterThan(equidadDe(s.porRival[1]))
+  })
+
+  it('en una mano ya jugada no hay porcentajes: hay un ganador', () => {
+    const s = simular({
+      mano: mano('Ah Ad'),
+      mesa: mano('As 7c 2d 9h 4s'),
+      rivales: 1,
+      manosRivales: [mano('Kh Kc')],
+    })
+    expect(s.gano).toBe(100)
+    expect(s.porRival[0].perdi).toBe(100)
+  })
+
+  it('dos manos iguales empatan siempre, y cada uno se lleva medio bote', () => {
+    /* La mesa es escalera de color y ninguno trae espadas: los dos juegan la mesa. */
+    const s = simular({
+      mano: mano('Kh Kd'),
+      mesa: mano('9s 8s 7s 6s 5s'),
+      rivales: 1,
+      manosRivales: [mano('Qh Qd')],
+    })
+    expect(s.gano).toBe(0)
+    expect(s.empate).toBe(100)
+    expect(s.porRival[0].empate).toBe(100)
+    expect(s.parte).toBe(50)
+    expect(equidadDe(s)).toBe(50)
+  })
+
+  it('cara a cara, lo que yo pierdo es lo que gana el otro', () => {
+    const s = simular({
+      mano: mano('Ah Kh'),
+      mesa: [],
+      rivales: 1,
+      manosRivales: [mano('7c 2d')],
+      iteraciones: 3000,
+      azar: azarCon(9),
+    })
+    expect(s.perdi).toBeCloseTo(s.porRival[0].gano, 6)
+    expect(s.empate).toBeCloseTo(s.porRival[0].empate, 6)
+    expect(s.gano + s.empate + s.perdi).toBeCloseTo(100, 6)
+  })
+
+  it('la equidad es la parte del bote que te toca', () => {
+    expect(equidadDe({ gano: 40, empate: 20, perdi: 40, parte: 50 })).toBe(50)
+  })
+})
+
+/*
+ * Las cuentas de la apuesta. Lo que se fija son los casos de libro, los que cualquiera
+ * de la mesa puede comprobar de cabeza.
+ */
+describe('si conviene pagar', () => {
+  it('pagar un noveno del bote pide ganar una de cada diez', () => {
+    const q = cuentasDeLaApuesta(20, 900, 100)!
+    expect(q.necesitas).toBeCloseTo(10, 6)
+    expect(q.conviene).toBe(true)
+  })
+
+  it('pagar lo que hay en el bote pide ganar la mitad', () => {
+    const q = cuentasDeLaApuesta(50, 500, 500)!
+    expect(q.necesitas).toBeCloseTo(50, 6)
+    /* Justo en la raya: ni deja ni cuesta. */
+    expect(q.esperado).toBeCloseTo(0, 6)
+    expect(q.conviene).toBe(true)
+  })
+
+  it('con menos de lo que se necesita, no conviene', () => {
+    const q = cuentasDeLaApuesta(20, 100, 100)!
+    expect(q.necesitas).toBeCloseTo(50, 6)
+    expect(q.conviene).toBe(false)
+    expect(q.esperado).toBeLessThan(0)
+  })
+
+  it('lo que deja pagar es lo que ganas en promedio cada vez', () => {
+    /* Ganas una de cada cuatro: te llevas $900 esa vez y pagas $100 las otras tres. */
+    const q = cuentasDeLaApuesta(25, 900, 100)!
+    expect(q.esperado).toBeCloseTo(0.25 * 900 - 0.75 * 100, 6)
+    expect(q.esperado).toBeCloseTo(150, 6)
+  })
+
+  it('dice qué tan grande es la apuesta contra el bote', () => {
+    expect(cuentasDeLaApuesta(50, 400, 200)!.parteDelBote).toBeCloseTo(0.5, 6)
+  })
+
+  it('sin bote o sin apuesta no hay nada que calcular', () => {
+    expect(cuentasDeLaApuesta(50, 0, 100)).toBeNull()
+    expect(cuentasDeLaApuesta(50, 500, 0)).toBeNull()
+    expect(cuentasDeLaApuesta(50, 500, NaN)).toBeNull()
   })
 })

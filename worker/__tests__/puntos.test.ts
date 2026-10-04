@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   CONSIDERACIONES,
+  PUNTOS_DEL_REGLAMENTO,
   PUNTOS_POR_DEFECTO,
   esquemaDePuntos,
   puntosDeLaNoche,
@@ -186,5 +187,45 @@ describe('el catálogo', () => {
     for (const c of CONSIDERACIONES.filter((x) => x.castigo)) {
       expect(c.sugerido).toBeLessThan(0)
     }
+  })
+})
+
+/*
+ * La otra forma de puntuar: una tabla fija por lugar. Es la que usa el reglamento de la
+ * liga y la que usan casi todas las ligas de casa.
+ */
+describe('la tabla por lugar', () => {
+  it('paga lo que dice la tabla y nada del sexto en adelante', () => {
+    const e: EsquemaPuntos = { reglas: [], tabla: [25, 20, 15, 10, 5] }
+    expect(puntosDeLaNoche(noche(1, 8), e)).toBe(25)
+    expect(puntosDeLaNoche(noche(5, 8), e)).toBe(5)
+    expect(puntosDeLaNoche(noche(6, 8), e)).toBe(0)
+    expect(puntosDeLaNoche(noche(8, 8), e)).toBe(0)
+  })
+
+  it('el reglamento de la liga: asistencia, bono y lugar', () => {
+    const e = PUNTOS_DEL_REGLAMENTO
+    /* Ganas dinero y quedas 1º: 5 de asistencia + 5 de bono + 25 de posición. */
+    expect(puntosDeLaNoche(noche(1, 8, { resultado: 900 }), e)).toBe(35)
+    /* Pierdes pero quedas 5º: 5 + 0 + 5. */
+    expect(puntosDeLaNoche(noche(5, 8, { resultado: -300 }), e)).toBe(10)
+    /* Del sexto en adelante sólo quedan los cinco por venir. */
+    expect(puntosDeLaNoche(noche(7, 8, { resultado: -500 }), e)).toBe(5)
+  })
+
+  it('la tabla y las consideraciones pueden convivir', () => {
+    const e: EsquemaPuntos = { reglas: [{ id: 'base', puntos: 5 }], tabla: [25, 20] }
+    expect(puntosDeLaNoche(noche(1, 6), e)).toBe(30)
+    expect(puntosDeLaNoche(noche(3, 6), e)).toBe(5)
+  })
+
+  it('una tabla vacía no se guarda como si existiera', () => {
+    const e = esquemaDePuntos(JSON.stringify({ reglas: [{ id: 'base', puntos: 1 }], tabla: [] }))
+    expect(e.tabla).toBeUndefined()
+  })
+
+  it('la tabla guardada se limpia como todo lo demás', () => {
+    const e = esquemaDePuntos(JSON.stringify({ reglas: [], tabla: [25, 'veinte', null, 99999] }))
+    expect(e.tabla).toEqual([25, 0, 0, 999])
   })
 })

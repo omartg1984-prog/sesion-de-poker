@@ -136,13 +136,28 @@ export function evaluar(cartas: number[]): number {
 
 /* ---- la simulación ---- */
 
-export interface Simulacion {
-  /** De cada 100 veces, cuántas ganas, empatas y pierdes. */
+/** De cada 100 veces, cuántas gana, empata y pierde un jugador. */
+export interface Reparto {
   gano: number
   empate: number
   perdi: number
+  /*
+   * De cada 100 botes, qué parte se lleva. No es lo mismo que ganar: un empate a dos
+   * paga medio bote y uno a tres, un tercio. Sumando el de todos da 100, porque cada
+   * bote se lo lleva alguien.
+   */
+  parte: number
+}
+
+export interface Simulacion extends Reparto {
   /** Cuántas manos se jugaron para sacar esos números. */
   manos: number
+  /*
+   * Lo mismo para cada rival, cada uno en su asiento. El rival al que se le sabe la mano
+   * trae su número de verdad; al que no, el de una mano cualquiera, que es justo lo que
+   * se sabe de él. Tú no vas aquí: tus números son los de arriba.
+   */
+  porRival: Reparto[]
 }
 
 /** Un azar con semilla, para que las pruebas digan lo mismo todas las veces. */
@@ -185,26 +200,44 @@ export function simular(p: PeticionSimulacion): Simulacion {
   const rivales = Math.max(1, Math.min(9, Math.floor(p.rivales)))
   const azar = p.azar ?? Math.random
 
-  /* Sólo cuentan las manos completas: un rival con una sola carta puesta se reparte al
-     azar, como si no se supiera nada de él. */
-  const sabidas = (p.manosRivales ?? []).filter((m) => m.length === 2).slice(0, rivales)
-  const alAzar = rivales - sabidas.length
+  /* Cada mano sabida se queda en su asiento: el rival 3 sigue siendo el rival 3 aunque
+     del 1 y el 2 no se sepa nada, y así su porcentaje se puede poner junto a su nombre. */
+  const sabidas: (number[] | null)[] = Array.from({ length: rivales }, (_, i) => {
+    const m = p.manosRivales?.[i]
+    return m && m.length === 2 ? m : null
+  })
 
-  const conocidas = [...p.mano, ...p.mesa, ...sabidas.flat()]
+  const conocidas = [...p.mano, ...p.mesa]
+  for (const m of sabidas) if (m) conocidas.push(...m)
+
   const mazo: number[] = []
   const usada = new Array<boolean>(52).fill(false)
   for (const c of conocidas) usada[c] = true
   for (let c = 0; c < 52; c++) if (!usada[c]) mazo.push(c)
 
   const faltanMesa = 5 - p.mesa.length
-  const aRepartir = faltanMesa + alAzar * 2
+
+  /* De dónde saca sus cartas cada rival del que no se sabe nada: de ahí para adelante
+     en lo que se barajó, después de las que faltan de la mesa. */
+  const desde = new Array<number>(rivales).fill(-1)
+  let cuantosAlAzar = 0
+  for (let r = 0; r < rivales; r++) {
+    if (sabidas[r]) continue
+    desde[r] = faltanMesa + cuantosAlAzar * 2
+    cuantosAlAzar++
+  }
+
+  const aRepartir = faltanMesa + cuantosAlAzar * 2
 
   /* Si no queda nada por repartir, la mano ya está jugada: una vuelta basta y todas las
      demás darían lo mismo. */
   const iteraciones = aRepartir === 0 ? 1 : Math.max(200, Math.floor(p.iteraciones ?? 20000))
 
-  let gano = 0
-  let empate = 0
+  /* Un casillero por jugador: el 0 soy yo y del 1 en adelante los rivales, en su asiento. */
+  const gano = new Array<number>(1 + rivales).fill(0)
+  const empate = new Array<number>(1 + rivales).fill(0)
+  const parte = new Array<number>(1 + rivales).fill(0)
+  const puntajes = new Array<number>(1 + rivales).fill(0)
 
   const siete = new Array<number>(7)
   for (let i = 0; i < iteraciones; i++) {
@@ -216,40 +249,61 @@ export function simular(p: PeticionSimulacion): Simulacion {
       mazo[j] = t
     }
 
-    siete[0] = p.mano[0]
-    siete[1] = p.mano[1]
+    /* La mesa es la misma para todos, así que se pone una vez y sólo se cambian las dos
+       primeras casillas al pasar de una mano a la siguiente. */
     for (let k = 0; k < p.mesa.length; k++) siete[2 + k] = p.mesa[k]
     for (let k = 0; k < faltanMesa; k++) siete[2 + p.mesa.length + k] = mazo[k]
 
-    const mia = evaluar(siete)
+    siete[0] = p.mano[0]
+    siete[1] = p.mano[1]
+    puntajes[0] = evaluar(siete)
 
-    let mejorRival = -1
-    for (const suyas of sabidas) {
-      siete[0] = suyas[0]
-      siete[1] = suyas[1]
-      const suya = evaluar(siete)
-      if (suya > mejorRival) mejorRival = suya
+    for (let r = 0; r < rivales; r++) {
+      const suyas = sabidas[r]
+      if (suyas) {
+        siete[0] = suyas[0]
+        siete[1] = suyas[1]
+      } else {
+        siete[0] = mazo[desde[r]]
+        siete[1] = mazo[desde[r] + 1]
+      }
+      puntajes[1 + r] = evaluar(siete)
     }
-    for (let r = 0; r < alAzar; r++) {
-      siete[0] = mazo[faltanMesa + r * 2]
-      siete[1] = mazo[faltanMesa + r * 2 + 1]
-      const suya = evaluar(siete)
-      if (suya > mejorRival) mejorRival = suya
-    }
-    /* Se deja la mesa puesta para la vuelta siguiente; las dos primeras se reescriben. */
 
-    if (mia > mejorRival) gano++
-    else if (mia === mejorRival) empate++
+    let mejor = puntajes[0]
+    for (let k = 1; k <= rivales; k++) if (puntajes[k] > mejor) mejor = puntajes[k]
+    let cuantos = 0
+    for (let k = 0; k <= rivales; k++) if (puntajes[k] === mejor) cuantos++
+    for (let k = 0; k <= rivales; k++) {
+      if (puntajes[k] !== mejor) continue
+      if (cuantos === 1) gano[k]++
+      else empate[k]++
+      parte[k] += 1 / cuantos
+    }
   }
 
   const pct = (n: number) => (n / iteraciones) * 100
+  const reparto = (k: number): Reparto => ({
+    gano: pct(gano[k]),
+    empate: pct(empate[k]),
+    perdi: pct(iteraciones - gano[k] - empate[k]),
+    parte: pct(parte[k]),
+  })
+
   return {
-    gano: pct(gano),
-    empate: pct(empate),
-    perdi: pct(iteraciones - gano - empate),
+    ...reparto(0),
     manos: iteraciones,
+    porRival: Array.from({ length: rivales }, (_, r) => reparto(1 + r)),
   }
 }
+
+/**
+ * Lo que vale una mano de aquí al final, en por ciento.
+ *
+ * Es la parte del bote que te toca, no las veces que ganas: los empates cuentan a
+ * medias porque el bote se parte. Es el número con el que se decide si pagar.
+ */
+export const equidadDe = (r: Reparto) => r.parte
 
 /** Cómo se llama lo que tienes ahora mismo, con las cartas que ya se ven. */
 export function nombreDeLaMano(mano: number[], mesa: number[]): string {
@@ -297,15 +351,30 @@ export function asientosDe(jugadores: number): Asiento[] {
       continue
     }
     if (n === 2) {
-      salida.push({ indice: 1, marca: 'CG', posicion: 'ciega', nombre: 'Ciega grande' })
+      salida.push({
+        indice: 1,
+        marca: 'CG',
+        posicion: 'ciega',
+        nombre: 'Ciega grande',
+      })
       continue
     }
     if (i === 1) {
-      salida.push({ indice: 1, marca: 'CCH', posicion: 'ciega', nombre: 'Ciega chica' })
+      salida.push({
+        indice: 1,
+        marca: 'CCH',
+        posicion: 'ciega',
+        nombre: 'Ciega chica',
+      })
       continue
     }
     if (i === 2) {
-      salida.push({ indice: 2, marca: 'CG', posicion: 'ciega', nombre: 'Ciega grande' })
+      salida.push({
+        indice: 2,
+        marca: 'CG',
+        posicion: 'ciega',
+        nombre: 'Ciega grande',
+      })
       continue
     }
 
@@ -315,11 +384,26 @@ export function asientosDe(jugadores: number): Asiento[] {
     const sitio = i - 3
     const ultimo = sitio === cuantos - 1
     if (ultimo && cuantos >= 2) {
-      salida.push({ indice: i, marca: '', posicion: 'tardia', nombre: 'Antes del botón' })
+      salida.push({
+        indice: i,
+        marca: '',
+        posicion: 'tardia',
+        nombre: 'Antes del botón',
+      })
     } else if (sitio < Math.ceil(cuantos / 2)) {
-      salida.push({ indice: i, marca: '', posicion: 'temprana', nombre: 'Entra temprano' })
+      salida.push({
+        indice: i,
+        marca: '',
+        posicion: 'temprana',
+        nombre: 'Entra temprano',
+      })
     } else {
-      salida.push({ indice: i, marca: '', posicion: 'media', nombre: 'A media mesa' })
+      salida.push({
+        indice: i,
+        marca: '',
+        posicion: 'media',
+        nombre: 'A media mesa',
+      })
     }
   }
   return salida
@@ -347,11 +431,7 @@ export interface Banda {
  * contra un número fijo: una mano que gana el 30% es excelente contra siete y mala
  * contra uno. Encima se le pide más margen cuanto peor sea la posición.
  */
-export function bandaDeJugabilidad(
-  equidad: number,
-  jugadores: number,
-  posicion: Posicion,
-): Banda {
+export function bandaDeJugabilidad(equidad: number, jugadores: number, posicion: Posicion): Banda {
   const justo = 100 / Math.max(2, jugadores)
   const razon = justo > 0 ? equidad / justo : 0
   const exige = EXIGENCIA[posicion]
@@ -360,4 +440,45 @@ export function bandaDeJugabilidad(
   if (razon >= exige) return { id: 'buena', etiqueta: 'Da para jugarla', tono: 'win' }
   if (razon >= 1) return { id: 'limite', etiqueta: 'Al límite', tono: 'ambar' }
   return { id: 'floja', etiqueta: 'Para tirarla', tono: 'loss' }
+}
+
+/* ---- lo que cuesta ver la siguiente carta ---- */
+
+export interface Cuentas {
+  /** Lo mínimo que tendrías que ganar para que pagar salga a cuentas, en por ciento. */
+  necesitas: number
+  /** Lo que de verdad ganas con esta mano, en por ciento. */
+  tienes: number
+  /** Lo que deja pagar, en pesos, repartido entre todas las veces que se jugara. */
+  esperado: number
+  /** Cuánto es la apuesta comparada con el bote, en veces. */
+  parteDelBote: number
+  conviene: boolean
+}
+
+/**
+ * Si pagar sale a cuentas o no.
+ *
+ * La pregunta de la mesa nunca es "¿voy ganando?" sino "¿me alcanza para pagar esto?".
+ * Pagar $100 a un bote de $900 necesita ganar una de cada diez; a un bote de $100,
+ * una de cada dos. Por eso la misma mano se paga o se tira según lo que cueste.
+ *
+ * Lo que deja pagar es lo que ganas en promedio cada vez que se jugara la misma mano:
+ * te llevas el bote cuando ganas y pierdes la apuesta cuando no.
+ */
+export function cuentasDeLaApuesta(equidad: number, bote: number, apuesta: number): Cuentas | null {
+  if (!Number.isFinite(bote) || !Number.isFinite(apuesta)) return null
+  if (bote <= 0 || apuesta <= 0) return null
+
+  const p = Math.max(0, Math.min(100, equidad)) / 100
+  const necesitas = (apuesta / (bote + apuesta)) * 100
+  const esperado = p * bote - (1 - p) * apuesta
+
+  return {
+    necesitas,
+    tienes: equidad,
+    esperado,
+    parteDelBote: apuesta / bote,
+    conviene: esperado >= 0,
+  }
 }

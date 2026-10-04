@@ -7,6 +7,7 @@ import { EPS, money, signed } from '../../lib/money'
 import type { DatosLiga, DatosTabla } from '../../lib/imagenTablas'
 import {
   api,
+  calificacionDe,
   type PartidaResumen,
   type Posicion,
   type ResultadoNoche,
@@ -42,7 +43,7 @@ const ORDENES: { id: Orden; label: string; ayuda: string }[] = [
     id: 'puntos',
     label: 'Campeonato',
     ayuda:
-      'Un punto por cada jugador al que le ganaste esa noche, más uno por presentarte. Aquí no importa cuánto se apostó: gana el más constante, no el que más arriesga.',
+      'Los puntos que fue juntando noche tras noche. Aquí no importa cuánto se apostó: gana el más constante, no el que más arriesga. Lo que suma cada noche lo decide la liga, y está escrito en "Cómo se reparten los puntos".',
   },
   {
     id: 'puntosNoche',
@@ -55,7 +56,7 @@ const ORDENES: { id: Orden; label: string; ayuda: string }[] = [
     id: 'roi',
     label: 'Rendimiento',
     ayuda:
-      'Cuánto rinde por cada peso que mete. No premia al que juega más, sino al que juega mejor.',
+      'Cuánto rinde por cada peso que mete. No premia al que juega más, sino al que juega mejor. De aquí sale la calificación: Shark de 50% para arriba, Pro de 20%, Solid de 0%, Rookie hasta −20% y Fish por debajo.',
   },
   { id: 'promedio', label: 'Por noche', ayuda: 'Lo que deja una partida típica suya.' },
   { id: 'partidas', label: 'Asistencia', ayuda: 'Quién se aparece más.' },
@@ -91,6 +92,28 @@ const COLUMNAS: {
   },
 ]
 const pct = (v: number) => `${v > 0 ? '+' : ''}${v.toFixed(0)}%`
+
+/*
+ * La calificación del reglamento: Shark, Pro, Solid, Rookie o Fish según el rendimiento.
+ * En las tarjetas cabe el nombre; en la vista de columnas sólo el animal, con el nombre
+ * al tocarlo, porque el ancho de un teléfono no da para más.
+ */
+function Calificacion({ p, soloEmoji }: { p: Posicion; soloEmoji?: boolean }) {
+  const c = calificacionDe(p.roi, p.partidas)
+  if (!c) return null
+  if (soloEmoji) {
+    return (
+      <span className="shrink-0 text-[12px]" title={`${c.nombre} · ${c.ayuda}`}>
+        {c.emoji}
+      </span>
+    )
+  }
+  return (
+    <span className="shrink-0" title={c.ayuda}>
+      {c.emoji} {c.nombre}
+    </span>
+  )
+}
 
 function fechaCorta(iso: string) {
   const [a, m, d] = iso.split('-').map(Number)
@@ -604,6 +627,7 @@ export default function TablaPosiciones({ tabla, nombreLiga, partidas }: Props) 
                     <span className="flex items-center gap-1.5">
                       <Cara nombre={p.nombre} foto={p.foto} size={22} />
                       <span className="truncate font-semibold text-white">{p.nombre}</span>
+                      <Calificacion p={p} soloEmoji />
                     </span>
                   </td>
                   {COLUMNAS.map((c) => {
@@ -639,6 +663,7 @@ export default function TablaPosiciones({ tabla, nombreLiga, partidas }: Props) 
                   {p.partidas} {p.partidas === 1 ? 'partida' : 'partidas'} · ganó {p.ganadas}
                   {!p.esMiembro && ' · ya no está'}
                 </span>
+                <Calificacion p={p} />
                 <Racha n={p.rachaActual} />
                 <Titulos titulos={p.titulos} max={1} />
               </>

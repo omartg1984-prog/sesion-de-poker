@@ -1,6 +1,8 @@
-import { RotateCcw, Users } from 'lucide-react'
+import { Coins, RotateCcw, Users } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
+import NumInput from '../../components/NumInput'
 import Sheet from '../../components/Sheet'
+import { money } from '../../lib/money'
 import {
   EXIGENCIA,
   PALOS,
@@ -8,6 +10,8 @@ import {
   asientosDe,
   bandaDeJugabilidad,
   carta,
+  cuentasDeLaApuesta,
+  equidadDe,
   nombreDeLaMano,
   paloDe,
   simular,
@@ -23,7 +27,9 @@ import {
  * hacen los programas de los profesionales, sólo que explicada.
  *
  * Sirve para dos cosas distintas: decidir en el momento, con la mesa a medias, y repasar
- * una mano después de jugada poniendo lo que enseñó cada quien.
+ * una mano después de jugada poniendo lo que enseñó cada quien. Para lo primero no basta
+ * el porcentaje: lo que decide es si alcanza para pagar lo que piden, y eso depende del
+ * bote. Para lo segundo ayuda ver el número de cada uno con su nombre, no "rival 3".
  */
 
 const HUECOS = [
@@ -69,7 +75,11 @@ function Carta({
 }) {
   const vacia = valor === null
   const medidas =
-    tam === 'normal' ? 'h-14 w-11 text-[19px]' : tam === 'chica' ? 'h-11 w-9 text-[15px]' : 'h-9 w-7 text-[13px]'
+    tam === 'normal'
+      ? 'h-14 w-11 text-[19px]'
+      : tam === 'chica'
+        ? 'h-11 w-9 text-[15px]'
+        : 'h-9 w-7 text-[13px]'
   return (
     <button
       type="button"
@@ -106,22 +116,30 @@ function Carta({
  * La mesa vista desde arriba, con una silla por jugador.
  *
  * Decir "posición media" no significa nada hasta que se ve dónde cae: aquí se toca la
- * silla y la app dice qué posición es y cuánto le exige a la mano.
+ * silla y la app dice qué posición es y cuánto le exige a la mano. Debajo de cada silla
+ * va el nombre de quien se sienta ahí y lo que se lleva, que es como se ve la mano
+ * completa de un vistazo en vez de leer una lista.
  */
 function Mesa({
   jugadores,
   asiento,
   onElegir,
+  etiqueta,
+  pct,
 }: {
   jugadores: number
   asiento: number
   onElegir: (i: number) => void
+  /** Cómo se llama el que se sienta ahí. */
+  etiqueta: (indice: number) => string
+  /** Lo que se lleva, ya escrito. Vacío mientras no haya cuenta hecha. */
+  pct: (indice: number) => string
 }) {
   const asientos = asientosDe(jugadores)
-  const alto = 150
+  const alto = 210
   return (
     <div className="relative mx-auto mb-2" style={{ height: alto, maxWidth: 320 }}>
-      <div className="absolute inset-x-6 inset-y-5 rounded-[999px] bg-[#0b6b3a] ring-4 ring-[#5b3b22]" />
+      <div className="absolute inset-x-8 inset-y-12 rounded-[999px] bg-[#0b6b3a] ring-4 ring-[#5b3b22]" />
       <div className="absolute inset-0 flex items-center justify-center">
         <span className="font-display text-[11px] tracking-[1px] text-white/50 uppercase">
           {jugadores} en la mesa
@@ -131,24 +149,46 @@ function Mesa({
         /* Las sillas se reparten por el óvalo empezando abajo, que es donde se sienta
            uno mismo al imaginarse la mesa. */
         const ang = Math.PI / 2 + (i / asientos.length) * Math.PI * 2
-        const x = 50 + Math.cos(ang) * 43
-        const y = 50 + Math.sin(ang) * 40
+        const x = 50 + Math.cos(ang) * 40
+        const y = 50 + Math.sin(ang) * 34
         const yo = a.indice === asiento
+        const nombre = etiqueta(a.indice)
+        const suyo = pct(a.indice)
         return (
-          <button
+          <div
             key={a.indice}
-            type="button"
-            onClick={() => onElegir(a.indice)}
-            aria-label={`Sentarme en ${a.nombre}`}
-            className={`absolute flex h-9 w-9 -translate-x-1/2 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full border-2 font-display text-[11px] font-bold transition-colors active:scale-90 ${
-              yo
-                ? 'border-marca-alta bg-marca text-white'
-                : 'border-white/25 bg-black/45 text-white/70'
-            }`}
+            className="absolute z-10 flex w-[58px] -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-[2px]"
             style={{ left: `${x}%`, top: `${y}%` }}
           >
-            {yo ? 'TÚ' : a.marca || i + 1}
-          </button>
+            <button
+              type="button"
+              onClick={() => onElegir(a.indice)}
+              aria-label={`Sentarme en ${a.nombre}`}
+              className={`flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-full border-2 font-display text-[11px] font-bold transition-colors active:scale-90 ${
+                yo
+                  ? 'border-marca-alta bg-marca text-white'
+                  : 'border-white/25 bg-black/45 text-white/70'
+              }`}
+            >
+              {yo ? 'TÚ' : a.marca || i + 1}
+            </button>
+            {/* En una placa oscura: el nombre y el porcentaje caen encima del fieltro y
+                en blanco a secas se pierden contra el verde. */}
+            {(nombre || suyo) && (
+              <span className="max-w-full rounded-md bg-black/65 px-1 py-[2px] text-center">
+                {nombre && (
+                  <span className="block truncate text-[9.5px] leading-tight font-semibold text-white/85">
+                    {nombre}
+                  </span>
+                )}
+                {suyo && (
+                  <span className="block font-display text-[11px] leading-tight font-bold text-white tabular-nums">
+                    {suyo}
+                  </span>
+                )}
+              </span>
+            )}
+          </div>
         )
       })}
     </div>
@@ -166,9 +206,12 @@ export default function Simulador({
   const [rivalesCartas, setRivalesCartas] = useState<(number | null)[][]>(
     Array.from({ length: 9 }, () => [null, null]),
   )
+  const [nombres, setNombres] = useState<string[]>(Array(9).fill(''))
   const [eligiendo, setEligiendo] = useState<Eligiendo | null>(null)
   const [rivales, setRivales] = useState(3)
   const [asiento, setAsiento] = useState(0)
+  const [bote, setBote] = useState(0)
+  const [apuesta, setApuesta] = useState(0)
   const [verRivales, setVerRivales] = useState(false)
   const [resultado, setResultado] = useState<Simulacion | null>(null)
   const [calculando, setCalculando] = useState(false)
@@ -183,20 +226,31 @@ export default function Simulador({
 
   const mano = useMemo(() => cartas.slice(0, 2).filter((c): c is number => c !== null), [cartas])
   const mesa = useMemo(() => cartas.slice(2).filter((c): c is number => c !== null), [cartas])
+  /* Cada rival se queda en su renglón: el que está a medias va vacío y se le reparte al
+     azar, pero no corre a los de abajo, porque su porcentaje lleva su nombre. */
   const manosRivales = useMemo(
     () =>
-      rivalesCartas
-        .slice(0, rivales)
-        .map((par) => par.filter((c): c is number => c !== null))
-        .filter((par) => par.length === 2),
+      rivalesCartas.slice(0, rivales).map((par) => {
+        const puestas = par.filter((c): c is number => c !== null)
+        return puestas.length === 2 ? puestas : []
+      }),
     [rivalesCartas, rivales],
   )
+  const sabidas = manosRivales.filter((m) => m.length === 2).length
+
+  /*
+   * Quién se sienta dónde: el rival 1 es el de tu izquierda y de ahí se sigue dando la
+   * vuelta. Hace falta para poner el nombre y el porcentaje en su silla.
+   */
+  const asientoDeRival = (r: number) => (asiento + 1 + r) % jugadores
+  const rivalEnAsiento = (indice: number) =>
+    indice === asiento ? -1 : (indice - asiento - 1 + jugadores) % jugadores
+  const nombreDeRival = (r: number) => nombres[r]?.trim() || `Rival ${r + 1}`
 
   const usadas = useMemo(() => {
     const s = new Set<number>()
     for (const c of cartas) if (c !== null) s.add(c)
-    for (const par of rivalesCartas.slice(0, rivales))
-      for (const c of par) if (c !== null) s.add(c)
+    for (const par of rivalesCartas.slice(0, rivales)) for (const c of par) if (c !== null) s.add(c)
     return s
   }, [cartas, rivalesCartas, rivales])
 
@@ -245,21 +299,42 @@ export default function Simulador({
     setEligiendo(null)
   }
 
+  /* Los nombres se quedan: son los de la mesa de esa noche y sirven para la mano que
+     sigue. Lo que se borra es la mano y lo que se había apostado en ella. */
   const limpiar = () => {
     setCartas(Array(7).fill(null))
     setRivalesCartas(Array.from({ length: 9 }, () => [null, null]))
     setEligiendo(null)
     setResultado(null)
+    setBote(0)
+    setApuesta(0)
   }
 
   const trae = listo && mesa.length >= 3 ? nombreDeLaMano(mano, mesa) : ''
   const justo = 100 / jugadores
-  const equidad = resultado ? resultado.gano + resultado.empate / 2 : 0
+  const equidad = resultado ? equidadDe(resultado) : 0
+  const cuentas = resultado ? cuentasDeLaApuesta(equidad, bote, apuesta) : null
+  /* Quién va mandando, para marcarlo: puede ser uno de los rivales y no tú. */
+  const mejorParte = resultado
+    ? Math.max(resultado.parte, ...resultado.porRival.map((r) => r.parte))
+    : 0
   const banda = bandaDeJugabilidad(equidad, jugadores, miAsiento.posicion)
   const TONOS = {
-    win: { caja: 'bg-win/12 text-win-tinta', barra: 'bg-win', texto: 'text-win' },
-    ambar: { caja: 'bg-[#f0a81e]/15 text-[#8a5c00]', barra: 'bg-[#f0a81e]', texto: 'text-[#8a5c00]' },
-    loss: { caja: 'bg-loss/12 text-loss', barra: 'bg-loss', texto: 'text-loss' },
+    win: {
+      caja: 'bg-win/12 text-win-tinta',
+      barra: 'bg-win',
+      texto: 'text-win',
+    },
+    ambar: {
+      caja: 'bg-[#f0a81e]/15 text-[#8a5c00]',
+      barra: 'bg-[#f0a81e]',
+      texto: 'text-[#8a5c00]',
+    },
+    loss: {
+      caja: 'bg-loss/12 text-loss',
+      barra: 'bg-loss',
+      texto: 'text-loss',
+    },
   }[banda.tono]
 
   /** El tablero de 52 cartas: las que ya están puestas salen tachadas y no se tocan. */
@@ -303,8 +378,8 @@ export default function Simulador({
   return (
     <Sheet abierta={abierta} onCerrar={onCerrar} titulo="Simulador de manos">
       <p className="mt-0 mb-3 text-[13px] leading-snug text-ink-soft">
-        Pon tus cartas y las que ya estén en la mesa. La app reparte la mano veinte mil
-        veces y cuenta cuántas ganas.
+        Pon tus cartas y las que ya estén en la mesa. La app reparte la mano veinte mil veces y
+        cuenta cuántas ganas.
       </p>
 
       {(['Tu mano', 'Flop', 'Turn', 'River'] as const).map((grupo) => (
@@ -350,33 +425,54 @@ export default function Simulador({
         Toca la silla donde te sentarías. <b className="text-ink">D</b> es el botón y{' '}
         <b className="text-ink">CCH</b>/<b className="text-ink">CG</b> las ciegas.
       </p>
-      <Mesa jugadores={jugadores} asiento={asiento} onElegir={setAsiento} />
+      <Mesa
+        jugadores={jugadores}
+        asiento={asiento}
+        onElegir={setAsiento}
+        etiqueta={(i) => {
+          const r = rivalEnAsiento(i)
+          return r < 0 ? '' : nombres[r]?.trim() || ''
+        }}
+        pct={(i) => {
+          if (!resultado || calculando) return ''
+          const r = rivalEnAsiento(i)
+          const suyo = r < 0 ? resultado : resultado.porRival[r]
+          return suyo ? `${suyo.parte.toFixed(0)}%` : ''
+        }}
+      />
       <p className="mt-0 mb-4 text-center text-[12.5px] text-ink-soft">
         <b className="text-ink">{miAsiento.nombre}</b> · posición{' '}
         {NOMBRE_POSICION[miAsiento.posicion]}
       </p>
 
       {/* ---- las manos de los demás ---- */}
-      <button
-        type="button"
-        className="btn btn-ghost mb-2"
-        onClick={() => setVerRivales((v) => !v)}
-      >
+      <button type="button" className="btn btn-ghost mb-2" onClick={() => setVerRivales((v) => !v)}>
         <Users size={16} strokeWidth={2.4} />
-        {verRivales ? 'Ocultar las manos de los demás' : 'Sé la mano de alguien'}
+        {verRivales ? 'Ocultar a los demás' : 'Pon los nombres y las manos de los demás'}
       </button>
 
       {verRivales && (
         <div className="mb-3 rounded-xl border border-paper-line bg-paper-soft px-3 py-2.5">
           <p className="mt-0 mb-2.5 text-[12px] leading-snug text-ink-soft">
-            Para repasar una mano ya jugada: pon lo que enseñó cada quien. Al que dejes en
-            blanco se le siguen repartiendo cartas al azar.
+            El nombre es para leer la mesa con la gente de esa noche y no con "rival 3". Las cartas,
+            para repasar una mano ya jugada: pon lo que enseñó cada quien. Al que dejes en blanco se
+            le siguen repartiendo cartas al azar.
           </p>
           {Array.from({ length: rivales }, (_, r) => (
-            <div key={r} className="mb-2 flex items-center gap-3 last:mb-0">
-              <span className="w-[62px] shrink-0 text-[12px] font-semibold text-ink-soft">
-                Rival {r + 1}
-              </span>
+            <div key={r} className="mb-2 flex items-center gap-2 last:mb-0">
+              <div className="field-box min-w-0 flex-1">
+                <input
+                  type="text"
+                  value={nombres[r]}
+                  placeholder={`Rival ${r + 1}`}
+                  aria-label={`Nombre del rival ${r + 1}`}
+                  maxLength={14}
+                  onChange={(e) =>
+                    setNombres((ns) => ns.map((n, i) => (i === r ? e.target.value : n)))
+                  }
+                  className="w-full border-none bg-transparent text-[13.5px] text-ink outline-none"
+                />
+              </div>
               <div className="flex gap-1.5">
                 {[0, 1].map((i) => (
                   <Carta
@@ -396,6 +492,9 @@ export default function Simulador({
               </div>
             </div>
           ))}
+          <p className="mt-2 mb-0 text-[11.5px] leading-snug text-ink-soft/80">
+            El rival 1 es el de tu izquierda, y de ahí se sigue dando la vuelta a la mesa.
+          </p>
           {eligiendo?.tipo === 'rival' && <Mazo />}
         </div>
       )}
@@ -456,20 +555,158 @@ export default function Simulador({
                 ))}
               </ul>
 
+              {/* Los porcentajes de los demás. Al que se le sabe la mano trae el suyo de
+                  verdad; al que no, el de una mano cualquiera, que es lo que se sabe de
+                  él. Suman 100 porque el bote siempre se lo lleva alguien. */}
+              <p className="field-label mt-4 mb-1">Lo que se lleva cada quien</p>
+              <ul className="m-0 mb-1 list-none p-0">
+                {[
+                  {
+                    clave: 'yo',
+                    nombre: 'Tú',
+                    detalle: miAsiento.nombre,
+                    suyas: mano,
+                    reparto: resultado,
+                  },
+                  ...resultado.porRival.map((reparto, r) => {
+                    const silla = asientos.find((a) => a.indice === asientoDeRival(r))
+                    const suyas = manosRivales[r] ?? []
+                    return {
+                      clave: `r${r}`,
+                      nombre: nombreDeRival(r),
+                      detalle: `${silla?.nombre ?? ''}${suyas.length === 2 ? '' : ' · a ciegas'}`,
+                      suyas,
+                      reparto,
+                    }
+                  }),
+                ].map((j) => {
+                  const manda = j.reparto.parte >= mejorParte - 1e-9
+                  return (
+                    <li
+                      key={j.clave}
+                      className="flex items-center gap-2 border-b border-dashed border-paper-line py-1.5 last:border-b-0"
+                    >
+                      <span className="min-w-0 flex-1">
+                        <b
+                          className={`block truncate text-[12.5px] ${manda ? 'text-win' : 'text-ink'}`}
+                        >
+                          {j.nombre}
+                        </b>
+                        <span className="block text-[10.5px] leading-tight text-ink-soft">
+                          {j.detalle}
+                        </span>
+                      </span>
+                      {j.suyas.length === 2 && (
+                        <span className="flex shrink-0 gap-0.5">
+                          {j.suyas.map((c) => (
+                            <Carta key={c} valor={c} tam="mini" />
+                          ))}
+                        </span>
+                      )}
+                      <b
+                        className={`w-12 shrink-0 text-right font-display text-[15px] tabular-nums ${
+                          manda ? 'text-win' : 'text-ink'
+                        }`}
+                      >
+                        {j.reparto.parte.toFixed(1)}%
+                      </b>
+                    </li>
+                  )
+                })}
+              </ul>
+              <p className="mt-0 mb-0 text-right text-[11px] text-ink-soft/80">
+                Contando que los empates se parten el bote.
+              </p>
+
               <p className="mt-3 mb-0 text-[12.5px] leading-snug text-ink-soft">
                 Repartiendo a ciegas entre {jugadores} te tocaría{' '}
                 <b className="text-ink">{justo.toFixed(1)}%</b>, y desde{' '}
-                <b className="text-ink">{miAsiento.nombre.toLowerCase()}</b> conviene pedirle
-                un {Math.round((EXIGENCIA[miAsiento.posicion] - 1) * 100)}% más que eso.
-                {manosRivales.length > 0 &&
-                  ` Contando ${manosRivales.length === 1 ? 'la mano que ya sabes' : `las ${manosRivales.length} manos que ya sabes`}.`}
+                <b className="text-ink">{miAsiento.nombre.toLowerCase()}</b> conviene pedirle un{' '}
+                {Math.round((EXIGENCIA[miAsiento.posicion] - 1) * 100)}% más que eso.
+                {sabidas > 0 &&
+                  ` Contando ${sabidas === 1 ? 'la mano que ya sabes' : `las ${sabidas} manos que ya sabes`}.`}
               </p>
 
               <p className="mt-2 mb-0 text-[11.5px] leading-snug text-ink-soft/80">
-                La posición no cambia el porcentaje —las cartas ganan lo mismo desde donde
-                sea—; cambia cuánto margen necesitas, porque hablando primero juegas sin
-                saber qué hicieron los demás.
+                La posición no cambia el porcentaje —las cartas ganan lo mismo desde donde sea—;
+                cambia cuánto margen necesitas, porque hablando primero juegas sin saber qué
+                hicieron los demás.
               </p>
+
+              {/* La pregunta de la mesa no es "¿voy ganando?" sino "¿me alcanza para pagar
+                  esto?". Pagar $100 a un bote de $900 necesita ganar una de cada diez; a
+                  un bote de $100, una de cada dos. */}
+              <div className="mt-4 border-t border-dashed border-paper-line pt-3">
+                <p className="field-label mt-0 mb-1.5">
+                  <Coins size={13} strokeWidth={2.6} className="-mt-0.5 mr-1 inline" />
+                  ¿Conviene pagar?
+                </p>
+                <div className="mb-2 flex gap-2">
+                  <label className="min-w-0 flex-1">
+                    <span className="mb-1 block text-[11.5px] text-ink-soft">En el bote hay</span>
+                    <span className="field-box block">
+                      <NumInput
+                        value={bote}
+                        mode="decimal"
+                        aria-label="Lo que hay en el bote"
+                        onChange={setBote}
+                      />
+                    </span>
+                  </label>
+                  <label className="min-w-0 flex-1">
+                    <span className="mb-1 block text-[11.5px] text-ink-soft">Te toca pagar</span>
+                    <span className="field-box block">
+                      <NumInput
+                        value={apuesta}
+                        mode="decimal"
+                        aria-label="Lo que te toca pagar"
+                        onChange={setApuesta}
+                      />
+                    </span>
+                  </label>
+                </div>
+
+                {!cuentas ? (
+                  <p className="mt-0 mb-0 text-[12px] leading-snug text-ink-soft">
+                    Pon lo que hay en el bote y lo que te piden, y la app dice si sale a cuentas
+                    pagar con la mano que traes.
+                  </p>
+                ) : (
+                  <>
+                    <div
+                      className={`rounded-xl px-3 py-2.5 ${
+                        cuentas.conviene ? 'bg-win/12' : 'bg-loss/12'
+                      }`}
+                    >
+                      <b
+                        className={`block font-display text-[14.5px] ${
+                          cuentas.conviene ? 'text-win-tinta' : 'text-loss'
+                        }`}
+                      >
+                        {cuentas.conviene ? 'Sí sale a cuentas pagar' : 'No sale a cuentas pagar'}
+                      </b>
+                      <p className="mt-1 mb-0 text-[12.5px] leading-snug text-ink">
+                        Pagar {money(apuesta)} a un bote de {money(bote)} te pide ganar{' '}
+                        <b>{cuentas.necesitas.toFixed(1)}%</b> de las veces, y te llevas{' '}
+                        <b>{cuentas.tienes.toFixed(1)}%</b>.
+                      </p>
+                      <p className="mt-1 mb-0 text-[12.5px] leading-snug text-ink">
+                        Cada vez que se jugara esta mano, pagar te{' '}
+                        {cuentas.esperado >= 0 ? 'deja' : 'cuesta'}{' '}
+                        <b className={cuentas.esperado >= 0 ? 'text-win' : 'text-loss'}>
+                          {money(Math.abs(cuentas.esperado))}
+                        </b>
+                        .
+                      </p>
+                    </div>
+                    <p className="mt-2 mb-0 text-[11.5px] leading-snug text-ink-soft/80">
+                      La apuesta es {(cuentas.parteDelBote * 100).toFixed(0)}% del bote. Esto sólo
+                      cuenta esta carta: si te van a volver a apostar después, te hace falta más
+                      margen del que dice aquí.
+                    </p>
+                  </>
+                )}
+              </div>
             </>
           )}
         </section>
