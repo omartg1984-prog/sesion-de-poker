@@ -1,7 +1,19 @@
-import { Coins, RotateCcw, Users } from 'lucide-react'
+import { Coins, RotateCcw, Undo2, UserRound, X } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
+import Cara from '../../components/Cara'
 import NumInput from '../../components/NumInput'
 import Sheet from '../../components/Sheet'
+import type { Miembro } from '../../lib/api'
+import {
+  NOMBRE_CALLE,
+  arrancarMano,
+  bote as boteDe,
+  comoSeDice,
+  deshacer,
+  jugar,
+  opciones,
+  type Mano,
+} from '../../lib/mano'
 import { money } from '../../lib/money'
 import {
   EXIGENCIA,
@@ -18,29 +30,23 @@ import {
   valorDe,
   type Simulacion,
 } from '../../lib/poker'
+import Mesa, { type AsientoEnMesa } from './Mesa'
 
 /*
- * El simulador: con qué frecuencia gana tu mano.
+ * El simulador: con qué frecuencia gana tu mano, y si sale a cuentas pagar.
  *
  * No adivina ni opina: reparte veinte mil veces lo que falta —las cartas que no se ven y
  * lo que queda por salir— y cuenta cuántas de esas veces ganas. Es la misma cuenta que
  * hacen los programas de los profesionales, sólo que explicada.
  *
- * Sirve para dos cosas distintas: decidir en el momento, con la mesa a medias, y repasar
- * una mano después de jugada poniendo lo que enseñó cada quien. Para lo primero no basta
- * el porcentaje: lo que decide es si alcanza para pagar lo que piden, y eso depende del
- * bote. Para lo segundo ayuda ver el número de cada uno con su nombre, no "rival 3".
+ * Todo cuelga de la mesa dibujada: ahí se sienta uno, se sienta a los demás con su nombre
+ * de la liga, se ponen las cartas comunes y se ve lo que se lleva cada quien. Debajo se
+ * apunta la mano como fue —las ciegas, quién subió, quién se fue— y de eso salen el bote
+ * y la cuenta de si pagar conviene, que es la pregunta de verdad en la mesa.
  */
 
-const HUECOS = [
-  { i: 0, grupo: 'Tu mano' },
-  { i: 1, grupo: 'Tu mano' },
-  { i: 2, grupo: 'Flop' },
-  { i: 3, grupo: 'Flop' },
-  { i: 4, grupo: 'Flop' },
-  { i: 5, grupo: 'Turn' },
-  { i: 6, grupo: 'River' },
-] as const
+const MIN_JUGADORES = 2
+const MAX_JUGADORES = 9
 
 const ROJO = (c: number) => paloDe(c) === 1 || paloDe(c) === 2
 
@@ -52,13 +58,16 @@ const NOMBRE_POSICION = {
   ciega: 'de ciega',
 } as const
 
-/** Qué hueco se está llenando: uno de los míos o una carta de un rival. */
-type Eligiendo = { tipo: 'mio'; i: number } | { tipo: 'rival'; r: number; i: number }
+/** Qué hueco se está llenando: una de las de en medio o una de alguien. */
+type Eligiendo = { tipo: 'mesa'; i: number } | { tipo: 'asiento'; s: number; i: number }
 const mismoHueco = (a: Eligiendo | null, b: Eligiendo) => {
   if (!a || a.tipo !== b.tipo) return false
-  if (a.tipo === 'mio' || b.tipo === 'mio') return a.i === b.i
-  return a.r === b.r && a.i === b.i
+  if (a.tipo === 'mesa' || b.tipo === 'mesa') return a.i === b.i
+  return a.s === b.s && a.i === b.i
 }
+
+const manosVacias = (): (number | null)[][] =>
+  Array.from({ length: MAX_JUGADORES }, () => [null, null])
 
 function Carta({
   valor,
@@ -69,17 +78,12 @@ function Carta({
 }: {
   valor: number | null
   onClick?: () => void
-  tam?: 'normal' | 'chica' | 'mini'
+  tam?: 'normal' | 'chica'
   activa?: boolean
   gastada?: boolean
 }) {
   const vacia = valor === null
-  const medidas =
-    tam === 'normal'
-      ? 'h-14 w-11 text-[19px]'
-      : tam === 'chica'
-        ? 'h-11 w-9 text-[15px]'
-        : 'h-9 w-7 text-[13px]'
+  const medidas = tam === 'normal' ? 'h-14 w-11 text-[19px]' : 'h-11 w-9 text-[15px]'
   return (
     <button
       type="button"
@@ -112,153 +116,125 @@ function Carta({
   )
 }
 
-/**
- * La mesa vista desde arriba, con una silla por jugador.
- *
- * Decir "posición media" no significa nada hasta que se ve dónde cae: aquí se toca la
- * silla y la app dice qué posición es y cuánto le exige a la mano. Debajo de cada silla
- * va el nombre de quien se sienta ahí y lo que se lleva, que es como se ve la mano
- * completa de un vistazo en vez de leer una lista.
- */
-function Mesa({
-  jugadores,
-  asiento,
-  onElegir,
-  etiqueta,
-  pct,
-}: {
-  jugadores: number
-  asiento: number
-  onElegir: (i: number) => void
-  /** Cómo se llama el que se sienta ahí. */
-  etiqueta: (indice: number) => string
-  /** Lo que se lleva, ya escrito. Vacío mientras no haya cuenta hecha. */
-  pct: (indice: number) => string
-}) {
-  const asientos = asientosDe(jugadores)
-  const alto = 210
+/** Dos cartas chiquitas, para los renglones del resultado. */
+function Par({ cartas }: { cartas: number[] }) {
   return (
-    <div className="relative mx-auto mb-2" style={{ height: alto, maxWidth: 320 }}>
-      <div className="absolute inset-x-8 inset-y-12 rounded-[999px] bg-[#0b6b3a] ring-4 ring-[#5b3b22]" />
-      <div className="absolute inset-0 flex items-center justify-center">
-        <span className="font-display text-[11px] tracking-[1px] text-white/50 uppercase">
-          {jugadores} en la mesa
+    <span className="flex shrink-0 gap-0.5">
+      {cartas.map((c) => (
+        <span
+          key={c}
+          className={`flex h-7 w-5 flex-col items-center justify-center rounded border border-paper-line bg-white font-display text-[10px] leading-none font-bold ${
+            ROJO(c) ? 'text-loss' : 'text-ink'
+          }`}
+        >
+          <span>{VALORES[valorDe(c)]}</span>
+          <span className="text-[8px]">{PALOS[paloDe(c)]}</span>
         </span>
-      </div>
-      {asientos.map((a, i) => {
-        /* Las sillas se reparten por el óvalo empezando abajo, que es donde se sienta
-           uno mismo al imaginarse la mesa. */
-        const ang = Math.PI / 2 + (i / asientos.length) * Math.PI * 2
-        const x = 50 + Math.cos(ang) * 40
-        const y = 50 + Math.sin(ang) * 34
-        const yo = a.indice === asiento
-        const nombre = etiqueta(a.indice)
-        const suyo = pct(a.indice)
-        return (
-          <div
-            key={a.indice}
-            className="absolute z-10 flex w-[58px] -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-[2px]"
-            style={{ left: `${x}%`, top: `${y}%` }}
-          >
-            <button
-              type="button"
-              onClick={() => onElegir(a.indice)}
-              aria-label={`Sentarme en ${a.nombre}`}
-              className={`flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-full border-2 font-display text-[11px] font-bold transition-colors active:scale-90 ${
-                yo
-                  ? 'border-marca-alta bg-marca text-white'
-                  : 'border-white/25 bg-black/45 text-white/70'
-              }`}
-            >
-              {yo ? 'TÚ' : a.marca || i + 1}
-            </button>
-            {/* En una placa oscura: el nombre y el porcentaje caen encima del fieltro y
-                en blanco a secas se pierden contra el verde. */}
-            {(nombre || suyo) && (
-              <span className="max-w-full rounded-md bg-black/65 px-1 py-[2px] text-center">
-                {nombre && (
-                  <span className="block truncate text-[9.5px] leading-tight font-semibold text-white/85">
-                    {nombre}
-                  </span>
-                )}
-                {suyo && (
-                  <span className="block font-display text-[11px] leading-tight font-bold text-white tabular-nums">
-                    {suyo}
-                  </span>
-                )}
-              </span>
-            )}
-          </div>
-        )
-      })}
-    </div>
+      ))}
+    </span>
   )
 }
 
 export default function Simulador({
   abierta,
+  miembros,
   onCerrar,
 }: {
   abierta: boolean
+  miembros: Miembro[]
   onCerrar: () => void
 }) {
-  const [cartas, setCartas] = useState<(number | null)[]>(Array(7).fill(null))
-  const [rivalesCartas, setRivalesCartas] = useState<(number | null)[][]>(
-    Array.from({ length: 9 }, () => [null, null]),
-  )
-  const [nombres, setNombres] = useState<string[]>(Array(9).fill(''))
-  const [eligiendo, setEligiendo] = useState<Eligiendo | null>(null)
-  const [rivales, setRivales] = useState(3)
+  const [jugadores, setJugadores] = useState(4)
   const [asiento, setAsiento] = useState(0)
-  const [bote, setBote] = useState(0)
-  const [apuesta, setApuesta] = useState(0)
-  const [verRivales, setVerRivales] = useState(false)
+  /** Las cinco de en medio. */
+  const [mesaCartas, setMesaCartas] = useState<(number | null)[]>(Array(5).fill(null))
+  /** Las dos de cada asiento, el mío incluido. */
+  const [manos, setManos] = useState<(number | null)[][]>(manosVacias)
+  /** Quién se sienta en cada asiento: el id de un jugador de la liga. */
+  const [quien, setQuien] = useState<(string | null)[]>(Array(MAX_JUGADORES).fill(null))
+  const [eligiendo, setEligiendo] = useState<Eligiendo | null>(null)
+  /** El asiento cuyo panel está abierto. */
+  const [panel, setPanel] = useState<number | null>(null)
   const [resultado, setResultado] = useState<Simulacion | null>(null)
   const [calculando, setCalculando] = useState(false)
 
-  const jugadores = rivales + 1
+  /* El repaso de la mano: las ciegas y lo que fue apostando cada quien. */
+  const [ciegas, setCiegas] = useState({ chica: 1, grande: 2 })
+  const [manoApuntada, setMano] = useState<Mano | null>(null)
+  const [subirA, setSubirA] = useState(0)
+  const [boteManual, setBoteManual] = useState(0)
+  const [apuestaManual, setApuestaManual] = useState(0)
+
+  /* Una mano apuntada con otra cantidad de gente no habla de esta mesa: mejor no
+     enseñarla que enseñar a medio mundo "se fue" por un asiento que ni existía. */
+  const mano = manoApuntada && manoApuntada.cfg.jugadores === jugadores ? manoApuntada : null
+
   const asientos = useMemo(() => asientosDe(jugadores), [jugadores])
-  /* Al cambiar el número de jugadores la silla elegida puede dejar de existir. */
-  useEffect(() => {
-    if (asiento >= jugadores) setAsiento(0)
-  }, [jugadores, asiento])
   const miAsiento = asientos.find((a) => a.indice === asiento) ?? asientos[0]
 
-  const mano = useMemo(() => cartas.slice(0, 2).filter((c): c is number => c !== null), [cartas])
-  const mesa = useMemo(() => cartas.slice(2).filter((c): c is number => c !== null), [cartas])
-  /* Cada rival se queda en su renglón: el que está a medias va vacío y se le reparte al
-     azar, pero no corre a los de abajo, porque su porcentaje lleva su nombre. */
-  const manosRivales = useMemo(
-    () =>
-      rivalesCartas.slice(0, rivales).map((par) => {
-        const puestas = par.filter((c): c is number => c !== null)
-        return puestas.length === 2 ? puestas : []
-      }),
-    [rivalesCartas, rivales],
-  )
-  const sabidas = manosRivales.filter((m) => m.length === 2).length
+  /* Al cambiar el tamaño de la mesa, la silla elegida puede dejar de existir y la mano
+     apuntada ya no cuadra con quién está sentado. */
+  useEffect(() => {
+    setAsiento((s) => (s >= jugadores ? 0 : s))
+    setMano(null)
+    setPanel(null)
+    setEligiendo(null)
+  }, [jugadores])
 
-  /*
-   * Quién se sienta dónde: el rival 1 es el de tu izquierda y de ahí se sigue dando la
-   * vuelta. Hace falta para poner el nombre y el porcentaje en su silla.
-   */
-  const asientoDeRival = (r: number) => (asiento + 1 + r) % jugadores
-  const rivalEnAsiento = (indice: number) =>
-    indice === asiento ? -1 : (indice - asiento - 1 + jugadores) % jugadores
-  const nombreDeRival = (r: number) => nombres[r]?.trim() || `Rival ${r + 1}`
+  /* Sin nadie sentado se le dice por su silla —"la ciega grande sube"—, que es como se
+     cuenta una mano cuando no te acuerdas de quién estaba ahí. */
+  const nombreDe = (s: number) => {
+    const m = miembros.find((x) => x.id === quien[s])
+    if (m) return m.nombre
+    if (s === asiento) return 'Tú'
+    const silla = asientos.find((a) => a.indice === s)
+    return silla?.marca || `Asiento ${s + 1}`
+  }
+  const fotoDe = (s: number) => miembros.find((x) => x.id === quien[s])?.foto ?? null
+
+  /* En la placa de la mesa no cabe "Asiento 4", y la silla ya se ve por su marca: ahí lo
+     útil es si está libre o quién se sentó. */
+  const enLaPlaca = (s: number) =>
+    miembros.find((x) => x.id === quien[s])?.nombre ?? (s === asiento ? 'Tú' : 'Libre')
+
+  const cartasDe = (s: number) => {
+    const puestas = manos[s].filter((c): c is number => c !== null)
+    return puestas.length === 2 ? puestas : []
+  }
+
+  const miMano = cartasDe(asiento)
+  const mesa = useMemo(() => mesaCartas.filter((c): c is number => c !== null), [mesaCartas])
 
   const usadas = useMemo(() => {
     const s = new Set<number>()
-    for (const c of cartas) if (c !== null) s.add(c)
-    for (const par of rivalesCartas.slice(0, rivales)) for (const c of par) if (c !== null) s.add(c)
+    for (const c of mesaCartas) if (c !== null) s.add(c)
+    for (const par of manos.slice(0, jugadores)) for (const c of par) if (c !== null) s.add(c)
     return s
-  }, [cartas, rivalesCartas, rivales])
+  }, [mesaCartas, manos, jugadores])
+
+  /* Los que siguen en la mano: sin nada apuntado, están todos. */
+  const sigue = (s: number) => !mano || mano.vivo[s]
+  const vivos = useMemo(
+    () => Array.from({ length: jugadores }, (_, s) => s).filter(sigue),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [jugadores, mano],
+  )
+  const rivalesVivos = vivos.filter((s) => s !== asiento)
+  const meFui = !sigue(asiento)
+
+  /* Para el motor los rivales van en fila; aquí se guarda a qué asiento es cada uno. */
+  const manosRivales = useMemo(
+    () => rivalesVivos.map((s) => cartasDe(s)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [rivalesVivos, manos],
+  )
 
   const mesaValida = [0, 3, 4, 5].includes(mesa.length)
   const sinHuecos =
-    cartas.slice(2, 2 + mesa.length).every((c) => c !== null) &&
-    cartas.slice(2 + mesa.length).every((c) => c === null)
-  const listo = mano.length === 2 && mesaValida && sinHuecos
+    mesaCartas.slice(0, mesa.length).every((c) => c !== null) &&
+    mesaCartas.slice(mesa.length).every((c) => c === null)
+  const listo =
+    miMano.length === 2 && mesaValida && sinHuecos && !meFui && rivalesVivos.length > 0
 
   useEffect(() => {
     if (!listo) {
@@ -267,75 +243,118 @@ export default function Simulador({
     }
     setCalculando(true)
     const t = setTimeout(() => {
-      setResultado(simular({ mano, mesa, rivales, manosRivales }))
+      setResultado(simular({ mano: miMano, mesa, rivales: rivalesVivos.length, manosRivales }))
       setCalculando(false)
     }, 30)
     return () => clearTimeout(t)
-  }, [listo, rivales, cartas, mano, mesa, manosRivales])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [listo, mesaCartas, manos, asiento, jugadores, mano])
+
+  /** Lo que se lleva un asiento, ya calculado. */
+  const repartoDe = (s: number) => {
+    if (!resultado) return null
+    if (s === asiento) return resultado
+    const k = rivalesVivos.indexOf(s)
+    return k >= 0 ? resultado.porRival[k] : null
+  }
+
+  const mejorParte = resultado
+    ? Math.max(resultado.parte, ...resultado.porRival.map((r) => r.parte))
+    : 0
 
   const poner = (valor: number) => {
     if (!eligiendo) return
-    if (eligiendo.tipo === 'mio') {
-      setCartas((cs) => cs.map((c, i) => (i === eligiendo.i ? valor : c)))
+    if (eligiendo.tipo === 'mesa') {
+      setMesaCartas((cs) => cs.map((c, i) => (i === eligiendo.i ? valor : c)))
       /* Salta al siguiente hueco vacío: poner cinco cartas no debe ser diez toques. */
-      const siguiente = cartas.findIndex((c, k) => k > eligiendo.i && c === null)
-      setEligiendo(siguiente >= 0 ? { tipo: 'mio', i: siguiente } : null)
+      const siguiente = mesaCartas.findIndex((c, k) => k > eligiendo.i && c === null)
+      setEligiendo(siguiente >= 0 ? { tipo: 'mesa', i: siguiente } : null)
       return
     }
-    setRivalesCartas((rs) =>
-      rs.map((par, r) =>
-        r === eligiendo.r ? par.map((c, i) => (i === eligiendo.i ? valor : c)) : par,
+    setManos((ms) =>
+      ms.map((par, s) =>
+        s === eligiendo.s ? par.map((c, i) => (i === eligiendo.i ? valor : c)) : par,
       ),
     )
-    setEligiendo(eligiendo.i === 0 ? { tipo: 'rival', r: eligiendo.r, i: 1 } : null)
+    setEligiendo(eligiendo.i === 0 ? { tipo: 'asiento', s: eligiendo.s, i: 1 } : null)
   }
 
-  const quitar = (e: Eligiendo) => {
-    if (e.tipo === 'mio') setCartas((cs) => cs.map((c, i) => (i === e.i ? null : c)))
+  const vaciarHueco = (e: Eligiendo) => {
+    if (e.tipo === 'mesa') setMesaCartas((cs) => cs.map((c, i) => (i === e.i ? null : c)))
     else
-      setRivalesCartas((rs) =>
-        rs.map((par, r) => (r === e.r ? par.map((c, i) => (i === e.i ? null : c)) : par)),
+      setManos((ms) =>
+        ms.map((par, s) => (s === e.s ? par.map((c, i) => (i === e.i ? null : c)) : par)),
       )
     setEligiendo(null)
   }
 
-  /* Los nombres se quedan: son los de la mesa de esa noche y sirven para la mano que
-     sigue. Lo que se borra es la mano y lo que se había apostado en ella. */
   const limpiar = () => {
-    setCartas(Array(7).fill(null))
-    setRivalesCartas(Array.from({ length: 9 }, () => [null, null]))
+    setMesaCartas(Array(5).fill(null))
+    setManos(manosVacias())
     setEligiendo(null)
     setResultado(null)
-    setBote(0)
-    setApuesta(0)
+    setMano(null)
+    setPanel(null)
   }
 
-  const trae = listo && mesa.length >= 3 ? nombreDeLaMano(mano, mesa) : ''
-  const justo = 100 / jugadores
+  /* ---- el repaso de la mano ---- */
+  const o = mano ? opciones(mano) : null
+  const bote = mano ? boteDe(mano) : 0
+  const meToca = mano?.turno === asiento
+
+  const empezar = () => {
+    setMano(arrancarMano({ jugadores, ciegaChica: ciegas.chica, ciegaGrande: ciegas.grande }))
+    setPanel(null)
+  }
+
+  const mover = (tipo: Parameters<typeof jugar>[1], hasta?: number) => {
+    if (!mano) return
+    const siguiente = jugar(mano, tipo, hasta)
+    setMano(siguiente)
+    setSubirA(opciones(siguiente)?.minimo ?? 0)
+  }
+
+  const minimo = o?.minimo ?? 0
+  useEffect(() => {
+    setSubirA((v) => (v >= minimo ? v : minimo))
+  }, [minimo])
+
+  /* Si se está apuntando la mano, lo que te piden pagar sale de ahí: es el número que de
+     verdad estás viendo en la mesa, no uno que haya que volver a teclear. */
+  const usandoMano = Boolean(mano && meToca && o && o.paga > 0)
+  const elBote = usandoMano ? bote : boteManual
+  const laApuesta = usandoMano ? (o?.paga ?? 0) : apuestaManual
+
   const equidad = resultado ? equidadDe(resultado) : 0
-  const cuentas = resultado ? cuentasDeLaApuesta(equidad, bote, apuesta) : null
-  /* Quién va mandando, para marcarlo: puede ser uno de los rivales y no tú. */
-  const mejorParte = resultado
-    ? Math.max(resultado.parte, ...resultado.porRival.map((r) => r.parte))
-    : 0
-  const banda = bandaDeJugabilidad(equidad, jugadores, miAsiento.posicion)
+  const banda = bandaDeJugabilidad(equidad, vivos.length, miAsiento.posicion)
+  const cuentas = resultado ? cuentasDeLaApuesta(equidad, elBote, laApuesta) : null
+  const justo = 100 / Math.max(2, vivos.length)
+  const trae = miMano.length === 2 && mesa.length >= 3 ? nombreDeLaMano(miMano, mesa) : ''
+  const sabidas = manosRivales.filter((m) => m.length === 2).length
+
   const TONOS = {
-    win: {
-      caja: 'bg-win/12 text-win-tinta',
-      barra: 'bg-win',
-      texto: 'text-win',
-    },
-    ambar: {
-      caja: 'bg-[#f0a81e]/15 text-[#8a5c00]',
-      barra: 'bg-[#f0a81e]',
-      texto: 'text-[#8a5c00]',
-    },
-    loss: {
-      caja: 'bg-loss/12 text-loss',
-      barra: 'bg-loss',
-      texto: 'text-loss',
-    },
+    win: { caja: 'bg-win/12 text-win-tinta', texto: 'text-win' },
+    ambar: { caja: 'bg-[#f0a81e]/15 text-[#8a5c00]', texto: 'text-[#8a5c00]' },
+    loss: { caja: 'bg-loss/12 text-loss', texto: 'text-loss' },
   }[banda.tono]
+
+  const enMesa: AsientoEnMesa[] = asientos.map((a) => {
+    const r = repartoDe(a.indice)
+    return {
+      indice: a.indice,
+      nombre: enLaPlaca(a.indice),
+      foto: fotoDe(a.indice),
+      ocupado: quien[a.indice] !== null,
+      marca: a.marca,
+      yo: a.indice === asiento,
+      cartas: cartasDe(a.indice),
+      pct: r && !calculando ? `${r.parte.toFixed(0)}%` : '',
+      apuesta: mano ? mano.puesto[a.indice] : 0,
+      fuera: !sigue(a.indice),
+      activo: mano?.turno === a.indice,
+      manda: Boolean(r && r.parte >= mejorParte - 1e-9),
+    }
+  })
 
   /** El tablero de 52 cartas: las que ya están puestas salen tachadas y no se tocan. */
   const Mazo = () => (
@@ -344,7 +363,7 @@ export default function Simulador({
         <span className="text-[12px] font-semibold text-ink-soft">Elige la carta</span>
         <button
           type="button"
-          onClick={() => eligiendo && quitar(eligiendo)}
+          onClick={() => eligiendo && vaciarHueco(eligiendo)}
           className="cursor-pointer border-none bg-transparent p-1 text-[11.5px] font-semibold text-ink-soft underline"
         >
           Vaciar este hueco
@@ -378,42 +397,22 @@ export default function Simulador({
   return (
     <Sheet abierta={abierta} onCerrar={onCerrar} titulo="Simulador de manos">
       <p className="mt-0 mb-3 text-[13px] leading-snug text-ink-soft">
-        Pon tus cartas y las que ya estén en la mesa. La app reparte la mano veinte mil veces y
-        cuenta cuántas ganas.
+        Siéntate en la mesa, pon tus cartas y las que vayan saliendo. La app reparte la mano
+        veinte mil veces y cuenta cuántas gana cada quien.
       </p>
 
-      {(['Tu mano', 'Flop', 'Turn', 'River'] as const).map((grupo) => (
-        <div key={grupo} className="mb-2.5 flex items-center gap-3">
-          <span className="w-[62px] shrink-0 text-[12px] font-semibold text-ink-soft">{grupo}</span>
-          <div className="flex gap-1.5">
-            {HUECOS.filter((h) => h.grupo === grupo).map((h) => (
-              <Carta
-                key={h.i}
-                valor={cartas[h.i]}
-                activa={mismoHueco(eligiendo, { tipo: 'mio', i: h.i })}
-                onClick={() =>
-                  setEligiendo(
-                    mismoHueco(eligiendo, { tipo: 'mio', i: h.i }) ? null : { tipo: 'mio', i: h.i },
-                  )
-                }
-              />
-            ))}
-          </div>
-        </div>
-      ))}
-
-      {eligiendo?.tipo === 'mio' && <Mazo />}
-
-      {/* ---- la mesa ---- */}
-      <p className="field-label mt-4 mb-1">Contra cuántos juegas</p>
-      <div className="mb-2 flex gap-1.5">
-        {[1, 2, 3, 4, 5, 6, 7, 8].map((n) => (
+      <p className="field-label mt-0 mb-1.5">Cuántos en la mesa</p>
+      <div className="mb-3 flex gap-1">
+        {Array.from(
+          { length: MAX_JUGADORES - MIN_JUGADORES + 1 },
+          (_, i) => i + MIN_JUGADORES,
+        ).map((n) => (
           <button
             key={n}
             type="button"
-            onClick={() => setRivales(n)}
+            onClick={() => setJugadores(n)}
             className={`flex-1 cursor-pointer rounded-lg border-none py-2 text-[13px] font-bold transition-colors ${
-              rivales === n ? 'bg-marca text-white' : 'bg-[#e6e1d8] text-ink-soft'
+              jugadores === n ? 'bg-marca text-white' : 'bg-[#e6e1d8] text-ink-soft'
             }`}
           >
             {n}
@@ -421,91 +420,326 @@ export default function Simulador({
         ))}
       </div>
 
-      <p className="mt-3 mb-1 text-[12px] leading-snug text-ink-soft">
-        Toca la silla donde te sentarías. <b className="text-ink">D</b> es el botón y{' '}
-        <b className="text-ink">CCH</b>/<b className="text-ink">CG</b> las ciegas.
-      </p>
       <Mesa
-        jugadores={jugadores}
-        asiento={asiento}
-        onElegir={setAsiento}
-        etiqueta={(i) => {
-          const r = rivalEnAsiento(i)
-          return r < 0 ? '' : nombres[r]?.trim() || ''
+        asientos={enMesa}
+        mesa={mesaCartas}
+        eligiendo={eligiendo?.tipo === 'mesa' ? eligiendo.i : null}
+        bote={bote}
+        dinero={money}
+        onAsiento={(s) => {
+          setPanel((p) => (p === s ? null : s))
+          setEligiendo(null)
         }}
-        pct={(i) => {
-          if (!resultado || calculando) return ''
-          const r = rivalEnAsiento(i)
-          const suyo = r < 0 ? resultado : resultado.porRival[r]
-          return suyo ? `${suyo.parte.toFixed(0)}%` : ''
-        }}
+        onCarta={(i) =>
+          setEligiendo((e) => (mismoHueco(e, { tipo: 'mesa', i }) ? null : { tipo: 'mesa', i }))
+        }
       />
-      <p className="mt-0 mb-4 text-center text-[12.5px] text-ink-soft">
-        <b className="text-ink">{miAsiento.nombre}</b> · posición{' '}
-        {NOMBRE_POSICION[miAsiento.posicion]}
+
+      <p className="mt-1 mb-3 text-center text-[12px] leading-snug text-ink-soft">
+        Toca a alguien para sentarlo o verle las cartas, y las de en medio para ponerlas.
+        Estás en <b className="text-ink">{miAsiento.nombre.toLowerCase()}</b>, posición{' '}
+        {NOMBRE_POSICION[miAsiento.posicion]}.
       </p>
 
-      {/* ---- las manos de los demás ---- */}
-      <button type="button" className="btn btn-ghost mb-2" onClick={() => setVerRivales((v) => !v)}>
-        <Users size={16} strokeWidth={2.4} />
-        {verRivales ? 'Ocultar a los demás' : 'Pon los nombres y las manos de los demás'}
-      </button>
+      {eligiendo?.tipo === 'mesa' && <Mazo />}
 
-      {verRivales && (
+      {/* ---- el asiento que se está tocando ---- */}
+      {panel !== null && (
         <div className="mb-3 rounded-xl border border-paper-line bg-paper-soft px-3 py-2.5">
-          <p className="mt-0 mb-2.5 text-[12px] leading-snug text-ink-soft">
-            El nombre es para leer la mesa con la gente de esa noche y no con "rival 3". Las cartas,
-            para repasar una mano ya jugada: pon lo que enseñó cada quien. Al que dejes en blanco se
-            le siguen repartiendo cartas al azar.
-          </p>
-          {Array.from({ length: rivales }, (_, r) => (
-            <div key={r} className="mb-2 flex items-center gap-2 last:mb-0">
-              <div className="field-box min-w-0 flex-1">
-                <input
-                  type="text"
-                  value={nombres[r]}
-                  placeholder={`Rival ${r + 1}`}
-                  aria-label={`Nombre del rival ${r + 1}`}
-                  maxLength={14}
-                  onChange={(e) =>
-                    setNombres((ns) => ns.map((n, i) => (i === r ? e.target.value : n)))
-                  }
-                  className="w-full border-none bg-transparent text-[13.5px] text-ink outline-none"
-                />
-              </div>
-              <div className="flex gap-1.5">
-                {[0, 1].map((i) => (
-                  <Carta
-                    key={i}
-                    valor={rivalesCartas[r][i]}
-                    tam="chica"
-                    activa={mismoHueco(eligiendo, { tipo: 'rival', r, i })}
+          <div className="mb-2 flex items-center justify-between">
+            <b className="text-[13.5px] text-ink">
+              {asientos.find((a) => a.indice === panel)?.nombre ?? 'El asiento'}
+            </b>
+            <button
+              type="button"
+              aria-label="Cerrar el asiento"
+              onClick={() => {
+                setPanel(null)
+                setEligiendo(null)
+              }}
+              className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg border-none bg-ink/8 text-ink-soft active:scale-95"
+            >
+              <X size={13} strokeWidth={2.6} />
+            </button>
+          </div>
+
+          {panel !== asiento && (
+            <button
+              type="button"
+              className="btn btn-ghost mb-2"
+              onClick={() => {
+                setAsiento(panel)
+                setPanel(null)
+              }}
+            >
+              <UserRound size={16} strokeWidth={2.4} />
+              Aquí me siento yo
+            </button>
+          )}
+
+          <p className="field-label mt-0 mb-1.5">Quién se sienta aquí</p>
+          {miembros.length === 0 ? (
+            <p className="mt-0 mb-2 text-[12px] leading-snug text-ink-soft">
+              La liga todavía no tiene jugadores a los que ponerles la cara.
+            </p>
+          ) : (
+            <div className="mb-2 flex flex-wrap gap-1.5">
+              {miembros.map((m) => {
+                const aqui = quien[panel] === m.id
+                return (
+                  <button
+                    key={m.id}
+                    type="button"
                     onClick={() =>
-                      setEligiendo(
-                        mismoHueco(eligiendo, { tipo: 'rival', r, i })
-                          ? null
-                          : { tipo: 'rival', r, i },
+                      setQuien((q) =>
+                        /* Nadie se sienta en dos sillas: se levanta de la otra. */
+                        q.map((x, s) =>
+                          s === panel ? (aqui ? null : m.id) : x === m.id ? null : x,
+                        ),
                       )
                     }
-                  />
-                ))}
-              </div>
+                    className={`flex cursor-pointer items-center gap-1.5 rounded-full border-none py-1 pr-2.5 pl-1 text-[12.5px] font-semibold active:scale-95 ${
+                      aqui ? 'bg-marca text-white' : 'bg-white text-ink'
+                    }`}
+                  >
+                    <Cara nombre={m.nombre} foto={m.foto} size={20} />
+                    {m.nombre}
+                  </button>
+                )
+              })}
             </div>
-          ))}
-          <p className="mt-2 mb-0 text-[11.5px] leading-snug text-ink-soft/80">
-            El rival 1 es el de tu izquierda, y de ahí se sigue dando la vuelta a la mesa.
+          )}
+
+          <p className="field-label mt-2 mb-1.5">
+            {panel === asiento ? 'Tus cartas' : 'Lo que enseñó'}
           </p>
-          {eligiendo?.tipo === 'rival' && <Mazo />}
+          <div className="flex gap-1.5">
+            {[0, 1].map((i) => (
+              <Carta
+                key={i}
+                valor={manos[panel][i]}
+                activa={mismoHueco(eligiendo, { tipo: 'asiento', s: panel, i })}
+                onClick={() =>
+                  setEligiendo((e) =>
+                    mismoHueco(e, { tipo: 'asiento', s: panel, i })
+                      ? null
+                      : { tipo: 'asiento', s: panel, i },
+                  )
+                }
+              />
+            ))}
+          </div>
+          {panel !== asiento && (
+            <p className="mt-1.5 mb-0 text-[11.5px] leading-snug text-ink-soft">
+              Déjalas en blanco y se le siguen repartiendo cartas al azar, que es justo lo que
+              sabes de él.
+            </p>
+          )}
+          {eligiendo?.tipo === 'asiento' && <Mazo />}
         </div>
       )}
+
+      {/* ---- tu mano, sin tener que buscarla ---- */}
+      {panel === null && (
+        <>
+          <p className="field-label mt-0 mb-1.5">Tu mano</p>
+          <div className="mb-1 flex gap-1.5">
+            {[0, 1].map((i) => (
+              <Carta
+                key={i}
+                valor={manos[asiento][i]}
+                activa={mismoHueco(eligiendo, { tipo: 'asiento', s: asiento, i })}
+                onClick={() =>
+                  setEligiendo((e) =>
+                    mismoHueco(e, { tipo: 'asiento', s: asiento, i })
+                      ? null
+                      : { tipo: 'asiento', s: asiento, i },
+                  )
+                }
+              />
+            ))}
+          </div>
+          {eligiendo?.tipo === 'asiento' && <Mazo />}
+        </>
+      )}
+
+      {/* ---- cómo se fue jugando ---- */}
+      <section className="panel">
+        <p className="panel-title">
+          <span>Cómo se fue la mano</span>
+        </p>
+
+        {!mano ? (
+          <>
+            <p className="mt-0 mb-2.5 text-[12.5px] leading-snug text-ink-soft">
+              Apúntala como pasó —las ciegas, quién subió, quién se fue— y la app lleva el bote
+              y te dice, cuando te toque, si sale a cuentas pagar.
+            </p>
+            <div className="mb-2 flex gap-2">
+              <label className="min-w-0 flex-1">
+                <span className="mb-1 block text-[11.5px] text-ink-soft">Ciega chica</span>
+                <span className="field-box block">
+                  <NumInput
+                    value={ciegas.chica}
+                    mode="decimal"
+                    aria-label="Ciega chica"
+                    onChange={(v) => setCiegas((c) => ({ ...c, chica: v }))}
+                  />
+                </span>
+              </label>
+              <label className="min-w-0 flex-1">
+                <span className="mb-1 block text-[11.5px] text-ink-soft">Ciega grande</span>
+                <span className="field-box block">
+                  <NumInput
+                    value={ciegas.grande}
+                    mode="decimal"
+                    aria-label="Ciega grande"
+                    onChange={(v) => setCiegas((c) => ({ ...c, grande: v }))}
+                  />
+                </span>
+              </label>
+            </div>
+            <button type="button" className="btn btn-marca" onClick={empezar}>
+              Repartir y empezar a apuntar
+            </button>
+          </>
+        ) : (
+          <>
+            <div className="mb-2 flex items-baseline justify-between">
+              <b className="font-display text-[14px] text-ink">{NOMBRE_CALLE[mano.calle]}</b>
+              <span className="text-[12.5px] text-ink-soft">
+                Bote <b className="font-display text-ink tabular-nums">{money(bote)}</b>
+              </span>
+            </div>
+
+            {/* El repaso, calle por calle: es lo que se cuenta después —"subió en el turn y
+                los demás se fueron"— y aquí queda escrito. */}
+            <ul className="m-0 mb-2.5 list-none p-0">
+              {mano.movimientos.map((x, i) => {
+                const abreCalle = i === 0 || mano.movimientos[i - 1].calle !== x.calle
+                return (
+                  <li key={i}>
+                    {abreCalle && x.calle !== 'preflop' && (
+                      <p className="mt-2 mb-1 text-[11px] font-bold tracking-[.5px] text-ink-soft uppercase">
+                        {NOMBRE_CALLE[x.calle]}
+                      </p>
+                    )}
+                    <p className="my-0 text-[12.5px] leading-relaxed text-ink">
+                      <b>{nombreDe(x.jugador)}</b>{' '}
+                      <span className="text-ink-soft">{comoSeDice(x, money)}</span>
+                    </p>
+                  </li>
+                )
+              })}
+            </ul>
+
+            {mano.terminada ? (
+              <p className="mt-0 mb-2 rounded-xl bg-ink/6 px-3 py-2.5 text-[12.5px] leading-snug text-ink">
+                {vivos.length === 1
+                  ? `Se acabó: el bote de ${money(bote)} es de ${nombreDe(vivos[0])}.`
+                  : `Se acabó el river. Al golpe quedan ${vivos.length} por ${money(bote)}.`}
+              </p>
+            ) : (
+              o &&
+              mano.turno !== null && (
+                <>
+                  <p className="mt-0 mb-1.5 text-[12.5px] text-ink">
+                    {meToca ? (
+                      'Te toca'
+                    ) : (
+                      <>
+                        Le toca a <b>{nombreDe(mano.turno)}</b>
+                      </>
+                    )}
+                    {o.paga > 0 && (
+                      <>
+                        , y pagar {meToca ? 'te' : 'le'} cuesta{' '}
+                        <b className="font-display tabular-nums">{money(o.paga)}</b>
+                      </>
+                    )}
+                    .
+                  </p>
+                  <div className="mb-2 flex gap-1.5">
+                    <button
+                      type="button"
+                      className="flex-1 cursor-pointer rounded-lg border-none bg-[#e6e1d8] py-2.5 text-[13px] font-bold text-ink-soft active:scale-95"
+                      onClick={() => mover('seVa')}
+                    >
+                      Se va
+                    </button>
+                    <button
+                      type="button"
+                      className="flex-1 cursor-pointer rounded-lg border-none bg-[#e6e1d8] py-2.5 text-[13px] font-bold text-ink active:scale-95"
+                      onClick={() => mover(o.pasa ? 'pasa' : 'paga')}
+                    >
+                      {o.pasa ? 'Pasa' : `Paga ${money(o.paga)}`}
+                    </button>
+                  </div>
+                  <div className="flex gap-1.5">
+                    <span className="field-box flex-1">
+                      <NumInput
+                        value={subirA}
+                        mode="decimal"
+                        aria-label="A cuánto sube"
+                        onChange={setSubirA}
+                      />
+                    </span>
+                    <button
+                      type="button"
+                      className="shrink-0 cursor-pointer rounded-lg border-none bg-marca px-4 py-2.5 text-[13px] font-bold text-white active:scale-95"
+                      onClick={() => mover(o.esApuesta ? 'apuesta' : 'sube', subirA)}
+                    >
+                      {o.esApuesta ? 'Apuesta' : 'Sube'}
+                    </button>
+                  </div>
+                  <div className="mt-1 flex gap-1.5">
+                    {[
+                      { k: 'Medio bote', v: Math.round(bote / 2) },
+                      { k: 'El bote', v: bote },
+                    ].map((s) => (
+                      <button
+                        key={s.k}
+                        type="button"
+                        onClick={() => setSubirA(Math.max(o.minimo, s.v))}
+                        className="flex-1 cursor-pointer border-none bg-transparent py-1 text-[11.5px] font-semibold text-ink-soft underline active:scale-95"
+                      >
+                        {s.k}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )
+            )}
+
+            <div className="mt-2.5 flex gap-1.5">
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={() => setMano((m) => (m ? deshacer(m) : m))}
+              >
+                <Undo2 size={16} strokeWidth={2.4} />
+                Deshacer
+              </button>
+              <button type="button" className="btn btn-ghost" onClick={() => setMano(null)}>
+                <RotateCcw size={16} strokeWidth={2.4} />
+                Otra mano
+              </button>
+            </div>
+          </>
+        )}
+      </section>
 
       {/* ---- el resultado ---- */}
       {!listo ? (
         <div className="balance balance-ok mb-2">
           <span>
-            {mano.length < 2
-              ? 'Pon tus dos cartas para empezar. La mesa puedes dejarla vacía.'
-              : 'El flop va completo: pon las tres o quítalas.'}
+            {meFui
+              ? 'Te fuiste de la mano: ya no hay nada que calcular.'
+              : rivalesVivos.length === 0
+                ? 'Ya no queda nadie contra quien jugar.'
+                : miMano.length < 2
+                  ? 'Pon tus dos cartas para empezar. La mesa puedes dejarla vacía.'
+                  : 'El flop va completo: pon las tres o quítalas.'}
           </span>
         </div>
       ) : (
@@ -560,55 +794,36 @@ export default function Simulador({
                   él. Suman 100 porque el bote siempre se lo lleva alguien. */}
               <p className="field-label mt-4 mb-1">Lo que se lleva cada quien</p>
               <ul className="m-0 mb-1 list-none p-0">
-                {[
-                  {
-                    clave: 'yo',
-                    nombre: 'Tú',
-                    detalle: miAsiento.nombre,
-                    suyas: mano,
-                    reparto: resultado,
-                  },
-                  ...resultado.porRival.map((reparto, r) => {
-                    const silla = asientos.find((a) => a.indice === asientoDeRival(r))
-                    const suyas = manosRivales[r] ?? []
-                    return {
-                      clave: `r${r}`,
-                      nombre: nombreDeRival(r),
-                      detalle: `${silla?.nombre ?? ''}${suyas.length === 2 ? '' : ' · a ciegas'}`,
-                      suyas,
-                      reparto,
-                    }
-                  }),
-                ].map((j) => {
-                  const manda = j.reparto.parte >= mejorParte - 1e-9
+                {[asiento, ...rivalesVivos].map((s) => {
+                  const r = repartoDe(s)
+                  if (!r) return null
+                  const suyas = cartasDe(s)
+                  const silla = asientos.find((a) => a.indice === s)
+                  const manda = r.parte >= mejorParte - 1e-9
                   return (
                     <li
-                      key={j.clave}
+                      key={s}
                       className="flex items-center gap-2 border-b border-dashed border-paper-line py-1.5 last:border-b-0"
                     >
+                      <Cara nombre={nombreDe(s)} foto={fotoDe(s)} size={26} />
                       <span className="min-w-0 flex-1">
                         <b
                           className={`block truncate text-[12.5px] ${manda ? 'text-win' : 'text-ink'}`}
                         >
-                          {j.nombre}
+                          {nombreDe(s)}
                         </b>
                         <span className="block text-[10.5px] leading-tight text-ink-soft">
-                          {j.detalle}
+                          {silla?.nombre}
+                          {suyas.length === 2 ? '' : ' · a ciegas'}
                         </span>
                       </span>
-                      {j.suyas.length === 2 && (
-                        <span className="flex shrink-0 gap-0.5">
-                          {j.suyas.map((c) => (
-                            <Carta key={c} valor={c} tam="mini" />
-                          ))}
-                        </span>
-                      )}
+                      {suyas.length === 2 && <Par cartas={suyas} />}
                       <b
                         className={`w-12 shrink-0 text-right font-display text-[15px] tabular-nums ${
                           manda ? 'text-win' : 'text-ink'
                         }`}
                       >
-                        {j.reparto.parte.toFixed(1)}%
+                        {r.parte.toFixed(1)}%
                       </b>
                     </li>
                   )
@@ -619,7 +834,7 @@ export default function Simulador({
               </p>
 
               <p className="mt-3 mb-0 text-[12.5px] leading-snug text-ink-soft">
-                Repartiendo a ciegas entre {jugadores} te tocaría{' '}
+                Repartiendo a ciegas entre {vivos.length} te tocaría{' '}
                 <b className="text-ink">{justo.toFixed(1)}%</b>, y desde{' '}
                 <b className="text-ink">{miAsiento.nombre.toLowerCase()}</b> conviene pedirle un{' '}
                 {Math.round((EXIGENCIA[miAsiento.posicion] - 1) * 100)}% más que eso.
@@ -634,37 +849,45 @@ export default function Simulador({
               </p>
 
               {/* La pregunta de la mesa no es "¿voy ganando?" sino "¿me alcanza para pagar
-                  esto?". Pagar $100 a un bote de $900 necesita ganar una de cada diez; a
-                  un bote de $100, una de cada dos. */}
+                  esto?". Pagar $100 a un bote de $900 necesita ganar una de cada diez; a un
+                  bote de $100, una de cada dos. */}
               <div className="mt-4 border-t border-dashed border-paper-line pt-3">
                 <p className="field-label mt-0 mb-1.5">
                   <Coins size={13} strokeWidth={2.6} className="-mt-0.5 mr-1 inline" />
                   ¿Conviene pagar?
                 </p>
-                <div className="mb-2 flex gap-2">
-                  <label className="min-w-0 flex-1">
-                    <span className="mb-1 block text-[11.5px] text-ink-soft">En el bote hay</span>
-                    <span className="field-box block">
-                      <NumInput
-                        value={bote}
-                        mode="decimal"
-                        aria-label="Lo que hay en el bote"
-                        onChange={setBote}
-                      />
-                    </span>
-                  </label>
-                  <label className="min-w-0 flex-1">
-                    <span className="mb-1 block text-[11.5px] text-ink-soft">Te toca pagar</span>
-                    <span className="field-box block">
-                      <NumInput
-                        value={apuesta}
-                        mode="decimal"
-                        aria-label="Lo que te toca pagar"
-                        onChange={setApuesta}
-                      />
-                    </span>
-                  </label>
-                </div>
+
+                {usandoMano ? (
+                  <p className="mt-0 mb-2 text-[12px] leading-snug text-ink-soft">
+                    Sale de la mano que estás apuntando: hay {money(elBote)} en el bote y te
+                    piden {money(laApuesta)}.
+                  </p>
+                ) : (
+                  <div className="mb-2 flex gap-2">
+                    <label className="min-w-0 flex-1">
+                      <span className="mb-1 block text-[11.5px] text-ink-soft">En el bote hay</span>
+                      <span className="field-box block">
+                        <NumInput
+                          value={boteManual}
+                          mode="decimal"
+                          aria-label="Lo que hay en el bote"
+                          onChange={setBoteManual}
+                        />
+                      </span>
+                    </label>
+                    <label className="min-w-0 flex-1">
+                      <span className="mb-1 block text-[11.5px] text-ink-soft">Te toca pagar</span>
+                      <span className="field-box block">
+                        <NumInput
+                          value={apuestaManual}
+                          mode="decimal"
+                          aria-label="Lo que te toca pagar"
+                          onChange={setApuestaManual}
+                        />
+                      </span>
+                    </label>
+                  </div>
+                )}
 
                 {!cuentas ? (
                   <p className="mt-0 mb-0 text-[12px] leading-snug text-ink-soft">
@@ -686,7 +909,7 @@ export default function Simulador({
                         {cuentas.conviene ? 'Sí sale a cuentas pagar' : 'No sale a cuentas pagar'}
                       </b>
                       <p className="mt-1 mb-0 text-[12.5px] leading-snug text-ink">
-                        Pagar {money(apuesta)} a un bote de {money(bote)} te pide ganar{' '}
+                        Pagar {money(laApuesta)} a un bote de {money(elBote)} te pide ganar{' '}
                         <b>{cuentas.necesitas.toFixed(1)}%</b> de las veces, y te llevas{' '}
                         <b>{cuentas.tienes.toFixed(1)}%</b>.
                       </p>
@@ -712,7 +935,7 @@ export default function Simulador({
         </section>
       )}
 
-      {(cartas.some((c) => c !== null) || usadas.size > 0) && (
+      {(usadas.size > 0 || mano) && (
         <button type="button" className="btn btn-ghost mb-2" onClick={limpiar}>
           <RotateCcw size={16} strokeWidth={2.4} />
           Empezar de nuevo

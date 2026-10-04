@@ -1,5 +1,6 @@
 import { Flame, Snowflake, Trophy } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import Cara from '../../components/Cara'
 import Esqueleto from '../../components/Esqueleto'
 import ShareBlock from '../../components/ShareBlock'
 import Titulos from '../../components/Titulos'
@@ -119,33 +120,6 @@ function fechaCorta(iso: string) {
   const [a, m, d] = iso.split('-').map(Number)
   if (!a || !m || !d) return iso
   return new Date(a, m - 1, d).toLocaleDateString('es-MX', { day: 'numeric', month: 'short' })
-}
-
-function Cara({
-  nombre,
-  foto,
-  size = 34,
-}: {
-  nombre: string
-  foto: string | null
-  size?: number
-}) {
-  return (
-    <span
-      /* `block` no es adorno: un span en linea ignora el ancho y el alto, y dentro del
-         podio —que no es flex— la foto se salía del tamaño pedido. */
-      className="block shrink-0 overflow-hidden rounded-full bg-ink/8"
-      style={{ width: size, height: size }}
-    >
-      {foto ? (
-        <img src={foto} alt="" className="h-full w-full object-cover" />
-      ) : (
-        <span className="flex h-full w-full items-center justify-center font-display font-bold text-ink-soft">
-          {nombre.charAt(0).toUpperCase()}
-        </span>
-      )}
-    </span>
-  )
 }
 
 function Racha({ n }: { n: number }) {

@@ -863,7 +863,11 @@ ${link}`
       </Sheet>
 
       {/* ---- el simulador ---- */}
-      <Simulador abierta={simulador} onCerrar={() => setSimulador(false)} />
+      <Simulador
+        abierta={simulador}
+        miembros={miembros}
+        onCerrar={() => setSimulador(false)}
+      />
 
       {/* ---- cómo se reparten los puntos ---- */}
       <Puntos
