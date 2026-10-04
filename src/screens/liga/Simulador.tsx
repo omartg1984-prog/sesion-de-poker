@@ -321,9 +321,13 @@ export default function Simulador({
 
   /* Si se está apuntando la mano, lo que te piden pagar sale de ahí: es el número que de
      verdad estás viendo en la mesa, no uno que haya que volver a teclear. */
-  const usandoMano = Boolean(mano && meToca && o && o.paga > 0)
+  /* Lo que te falta para seguir en la mano. No hace falta que sea tu turno: mientras
+     alguien apuesta ya se ve lo que te va a costar entrar, que es lo que se está
+     pensando mientras los demás hablan. */
+  const meFalta = mano && !meFui ? Math.max(...mano.puesto) - mano.puesto[asiento] : 0
+  const usandoMano = Boolean(mano && !meFui)
   const elBote = usandoMano ? bote : boteManual
-  const laApuesta = usandoMano ? (o?.paga ?? 0) : apuestaManual
+  const laApuesta = usandoMano ? meFalta : apuestaManual
 
   const equidad = resultado ? equidadDe(resultado) : 0
   const banda = bandaDeJugabilidad(equidad, vivos.length, miAsiento.posicion)
@@ -510,58 +514,70 @@ export default function Simulador({
             </div>
           )}
 
-          <p className="field-label mt-2 mb-1.5">
-            {panel === asiento ? 'Tus cartas' : 'Lo que enseñó'}
-          </p>
-          <div className="flex gap-1.5">
-            {[0, 1].map((i) => (
-              <Carta
-                key={i}
-                valor={manos[panel][i]}
-                activa={mismoHueco(eligiendo, { tipo: 'asiento', s: panel, i })}
-                onClick={() =>
-                  setEligiendo((e) =>
-                    mismoHueco(e, { tipo: 'asiento', s: panel, i })
-                      ? null
-                      : { tipo: 'asiento', s: panel, i },
-                  )
-                }
-              />
-            ))}
-          </div>
-          {panel !== asiento && (
-            <p className="mt-1.5 mb-0 text-[11.5px] leading-snug text-ink-soft">
-              Déjalas en blanco y se le siguen repartiendo cartas al azar, que es justo lo que
-              sabes de él.
-            </p>
-          )}
-          {eligiendo?.tipo === 'asiento' && <Mazo />}
         </div>
       )}
 
-      {/* ---- tu mano, sin tener que buscarla ---- */}
-      {panel === null && (
-        <>
-          <p className="field-label mt-0 mb-1.5">Tu mano</p>
-          <div className="mb-1 flex gap-1.5">
-            {[0, 1].map((i) => (
-              <Carta
-                key={i}
-                valor={manos[asiento][i]}
-                activa={mismoHueco(eligiendo, { tipo: 'asiento', s: asiento, i })}
-                onClick={() =>
-                  setEligiendo((e) =>
-                    mismoHueco(e, { tipo: 'asiento', s: asiento, i })
-                      ? null
-                      : { tipo: 'asiento', s: asiento, i },
-                  )
-                }
-              />
-            ))}
-          </div>
-          {eligiendo?.tipo === 'asiento' && <Mazo />}
-        </>
-      )}
+      {/* ---- lo que trae cada quien ----
+          Las cartas también se ponen tocando a alguien en la mesa, pero ahí hay que
+          saber que se puede. Esta lista lo deja a la vista: un renglón por silla, el
+          tuyo primero, y el que no se sabe se queda en blanco. */}
+      <p className="field-label mt-0 mb-1.5">Lo que trae cada quien</p>
+      <ul className="m-0 mb-1 list-none p-0">
+        {Array.from({ length: jugadores }, (_, s) => s).map((s) => {
+          const silla = asientos.find((a) => a.indice === s)
+          const fuera = !sigue(s)
+          return (
+            <li key={s} className="mb-1.5 flex items-center gap-2 last:mb-0">
+              <button
+                type="button"
+                onClick={() => {
+                  setPanel((x) => (x === s ? null : s))
+                  setEligiendo(null)
+                }}
+                className={`flex min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-xl border border-paper-line bg-paper-soft px-2 py-1.5 text-left active:scale-[.99] ${
+                  fuera ? 'opacity-45' : ''
+                }`}
+              >
+                {/* Sin nadie sentado no hay cara que poner: la inicial de "ciega grande"
+                    no es de nadie. */}
+                {quien[s] !== null && <Cara nombre={nombreDe(s)} foto={fotoDe(s)} size={24} />}
+                <span className="min-w-0 flex-1">
+                  <b className="block truncate text-[13px] text-ink">
+                    {s === asiento ? 'Tú' : nombreDe(s)}
+                  </b>
+                  <span className="block truncate text-[10.5px] leading-tight text-ink-soft">
+                    {silla?.nombre}
+                    {fuera && ' · se fue'}
+                  </span>
+                </span>
+              </button>
+              <span className="flex shrink-0 gap-1.5">
+                {[0, 1].map((i) => (
+                  <Carta
+                    key={i}
+                    valor={manos[s][i]}
+                    tam="chica"
+                    activa={mismoHueco(eligiendo, { tipo: 'asiento', s, i })}
+                    onClick={() =>
+                      setEligiendo((e) =>
+                        mismoHueco(e, { tipo: 'asiento', s, i })
+                          ? null
+                          : { tipo: 'asiento', s, i },
+                      )
+                    }
+                  />
+                ))}
+              </span>
+            </li>
+          )
+        })}
+      </ul>
+      <p className="mt-0 mb-3 text-[11.5px] leading-snug text-ink-soft">
+        Toca el nombre para decir quién se sienta ahí. Al que dejes en blanco se le siguen
+        repartiendo cartas al azar, que es justo lo que sabes de él.
+      </p>
+
+      {eligiendo?.tipo === 'asiento' && <Mazo />}
 
       {/* ---- cómo se fue jugando ---- */}
       <section className="panel">
@@ -729,6 +745,108 @@ export default function Simulador({
         )}
       </section>
 
+      {/* ---- si conviene pagar ----
+          La pregunta de la mesa no es "¿voy ganando?" sino "¿me alcanza para pagar esto?".
+          Pagar $100 a un bote de $900 necesita ganar una de cada diez; a un bote de $100,
+          una de cada dos. Apuntando la mano, el bote y lo que te piden salen solos: no hay
+          que volver a teclear lo que ya se apuntó. */}
+      <section className="panel">
+        <p className="panel-title">
+          <span>
+            <Coins size={14} strokeWidth={2.6} className="-mt-0.5 mr-1 inline" />
+            ¿Conviene pagar?
+          </span>
+        </p>
+
+        {usandoMano ? (
+          <div className="mb-2 flex gap-2">
+            <div className="flex-1 rounded-xl bg-ink/6 px-3 py-2">
+              <span className="block text-[11px] text-ink-soft">En el bote hay</span>
+              <b className="block font-display text-[19px] leading-tight text-ink tabular-nums">
+                {money(elBote)}
+              </b>
+            </div>
+            <div className="flex-1 rounded-xl bg-ink/6 px-3 py-2">
+              <span className="block text-[11px] text-ink-soft">
+                {meToca ? 'Te toca poner' : 'Para seguir pones'}
+              </span>
+              <b className="block font-display text-[19px] leading-tight text-ink tabular-nums">
+                {money(laApuesta)}
+              </b>
+            </div>
+          </div>
+        ) : (
+          <div className="mb-2 flex gap-2">
+            <label className="min-w-0 flex-1">
+              <span className="mb-1 block text-[11.5px] text-ink-soft">En el bote hay</span>
+              <span className="field-box block">
+                <NumInput
+                  value={boteManual}
+                  mode="decimal"
+                  aria-label="Lo que hay en el bote"
+                  onChange={setBoteManual}
+                />
+              </span>
+            </label>
+            <label className="min-w-0 flex-1">
+              <span className="mb-1 block text-[11.5px] text-ink-soft">Te toca pagar</span>
+              <span className="field-box block">
+                <NumInput
+                  value={apuestaManual}
+                  mode="decimal"
+                  aria-label="Lo que te toca pagar"
+                  onChange={setApuestaManual}
+                />
+              </span>
+            </label>
+          </div>
+        )}
+
+        {cuentas ? (
+          <>
+            <div
+              className={`rounded-xl px-3 py-2.5 ${cuentas.conviene ? 'bg-win/12' : 'bg-loss/12'}`}
+            >
+              <b
+                className={`block font-display text-[14.5px] ${
+                  cuentas.conviene ? 'text-win-tinta' : 'text-loss'
+                }`}
+              >
+                {cuentas.conviene ? 'Sí sale a cuentas pagar' : 'No sale a cuentas pagar'}
+              </b>
+              <p className="mt-1 mb-0 text-[12.5px] leading-snug text-ink">
+                Pagar {money(laApuesta)} a un bote de {money(elBote)} te pide ganar{' '}
+                <b>{cuentas.necesitas.toFixed(1)}%</b> de las veces, y te llevas{' '}
+                <b>{cuentas.tienes.toFixed(1)}%</b>.
+              </p>
+              <p className="mt-1 mb-0 text-[12.5px] leading-snug text-ink">
+                Cada vez que se jugara esta mano, pagar te{' '}
+                {cuentas.esperado >= 0 ? 'deja' : 'cuesta'}{' '}
+                <b className={cuentas.esperado >= 0 ? 'text-win' : 'text-loss'}>
+                  {money(Math.abs(cuentas.esperado))}
+                </b>
+                .
+              </p>
+            </div>
+            <p className="mt-2 mb-0 text-[11.5px] leading-snug text-ink-soft/80">
+              La apuesta es {(cuentas.parteDelBote * 100).toFixed(0)}% del bote. Esto sólo cuenta
+              esta carta: si te van a volver a apostar después, te hace falta más margen del que
+              dice aquí.
+            </p>
+          </>
+        ) : (
+          <p className="mt-0 mb-0 text-[12.5px] leading-snug text-ink-soft">
+            {meFui
+              ? 'Te fuiste de la mano: ya no hay nada que pagar.'
+              : !resultado
+                ? 'Falta poner tus dos cartas para saber cuánto te llevas y poder comparar.'
+                : usandoMano && laApuesta <= 0
+                  ? `Ahora mismo no te piden nada: estás al corriente y en el bote hay ${money(elBote)}.`
+                  : 'Pon lo que hay en el bote y lo que te piden, y la app dice si sale a cuentas pagar con la mano que traes.'}
+          </p>
+        )}
+      </section>
+
       {/* ---- el resultado ---- */}
       {!listo ? (
         <div className="balance balance-ok mb-2">
@@ -848,88 +966,6 @@ export default function Simulador({
                 hicieron los demás.
               </p>
 
-              {/* La pregunta de la mesa no es "¿voy ganando?" sino "¿me alcanza para pagar
-                  esto?". Pagar $100 a un bote de $900 necesita ganar una de cada diez; a un
-                  bote de $100, una de cada dos. */}
-              <div className="mt-4 border-t border-dashed border-paper-line pt-3">
-                <p className="field-label mt-0 mb-1.5">
-                  <Coins size={13} strokeWidth={2.6} className="-mt-0.5 mr-1 inline" />
-                  ¿Conviene pagar?
-                </p>
-
-                {usandoMano ? (
-                  <p className="mt-0 mb-2 text-[12px] leading-snug text-ink-soft">
-                    Sale de la mano que estás apuntando: hay {money(elBote)} en el bote y te
-                    piden {money(laApuesta)}.
-                  </p>
-                ) : (
-                  <div className="mb-2 flex gap-2">
-                    <label className="min-w-0 flex-1">
-                      <span className="mb-1 block text-[11.5px] text-ink-soft">En el bote hay</span>
-                      <span className="field-box block">
-                        <NumInput
-                          value={boteManual}
-                          mode="decimal"
-                          aria-label="Lo que hay en el bote"
-                          onChange={setBoteManual}
-                        />
-                      </span>
-                    </label>
-                    <label className="min-w-0 flex-1">
-                      <span className="mb-1 block text-[11.5px] text-ink-soft">Te toca pagar</span>
-                      <span className="field-box block">
-                        <NumInput
-                          value={apuestaManual}
-                          mode="decimal"
-                          aria-label="Lo que te toca pagar"
-                          onChange={setApuestaManual}
-                        />
-                      </span>
-                    </label>
-                  </div>
-                )}
-
-                {!cuentas ? (
-                  <p className="mt-0 mb-0 text-[12px] leading-snug text-ink-soft">
-                    Pon lo que hay en el bote y lo que te piden, y la app dice si sale a cuentas
-                    pagar con la mano que traes.
-                  </p>
-                ) : (
-                  <>
-                    <div
-                      className={`rounded-xl px-3 py-2.5 ${
-                        cuentas.conviene ? 'bg-win/12' : 'bg-loss/12'
-                      }`}
-                    >
-                      <b
-                        className={`block font-display text-[14.5px] ${
-                          cuentas.conviene ? 'text-win-tinta' : 'text-loss'
-                        }`}
-                      >
-                        {cuentas.conviene ? 'Sí sale a cuentas pagar' : 'No sale a cuentas pagar'}
-                      </b>
-                      <p className="mt-1 mb-0 text-[12.5px] leading-snug text-ink">
-                        Pagar {money(laApuesta)} a un bote de {money(elBote)} te pide ganar{' '}
-                        <b>{cuentas.necesitas.toFixed(1)}%</b> de las veces, y te llevas{' '}
-                        <b>{cuentas.tienes.toFixed(1)}%</b>.
-                      </p>
-                      <p className="mt-1 mb-0 text-[12.5px] leading-snug text-ink">
-                        Cada vez que se jugara esta mano, pagar te{' '}
-                        {cuentas.esperado >= 0 ? 'deja' : 'cuesta'}{' '}
-                        <b className={cuentas.esperado >= 0 ? 'text-win' : 'text-loss'}>
-                          {money(Math.abs(cuentas.esperado))}
-                        </b>
-                        .
-                      </p>
-                    </div>
-                    <p className="mt-2 mb-0 text-[11.5px] leading-snug text-ink-soft/80">
-                      La apuesta es {(cuentas.parteDelBote * 100).toFixed(0)}% del bote. Esto sólo
-                      cuenta esta carta: si te van a volver a apostar después, te hace falta más
-                      margen del que dice aquí.
-                    </p>
-                  </>
-                )}
-              </div>
             </>
           )}
         </section>
