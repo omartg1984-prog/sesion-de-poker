@@ -1,0 +1,12 @@
+-- Dar por cerrado a un jugador en el cash out.
+--
+-- Contar las fichas y apuntar cuánto se le entregó son dos momentos distintos, y entre
+-- los dos pasa un rato: se cuenta, se compara con lo que tiene que cobrar, se busca el
+-- cambio. Hasta ahora la tarjeta de cada quien se quedaba abierta toda la noche, así que
+-- en una mesa de ocho había que pasar de largo a los seis que ya cobraron para llegar al
+-- que falta.
+--
+-- Con esto, quien lleva el banco da por cerrado al que ya pagó. La fecha sirve para
+-- distinguir "todavía no" de "cerrado"; en NULL están los que siguen abiertos y todas
+-- las partidas de antes de que esto existiera.
+ALTER TABLE participaciones ADD COLUMN cerrado_en TEXT;

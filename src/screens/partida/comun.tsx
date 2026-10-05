@@ -1,4 +1,4 @@
-import { AlertTriangle, Check, ChevronRight, RotateCcw, Save } from 'lucide-react'
+import { AlertTriangle, Check, ChevronRight, RotateCcw, Save, Users } from 'lucide-react'
 import { useState } from 'react'
 import Chip from '../../components/Chip'
 import NumInput from '../../components/NumInput'
@@ -8,6 +8,7 @@ import {
   computeDistribution,
   dineroDeLaCaja,
   distributionText,
+  mismoValorQue,
   type Distribution,
   type DistributionRow,
 } from '../../lib/distribution'
@@ -127,6 +128,37 @@ export const participacionDeFila = (id: string) => id.split('#')[0]
  * Esas partidas siguen abiertas, así que ese formato se lee y se cuelga de la entrada,
  * que es donde estaba antes de que existieran las recompras por separado.
  */
+/**
+ * Copiarle ese reparto a todos los demás que pusieron lo mismo.
+ *
+ * La casa acomoda las pilas a su gusto —más fichas chicas para que alcance el cambio,
+ * una morada de adorno— y hasta ahora eso había que repetirlo jugador por jugador. Se
+ * guarda como reparto a mano, igual que si se hubiera tecleado en cada uno, así que
+ * cualquiera puede volver al automático después.
+ */
+export { mismoValorQue }
+
+export function aplicarRepartoATodos(
+  fila: DistributionRow,
+  filas: DistributionRow[],
+  participaciones: Participacion[],
+  tocar: PropsPestana['tocar'],
+) {
+  const porJugador = new Map<string, Record<string, Chips>>()
+  for (const r of mismoValorQue(fila, filas)) {
+    const pid = participacionDeFila(r.id)
+    const clave = r.id.slice(pid.length + 1)
+    const suya = participaciones.find((x) => x.id === pid)
+    if (!suya || !clave) continue
+    const manuales = porJugador.get(pid) ?? { ...manualesDe(suya) }
+    manuales[clave] = { ...fila.counts }
+    porJugador.set(pid, manuales)
+  }
+  for (const [pid, manuales] of porJugador) {
+    tocar(pid, { fichas_manual: JSON.stringify(manuales) }, { fichasManual: manuales })
+  }
+}
+
 export function manualesDe(p: Participacion): Record<string, Chips> {
   const crudo = leerJson<Record<string, unknown>>(p.fichas_manual, {})
   const claves = Object.keys(crudo)
@@ -222,6 +254,8 @@ export function FichasDelJugador({
   colores,
   puedeEditar,
   guardar,
+  /* Para copiarle este reparto a los demás que pusieron lo mismo. */
+  aplicar,
   /* Qué fichas son éstas. En cash hay un renglón por concepto y hace falta decir de
      cuál: 'Entrada', 'Recompra 1'… */
   rotulo = 'Fichas',
@@ -234,6 +268,7 @@ export function FichasDelJugador({
   puedeEditar: boolean
   /** `null` devuelve este renglón al reparto automático. */
   guardar: (fichas: Chips | null) => void
+  aplicar?: { cuantos: number; hazlo: () => void }
   rotulo?: string
   formato?: (n: number) => string
 }) {
@@ -283,16 +318,30 @@ export function FichasDelJugador({
 
       {abierto && (
         <>
-          {fila.manual && puedeEditar && (
-            <button
-              type="button"
-              onClick={() => guardar(null)}
-              className="mt-2 flex cursor-pointer items-center gap-1 rounded-full border-none bg-marca/20 px-2 py-0.5 text-[10px] font-bold text-marca-tinta active:scale-95"
-            >
-              <RotateCcw size={10} strokeWidth={3} />
-              Volver al reparto automático
-            </button>
-          )}
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {fila.manual && puedeEditar && (
+              <button
+                type="button"
+                onClick={() => guardar(null)}
+                className="flex cursor-pointer items-center gap-1 rounded-full border-none bg-marca/20 px-2 py-0.5 text-[10px] font-bold text-marca-tinta active:scale-95"
+              >
+                <RotateCcw size={10} strokeWidth={3} />
+                Volver al reparto automático
+              </button>
+            )}
+            {/* Acomodar la pila a mano y luego repetirla en cada jugador era el trabajo
+                tonto de todo registro. */}
+            {puedeEditar && aplicar && aplicar.cuantos > 0 && (
+              <button
+                type="button"
+                onClick={aplicar.hazlo}
+                className="flex cursor-pointer items-center gap-1 rounded-full border-none bg-noche-linea px-2 py-0.5 text-[10px] font-bold text-paper active:scale-95"
+              >
+                <Users size={10} strokeWidth={3} />
+                Aplicar a los otros {aplicar.cuantos} de {formato(fila.buyIn)}
+              </button>
+            )}
+          </div>
 
           <div className="mt-2 grid grid-cols-[repeat(auto-fit,minmax(54px,1fr))] gap-1.5">
             {colores.map((c) => (

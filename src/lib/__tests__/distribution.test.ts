@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { balancedStack, computeDistribution, distributionText, stackTotal } from '../distribution'
-import type { Caps, DealPlayer } from '../distribution'
+import {
+  balancedStack,
+  computeDistribution,
+  distributionText,
+  mismoValorQue,
+  stackTotal,
+} from '../distribution'
+import type { Caps, DealPlayer, DistributionRow } from '../distribution'
 import { money } from '../money'
 import type { ChipColor, Chips } from '../../store/types'
 
@@ -193,5 +199,46 @@ describe('computeDistribution', () => {
     const txt = distributionText(dist, COLORS, money)
     expect(txt).toContain('Reparto de fichas')
     expect(txt).toContain('Ana ($300): 6 Verdes, 7 Negras, 8 Rojas, 12 Azules, 16 Blancas')
+  })
+})
+
+/*
+ * A quiénes alcanza el "aplicar este reparto a todos". Lo que se fija es lo único que
+ * importa: que no se le peguen a nadie fichas que no cubren su dinero.
+ */
+describe('a quiénes se les copia un reparto', () => {
+  const fila = (id: string, buyIn: number): DistributionRow => ({
+    id,
+    name: id,
+    buyIn,
+    counts: {},
+    total: buyIn,
+    leftover: 0,
+    manual: false,
+  })
+
+  it('alcanza a los que pusieron lo mismo', () => {
+    const filas = [fila('a#entrada', 500), fila('b#entrada', 500), fila('c#entrada', 500)]
+    expect(mismoValorQue(filas[0], filas).map((r) => r.id)).toEqual(['b#entrada', 'c#entrada'])
+  })
+
+  it('no alcanza al que puso otra cosa', () => {
+    const filas = [fila('a#entrada', 500), fila('b#entrada', 300)]
+    expect(mismoValorQue(filas[0], filas)).toEqual([])
+  })
+
+  it('a uno mismo no se copia', () => {
+    const filas = [fila('a#entrada', 500)]
+    expect(mismoValorQue(filas[0], filas)).toEqual([])
+  })
+
+  it('una recompra del mismo tamaño también cuenta: lo que manda es el dinero', () => {
+    const filas = [fila('a#r0', 200), fila('b#r1', 200), fila('c#entrada', 500)]
+    expect(mismoValorQue(filas[0], filas).map((r) => r.id)).toEqual(['b#r1'])
+  })
+
+  it('los centavos de redondeo no separan a dos que pusieron lo mismo', () => {
+    const filas = [fila('a#entrada', 500), fila('b#entrada', 500.0000000001)]
+    expect(mismoValorQue(filas[0], filas)).toHaveLength(1)
   })
 })

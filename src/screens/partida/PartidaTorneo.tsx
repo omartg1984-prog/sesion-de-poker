@@ -25,6 +25,7 @@ import {
 import {
   CompartirReparto,
   FichasDelJugador,
+  aplicarRepartoATodos,
   conceptosDeTorneo,
   idFila,
   manualesDe,
@@ -32,6 +33,7 @@ import {
   ListaDeLaMesa,
   calcularRepartoPorConcepto,
   claseClara,
+  mismoValorQue,
   type PropsPestana,
 } from './comun'
 
@@ -361,6 +363,14 @@ export default function PartidaTorneo({
                     colores={coloresTorneo}
                     puedeEditar={puedeEditar}
                     guardar={guardarFichas(clave)}
+                    /* Lo acomodado a mano se le copia a todos los que valen lo mismo:
+                       en torneo todas las entradas son iguales, así que es a la mesa
+                       entera de una vez. */
+                    aplicar={{
+                      cuantos: mismoValorQue(fila, reparto.rows).length,
+                      hazlo: () =>
+                        aplicarRepartoATodos(fila, reparto.rows, datos.participaciones, tocar),
+                    }}
                     rotulo={rotulo}
                     formato={enFichas}
                   />

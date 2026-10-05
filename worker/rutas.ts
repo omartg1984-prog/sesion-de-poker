@@ -1144,6 +1144,7 @@ export async function rutas(
         estado: string
         pagado: number | null
         fichas_manual: string | null
+        cerrado_en: string | null
       }>()
     if (!par) return json({ error: 'No encontrado' }, 404)
 
@@ -1152,7 +1153,7 @@ export async function rutas(
     const esAdminLiga = mia?.es_admin === 1 || yo.es_admin_app === 1
     if (par.estado === 'cerrada') return json({ error: 'La partida ya está cerrada' }, 409)
 
-    const { entrada, recompras, fichasManual, fichasFinal, rebuys, addons, lugar, pagado } =
+    const { entrada, recompras, fichasManual, fichasFinal, rebuys, addons, lugar, pagado, cerrado } =
       await cuerpo<Record<string, unknown>>()
 
     /*
@@ -1164,7 +1165,7 @@ export async function rutas(
      * y cuánto se le entregó sigue siendo del admin: eso no lo apura contar entre todos
      * y sí es lo que decide quién le debe a quién.
      */
-    const delAdmin = { entrada, recompras, fichasManual, rebuys, addons, lugar, pagado }
+    const delAdmin = { entrada, recompras, fichasManual, rebuys, addons, lugar, pagado, cerrado }
     const soloEsElConteo = fichasFinal !== undefined && Object.values(delAdmin).every((v) => v === undefined)
     if (!esAdminLiga && !soloEsElConteo)
       return json({ error: 'Eso sólo lo cambia un admin de la liga' }, 403)
@@ -1218,7 +1219,8 @@ export async function rutas(
          addons        = COALESCE(?, addons),
          lugar         = COALESCE(?, lugar),
          pagado        = ?,
-         contadas_por  = COALESCE(?, contadas_por)
+         contadas_por  = COALESCE(?, contadas_por),
+         cerrado_en    = ?
        WHERE id = ?`,
     )
       .bind(
@@ -1243,6 +1245,13 @@ export async function rutas(
         /* Quién capturó el conteo, para que el que lleva el banco pueda revisar de un
            vistazo antes de soltar el dinero. */
         fichasFinal === undefined ? null : yo.id,
+        /* Dar por cerrado a alguien del cash out, y poder reabrirlo: `false` lo regresa
+           a la lista de los que faltan, que es lo que se hace al descubrir un error. */
+        cerrado === undefined
+          ? (par.cerrado_en ?? null)
+          : cerrado
+            ? (par.cerrado_en ?? new Date().toISOString())
+            : null,
         par.id,
       )
       .run()

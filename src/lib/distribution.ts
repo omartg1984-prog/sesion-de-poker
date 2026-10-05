@@ -56,6 +56,17 @@ export interface DistributionRow {
   manual: boolean
 }
 
+/**
+ * Los renglones del reparto que valen lo mismo que éste, sin contarlo a él.
+ *
+ * Es a quiénes alcanza el "aplicar este reparto a todos". Las fichas de una entrada de
+ * $500 no son las de una de $300: copiarle a alguien un reparto que no cubre su dinero
+ * deja la mesa descuadrada desde el registro, así que se copia sólo entre los que
+ * pusieron lo mismo.
+ */
+export const mismoValorQue = (fila: DistributionRow, filas: DistributionRow[]) =>
+  filas.filter((r) => r.id !== fila.id && Math.abs(r.buyIn - fila.buyIn) < 1e-9)
+
 export interface ColorUsage {
   used: number
   inventory: number

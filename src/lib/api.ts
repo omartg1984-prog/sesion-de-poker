@@ -462,6 +462,8 @@ export interface Participacion {
   /** Quién capturó el conteo de fichas del final. */
   contadas_por: string | null
   contadas_por_nombre: string | null
+  /** Cuándo se le dio por cerrado en el cash out. null = sigue abierto. */
+  cerrado_en: string | null
   nombre: string
   usuario: string
   foto: string | null
@@ -694,6 +696,8 @@ export const api = {
       lugar?: number
       /** null borra el pago; no mandarlo lo deja como estaba. */
       pagado?: number | null
+      /** Darlo por cerrado en el cash out, o reabrirlo. */
+      cerrado?: boolean
     },
   ) => patch<{ ok: true }>(`participaciones/${id}`, cambios),
 

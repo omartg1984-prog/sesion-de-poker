@@ -14,11 +14,13 @@ import type { Chips } from '../../store/types'
 import {
   CompartirReparto,
   FichasDelJugador,
+  aplicarRepartoATodos,
   GuardarConteo,
   InventarioUsado,
   ListaDeLaMesa,
   calcularRepartoCash,
   claseClara,
+  mismoValorQue,
   finalDe,
   idFila,
   invertidoDe,
@@ -90,6 +92,13 @@ export default function PartidaCash({
           }
           const filaDe = (clave: string) =>
             reparto.rows.find((r) => r.id === idFila(p.id, clave))
+          /* Lo que la casa acomode en una pila se le puede copiar a todos los que
+             pusieron lo mismo, en vez de repetirlo jugador por jugador. */
+          const aplicarA = (fila: (typeof reparto.rows)[number]) => ({
+            cuantos: mismoValorQue(fila, reparto.rows).length,
+            hazlo: () =>
+              aplicarRepartoATodos(fila, reparto.rows, datos.participaciones, tocar),
+          })
           const entrada = filaDe('entrada')
           return (
             <section key={p.id} className="panel">
@@ -122,6 +131,7 @@ export default function PartidaCash({
                   colores={colores}
                   puedeEditar={puedeEditar}
                   guardar={guardarFichas('entrada')}
+                  aplicar={aplicarA(entrada)}
                   rotulo="Fichas de entrada"
                 />
               )}
@@ -181,6 +191,7 @@ export default function PartidaCash({
                           colores={colores}
                           puedeEditar={puedeEditar}
                           guardar={guardarFichas(`r${ri}`)}
+                          aplicar={aplicarA(suya)}
                           rotulo="Fichas a entregar"
                         />
                       )
@@ -224,6 +235,13 @@ export default function PartidaCash({
   /* ---- conteo final ---- */
   if (pestana === 'final') {
     const contados = conTotales.filter((p) => p.final > 0).length
+    /*
+     * Al que ya cobró se le da por cerrado y su tarjeta se va al final, hecha un
+     * renglón. En una mesa de ocho, lo que estorba para llegar al que falta son los seis
+     * que ya quedaron: siguen ahí para poder revisarlos, pero sin ocupar la pantalla.
+     */
+    const abiertos = conTotales.filter((p) => !p.cerrado_en)
+    const cerrados = conTotales.filter((p) => p.cerrado_en)
     return (
       <>
         <section className="panel">
@@ -242,9 +260,14 @@ export default function PartidaCash({
             Cualquiera de la mesa puede capturar un conteo, no hace falta ser admin. Debajo de cada
             uno queda apuntado quién lo puso.
           </p>
+          {cerrados.length > 0 && (
+            <p className="mt-2 mb-0 text-[12px] leading-snug text-ink-soft">
+              Ya cerraron <b className="text-ink">{cerrados.length}</b>; quedan abajo, en corto.
+            </p>
+          )}
         </section>
 
-        {conTotales.map((p) => {
+        {abiertos.map((p) => {
           const fichas = leerJson<Chips>(p.fichas_final, {})
           const yaContado = p.final > 0
           return (
@@ -338,9 +361,66 @@ export default function PartidaCash({
                   {signed(p.pl)}
                 </b>
               </div>
+
+              {/* Hasta que no se apunta cuánto se le entregó no hay nada que cerrar: el
+                  botón aparece solo cuando ya se le pagó. */}
+              {puedeEditar && p.pagado !== null && (
+                <button
+                  type="button"
+                  className="btn btn-marca mt-3"
+                  onClick={() =>
+                    tocar(p.id, { cerrado_en: new Date().toISOString() }, { cerrado: true })
+                  }
+                >
+                  <Check size={16} strokeWidth={2.6} />
+                  Cerrar a {p.nombre.split(' ')[0]}
+                </button>
+              )}
             </section>
           )
         })}
+
+        {/* Los que ya quedaron, en un renglón cada uno. Se puede reabrir al que se
+            cerró por error, que al final de la noche pasa. */}
+        {cerrados.length > 0 && (
+          <section className="panel">
+            <p className="panel-title">
+              <span>Ya cerrados</span>
+            </p>
+            <ul className="m-0 list-none p-0">
+              {cerrados.map((p) => (
+                <li
+                  key={p.id}
+                  className="flex items-center gap-2 border-b border-dashed border-paper-line py-2 last:border-b-0"
+                >
+                  <Check size={14} strokeWidth={3} className="shrink-0 text-win" />
+                  <span className="min-w-0 flex-1">
+                    <b className="block truncate text-[13.5px] text-ink">{p.nombre}</b>
+                    <span className="block text-[11px] leading-tight text-ink-soft">
+                      Cobró {money(p.pagado ?? p.final)}
+                      {p.pagado !== null && Math.abs(p.pagado - p.final) > EPS && (
+                        <> · tenía {money(p.final)} en fichas</>
+                      )}
+                    </span>
+                  </span>
+                  <b className={`shrink-0 font-display text-lg tabular-nums ${claseClara(p.pl)}`}>
+                    {signed(p.pl)}
+                  </b>
+                  {puedeEditar && (
+                    <button
+                      type="button"
+                      aria-label={`Reabrir a ${p.nombre}`}
+                      onClick={() => tocar(p.id, { cerrado_en: null }, { cerrado: false })}
+                      className="ml-1 shrink-0 cursor-pointer rounded-lg border-none bg-ink/8 px-2 py-1.5 text-[11.5px] font-semibold text-ink-soft active:scale-95"
+                    >
+                      Reabrir
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
 
         <RepartoDinero
           filas={ranking.map((r) => ({ p: r, nombre: r.nombre, leToca: r.final }))}
