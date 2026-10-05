@@ -176,26 +176,87 @@ export default function RepartoDinero({
         </table>
       </div>
 
+      {/* La feria que queda es la pregunta del final de la noche, no una nota al pie:
+          va en grande y con su nombre, para leerla de lejos mientras se paga. */}
       {yaSeRepartio ? (
         Math.abs(enLaMesa) < EPS ? (
-          <div className="balance balance-ok mt-3 mb-0">
-            <Check size={16} strokeWidth={2.6} />
-            Se repartió todo: no queda nada en la mesa
+          <div className="mt-3 flex items-center justify-center gap-2 rounded-xl bg-win/12 px-3 py-3 text-[13.5px] font-bold text-win-tinta">
+            <Check size={17} strokeWidth={2.8} />
+            Se repartió todo: no queda feria en la mesa
           </div>
         ) : (
-          <div className={`balance mt-3 mb-0 ${enLaMesa > 0 ? 'balance-ok' : 'balance-off'}`}>
-            <HandCoins size={16} strokeWidth={2.4} />
-            {enLaMesa > 0
-              ? `Quedan ${money(enLaMesa)} en la mesa`
-              : `Se entregaron ${money(-enLaMesa)} de más`}
+          <div
+            className={`mt-3 flex items-center gap-3 rounded-xl px-3.5 py-3 ${
+              enLaMesa > 0 ? 'bg-noche-linea text-paper' : 'bg-loss/12'
+            }`}
+          >
+            <HandCoins
+              size={22}
+              strokeWidth={2.2}
+              className={`shrink-0 ${enLaMesa > 0 ? 'text-paper/70' : 'text-loss'}`}
+            />
+            <span className="min-w-0 flex-1">
+              <span
+                className={`block text-[10.5px] font-bold tracking-[.6px] uppercase ${
+                  enLaMesa > 0 ? 'text-paper/70' : 'text-loss'
+                }`}
+              >
+                {enLaMesa > 0 ? 'Queda en la mesa' : 'Se entregó de más'}
+              </span>
+              <b
+                className={`block font-display text-[30px] leading-none tabular-nums ${
+                  enLaMesa > 0 ? 'text-paper' : 'text-loss'
+                }`}
+              >
+                {money(Math.abs(enLaMesa))}
+              </b>
+            </span>
+            <span
+              className={`shrink-0 text-right text-[11px] leading-tight ${
+                enLaMesa > 0 ? 'text-paper/70' : 'text-loss'
+              }`}
+            >
+              {enLaMesa > 0 ? (
+                <>
+                  entraron {money(totalMesa)}
+                  <br />y se han dado {money(entregado)}
+                </>
+              ) : (
+                <>
+                  entraron {money(totalMesa)}
+                  <br />y se dieron {money(entregado)}
+                </>
+              )}
+            </span>
           </div>
         )
       ) : (
-        <p className="mt-3 mb-2 text-center text-[12px] text-ink-soft">
-          Todavía no se reparte el dinero.
-          {sugerido.sobra > EPS &&
-            ` Con billetes de $${redondeo} sobrarían ${money(sugerido.sobra)}.`}
-        </p>
+        <div className="mt-3 flex items-center gap-3 rounded-xl bg-ink/6 px-3.5 py-3">
+          <HandCoins size={22} strokeWidth={2.2} className="shrink-0 text-ink-soft" />
+          <span className="min-w-0 flex-1">
+            <span className="block text-[10.5px] font-bold tracking-[.6px] text-ink-soft uppercase">
+              Por repartir
+            </span>
+            <b className="block font-display text-[30px] leading-none text-ink tabular-nums">
+              {money(totalMesa)}
+            </b>
+          </span>
+          <span className="shrink-0 text-right text-[11px] leading-tight text-ink-soft">
+            {sugerido.sobra > EPS ? (
+              <>
+                con billetes de ${redondeo}
+                <br />
+                sobrarían {money(sugerido.sobra)}
+              </>
+            ) : (
+              <>
+                todavía no se
+                <br />
+                reparte nada
+              </>
+            )}
+          </span>
+        </div>
       )}
 
       {yaSeRepartio && (

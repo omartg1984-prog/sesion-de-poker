@@ -32,6 +32,7 @@ import { linkDePartida } from '../components/Invitacion'
 import { compartirTextoNativo, esNativo } from '../lib/nativo'
 import { copyText } from '../lib/portapapeles'
 import BannerCaja from './partida/BannerCaja'
+import BannerFeria from './partida/BannerFeria'
 import BannerFichas from './partida/BannerFichas'
 import Numeros from './partida/Numeros'
 import Presume from './partida/Presume'
@@ -39,6 +40,7 @@ import { useAvisoDeNivel } from './partida/usarReloj'
 import { calcularCuadre, porQueNoSePuedeCerrar } from './partida/cuadre'
 import { calcularRepartoCash, invertidoDe } from './partida/comun'
 import { dineroDeLaCaja } from '../lib/distribution'
+import { num } from '../lib/money'
 import { RELOJ_PARADO, pausarReloj, type Estructura, type RelojTorneo } from '../lib/torneo'
 import TiempoDeJuego from './partida/TiempoDeJuego'
 import LaPartida from './partida/LaPartida'
@@ -413,6 +415,21 @@ export default function PartidaScreen() {
     : null
   const trabaParaCerrar = cuadre ? porQueNoSePuedeCerrar(cuadre) : null
 
+  /*
+   * La feria que queda sobre la mesa: lo que entró menos lo que ya se entregó.
+   *
+   * Sólo tiene sentido una vez que empezó a repartirse el dinero; antes de eso "queda
+   * todo" no le dice nada a nadie. Vale igual en cash que en torneo: el dinero que se
+   * juntó es el mismo y hay que acabar la noche sin billetes huérfanos.
+   */
+  const feria = (() => {
+    const puestos = datos.participaciones.filter((p) => p.pagado !== null)
+    if (puestos.length === 0) return null
+    const entro = datos.participaciones.reduce((a, p) => a + invertidoDe(p), 0)
+    const entregado = datos.participaciones.reduce((a, p) => a + num(p.pagado), 0)
+    return entro - entregado
+  })()
+
   /* Lo que le queda a la caja, en dinero. Es la cuenta de "¿alcanza para otra
      recompra?", y por eso vive arriba mientras se captura y no al fondo. En torneo no
      aplica: ahí las fichas son puntos. */
@@ -502,6 +519,11 @@ export default function PartidaScreen() {
         )}
 
         {caja && pestana === 'jugadores' && <BannerCaja caja={caja} />}
+
+        {/* Mientras se paga, lo que se consulta a cada rato es cuánta feria queda. */}
+        {feria !== null && (pestana === 'final' || pestana === 'resultado') && (
+          <BannerFeria queda={feria} />
+        )}
       </header>
 
       {/* De qué hora a qué hora se jugó. Va hasta arriba y no al fondo de la lista: es
