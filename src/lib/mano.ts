@@ -236,6 +236,29 @@ export function deshacer(m: Mano): Mano {
   return rehecha
 }
 
+/**
+ * Lo mismo en dos palabras, para la placa de la mesa.
+ *
+ * En la mesa dibujada no cabe "sube a cincuenta" y tampoco hace falta: lo que se busca
+ * de un vistazo es quién subió, quién pagó y quién se fue, como en las transmisiones.
+ */
+export function comoSeDiceCorto(x: Movimiento, dinero: (n: number) => string): string {
+  switch (x.tipo) {
+    case 'ciega':
+      return `Ciega ${dinero(x.monto)}`
+    case 'pasa':
+      return 'Pasa'
+    case 'paga':
+      return `Paga ${dinero(x.monto)}`
+    case 'apuesta':
+      return `Apuesta ${dinero(x.hasta)}`
+    case 'sube':
+      return `Sube ${dinero(x.hasta)}`
+    case 'seVa':
+      return 'Se fue'
+  }
+}
+
 /** Cómo se cuenta un movimiento, para el renglón del repaso. */
 export function comoSeDice(x: Movimiento, dinero: (n: number) => string): string {
   switch (x.tipo) {

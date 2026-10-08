@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   arrancarMano,
   bote,
+  comoSeDiceCorto,
   deshacer,
   jugar,
   opciones,
@@ -196,5 +197,41 @@ describe('deshacer', () => {
   it('en una mano sin movimientos no rompe nada', () => {
     const m = arrancarMano(mesa(5))
     expect(deshacer(m)).toEqual(m)
+  })
+})
+
+/*
+ * Lo que se pinta en la placa de cada quien mientras se juega. Son dos palabras porque
+ * en la mesa dibujada no cabe más, y porque de un vistazo lo que se busca es quién
+ * subió, quién pagó y quién se fue.
+ */
+describe('cómo se dice en la mesa', () => {
+  const pesos = (n: number) => `$${n}`
+
+  it('cada movimiento tiene su palabra', () => {
+    let m = arrancarMano(mesa(4))
+    const dicho = () => comoSeDiceCorto(m.movimientos[m.movimientos.length - 1], pesos)
+    expect(comoSeDiceCorto(m.movimientos[0], pesos)).toBe('Ciega $1')
+    m = jugar(m, 'sube', 8)
+    expect(dicho()).toBe('Sube $8')
+    m = jugar(m, 'paga')
+    expect(dicho()).toBe('Paga $8')
+    m = jugar(m, 'seVa')
+    expect(dicho()).toBe('Se fue')
+  })
+
+  it('subir dice a cuánto quedó, no lo que soltó', () => {
+    let m = arrancarMano(mesa(4))
+    m = correr(m, [['paga'], ['sube', 20]])
+    /* El botón no había puesto nada, pero la ciega chica sí: lo que se canta es el 20. */
+    m = jugar(m, 'sube', 60)
+    expect(comoSeDiceCorto(m.movimientos[m.movimientos.length - 1], pesos)).toBe('Sube $60')
+  })
+
+  it('apostar de cero se dice apuesta, no sube', () => {
+    let m = arrancarMano(mesa(3))
+    m = correr(m, [['paga'], ['paga'], ['pasa']])
+    m = jugar(m, 'apuesta', 10)
+    expect(comoSeDiceCorto(m.movimientos[m.movimientos.length - 1], pesos)).toBe('Apuesta $10')
   })
 })

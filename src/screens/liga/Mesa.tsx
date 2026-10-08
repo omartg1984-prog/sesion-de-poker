@@ -35,6 +35,8 @@ export interface AsientoEnMesa {
   fuera: boolean
   /** Le toca hablar. */
   activo: boolean
+  /** Lo último que hizo en esta calle: 'Paga $8', 'Sube $20', 'Se fue'… */
+  accion: string
   /** Va ganando la mano. */
   manda: boolean
 }
@@ -103,7 +105,7 @@ export default function Mesa({
 }: Props) {
   const de = asientos.length
   /* Con mucha gente las placas se estorban: la mesa crece para que quepan. */
-  const alto = de <= 6 ? 268 : 298
+  const alto = de <= 6 ? 286 : 316
 
   return (
     <div className="relative mx-auto select-none" style={{ height: alto, maxWidth: 300 }}>
@@ -179,6 +181,21 @@ export default function Mesa({
               D
             </span>
           )}
+          {/* La burbuja de lo que acaba de hacer, como en las transmisiones: con eso se
+              sigue la mano mirando la mesa y no una lista. */}
+          <span className="flex h-[15px] items-center">
+            {a.accion && (
+              <span
+                className={`rounded-full px-1.5 py-[1px] text-[8.5px] leading-none font-bold tracking-[.2px] uppercase ring-1 ${
+                  a.fuera
+                    ? 'bg-black/60 text-white/60 ring-white/10'
+                    : 'bg-black/75 text-white ring-white/25'
+                }`}
+              >
+                {a.accion}
+              </span>
+            )}
+          </span>
           <span className="flex h-[23px] gap-[2px]">
             {a.cartas.length === 2 ? (
               a.cartas.map((c) => <CartaChica key={c} valor={c} chica />)
