@@ -1,8 +1,7 @@
-import { Coins, RotateCcw, Undo2, UserRound, X } from 'lucide-react'
+import { ChevronRight, RotateCcw, Undo2, UserRound, X } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import Cara from '../../components/Cara'
 import NumInput from '../../components/NumInput'
-import Sheet from '../../components/Sheet'
 import type { Miembro } from '../../lib/api'
 import {
   NOMBRE_CALLE,
@@ -33,16 +32,17 @@ import {
 import Mesa, { type AsientoEnMesa } from './Mesa'
 
 /*
- * El simulador: con qué frecuencia gana tu mano, y si sale a cuentas pagar.
+ * El simulador: ¿voy o no voy?
  *
- * No adivina ni opina: reparte veinte mil veces lo que falta —las cartas que no se ven y
- * lo que queda por salir— y cuenta cuántas de esas veces ganas. Es la misma cuenta que
- * hacen los programas de los profesionales, sólo que explicada.
+ * No adivina ni opina: reparte la mano veinte mil veces —las cartas que no se ven y lo
+ * que queda por salir— y cuenta cuántas de esas veces gana cada quien. Es la misma
+ * cuenta que hacen los programas de los profesionales, sólo que explicada.
  *
- * Todo cuelga de la mesa dibujada: ahí se sienta uno, se sienta a los demás con su nombre
- * de la liga, se ponen las cartas comunes y se ve lo que se lleva cada quien. Debajo se
- * apunta la mano como fue —las ciegas, quién subió, quién se fue— y de eso salen el bote
- * y la cuenta de si pagar conviene, que es la pregunta de verdad en la mesa.
+ * La pantalla está armada alrededor de una sola respuesta. El fondo se pone verde,
+ * amarillo o rojo según convenga pagar o no, la respuesta va pegada abajo para no tener
+ * que buscarla, y la cuenta se enseña con dos barras: lo que ganas contra lo que
+ * necesitarías ganar. Si tu barra es la más larga, se paga. Eso es todo el poker que
+ * hay que entender para no regalar dinero.
  */
 
 const MIN_JUGADORES = 2
@@ -68,6 +68,31 @@ const mismoHueco = (a: Eligiendo | null, b: Eligiendo) => {
 
 const manosVacias = (): (number | null)[][] =>
   Array.from({ length: MAX_JUGADORES }, () => [null, null])
+
+/* Los tres colores con los que se contesta: verde se paga, amarillo está parejo, rojo se
+   tira. El gris es "todavía no hay nada que decidir", no un cuarto consejo. */
+type Tono = 'verde' | 'ambar' | 'rojo' | 'gris'
+
+const FONDOS: Record<Tono, string> = {
+  verde: 'linear-gradient(180deg, rgba(23,152,90,.42) 0%, rgba(23,152,90,.10) 55%, rgba(23,152,90,.04) 100%)',
+  ambar: 'linear-gradient(180deg, rgba(240,168,30,.40) 0%, rgba(240,168,30,.10) 55%, rgba(240,168,30,.04) 100%)',
+  rojo: 'linear-gradient(180deg, rgba(200,45,45,.42) 0%, rgba(200,45,45,.10) 55%, rgba(200,45,45,.04) 100%)',
+  gris: 'linear-gradient(180deg, rgba(255,255,255,.07) 0%, rgba(255,255,255,.02) 60%, transparent 100%)',
+}
+
+const BARRAS: Record<Tono, string> = {
+  verde: 'bg-[#17985a]',
+  ambar: 'bg-[#e09612]',
+  rojo: 'bg-[#c82d2d]',
+  gris: 'bg-ink/30',
+}
+
+const PEGADA: Record<Tono, string> = {
+  verde: 'bg-[#13713f]',
+  ambar: 'bg-[#9a6207]',
+  rojo: 'bg-[#9c2020]',
+  gris: 'bg-noche-linea',
+}
 
 function Carta({
   valor,
@@ -116,7 +141,7 @@ function Carta({
   )
 }
 
-/** Dos cartas chiquitas, para los renglones del resultado. */
+/** Dos cartas chiquitas, para los renglones del detalle. */
 function Par({ cartas }: { cartas: number[] }) {
   return (
     <span className="flex shrink-0 gap-0.5">
@@ -135,15 +160,71 @@ function Par({ cartas }: { cartas: number[] }) {
   )
 }
 
-export default function Simulador({
+/** Una sección que se abre sólo cuando hace falta, para no alargar la pantalla. */
+function Plegable({
+  titulo,
   abierta,
-  miembros,
-  onCerrar,
+  onTocar,
+  children,
 }: {
+  titulo: string
   abierta: boolean
-  miembros: Miembro[]
-  onCerrar: () => void
+  onTocar: () => void
+  children: React.ReactNode
 }) {
+  return (
+    <section className="panel">
+      <button
+        type="button"
+        aria-expanded={abierta}
+        onClick={onTocar}
+        className="flex w-full cursor-pointer items-center gap-2 border-none bg-transparent p-0 text-left"
+      >
+        <b className="flex-1 font-display text-[14px] text-ink">{titulo}</b>
+        <ChevronRight
+          size={16}
+          strokeWidth={2.6}
+          className={`shrink-0 text-ink-soft/50 transition-transform ${abierta ? 'rotate-90' : ''}`}
+        />
+      </button>
+      {abierta && <div className="mt-3">{children}</div>}
+    </section>
+  )
+}
+
+/**
+ * Las dos barras con las que se decide.
+ *
+ * Arriba lo que de verdad ganas, abajo lo que te bastaría ganar para que pagar salga a
+ * mano. Si la de arriba es más larga, se paga. No hace falta entender un porcentaje para
+ * leer dos barras, y es exactamente la misma cuenta.
+ */
+function Barras({ ganas, necesitas, tono }: { ganas: number; necesitas: number; tono: Tono }) {
+  const fila = (k: string, v: number, color: string) => (
+    <div className="mb-2 last:mb-0">
+      <div className="mb-1 flex items-baseline justify-between">
+        <span className="text-[12px] font-semibold text-ink-soft">{k}</span>
+        <b className="font-display text-[14px] text-ink tabular-nums">
+          {Math.round(v)} de cada 100
+        </b>
+      </div>
+      <div className="h-3 overflow-hidden rounded-full bg-ink/10">
+        <div
+          className={`h-full rounded-full ${color}`}
+          style={{ width: `${Math.max(2, Math.min(100, v))}%` }}
+        />
+      </div>
+    </div>
+  )
+  return (
+    <div className="mt-3">
+      {fila('Las veces que ganas', ganas, BARRAS[tono])}
+      {fila('Las que te bastarían', necesitas, 'bg-ink/35')}
+    </div>
+  )
+}
+
+export default function Simulador({ miembros }: { miembros: Miembro[] }) {
   const [jugadores, setJugadores] = useState(4)
   const [asiento, setAsiento] = useState(0)
   /** Las cinco de en medio. */
@@ -157,6 +238,8 @@ export default function Simulador({
   const [panel, setPanel] = useState<number | null>(null)
   const [resultado, setResultado] = useState<Simulacion | null>(null)
   const [calculando, setCalculando] = useState(false)
+  const [verDetalle, setVerDetalle] = useState(false)
+  const [verMesa, setVerMesa] = useState(false)
 
   /* El repaso de la mano: las ciegas y lo que fue apostando cada quien. */
   const [ciegas, setCiegas] = useState({ chica: 1, grande: 2 })
@@ -319,8 +402,6 @@ export default function Simulador({
     setSubirA((v) => (v >= minimo ? v : minimo))
   }, [minimo])
 
-  /* Si se está apuntando la mano, lo que te piden pagar sale de ahí: es el número que de
-     verdad estás viendo en la mesa, no uno que haya que volver a teclear. */
   /* Lo que te falta para seguir en la mano. No hace falta que sea tu turno: mientras
      alguien apuesta ya se ve lo que te va a costar entrar, que es lo que se está
      pensando mientras los demás hablan. */
@@ -336,11 +417,53 @@ export default function Simulador({
   const trae = miMano.length === 2 && mesa.length >= 3 ? nombreDeLaMano(miMano, mesa) : ''
   const sabidas = manosRivales.filter((m) => m.length === 2).length
 
-  const TONOS = {
-    win: { caja: 'bg-win/12 text-win-tinta', texto: 'text-win' },
-    ambar: { caja: 'bg-[#f0a81e]/15 text-[#8a5c00]', texto: 'text-[#8a5c00]' },
-    loss: { caja: 'bg-loss/12 text-loss', texto: 'text-loss' },
-  }[banda.tono]
+  /*
+   * La respuesta, en una palabra y un color.
+   *
+   * Con algo que pagar manda la cuenta del bote; sin nada que pagar manda la fuerza de
+   * la mano, que es la otra pregunta que se hace uno. "Apenas alcanza" existe porque
+   * salir a mano no es ganar: ahí se paga sabiendo que no sobra nada.
+   */
+  const veredicto: { tono: Tono; titulo: string; linea: string } = (() => {
+    if (meFui) return { tono: 'gris', titulo: 'Te fuiste', linea: 'Ya no hay nada que decidir.' }
+    if (rivalesVivos.length === 0)
+      return { tono: 'gris', titulo: 'Sin rivales', linea: 'Ya no queda nadie contra quien jugar.' }
+    if (!listo || !resultado || calculando)
+      return {
+        tono: 'gris',
+        titulo: 'Pon tus cartas',
+        linea:
+          miMano.length < 2
+            ? 'Toca tu lugar en la mesa y dale tus dos cartas.'
+            : 'El flop va completo: pon las tres o quítalas.',
+      }
+    if (cuentas) {
+      const holgura = cuentas.tienes / Math.max(cuentas.necesitas, 0.0001)
+      if (holgura >= 1.25)
+        return {
+          tono: 'verde',
+          titulo: 'Paga',
+          linea: `Ganas ${Math.round(cuentas.tienes)} de cada 100 y te bastaba con ${Math.round(cuentas.necesitas)}.`,
+        }
+      if (holgura >= 1)
+        return {
+          tono: 'ambar',
+          titulo: 'Apenas alcanza',
+          linea: `Ganas ${Math.round(cuentas.tienes)} de cada 100 y necesitas ${Math.round(cuentas.necesitas)}: no sobra nada.`,
+        }
+      return {
+        tono: 'rojo',
+        titulo: 'Tírala',
+        linea: `Ganas ${Math.round(cuentas.tienes)} de cada 100 y harían falta ${Math.round(cuentas.necesitas)}.`,
+      }
+    }
+    const tono: Tono = banda.tono === 'win' ? 'verde' : banda.tono === 'ambar' ? 'ambar' : 'rojo'
+    return {
+      tono,
+      titulo: banda.etiqueta,
+      linea: `Nadie te pide nada. Ganas ${Math.round(equidad)} de cada 100 y repartiendo a ciegas te tocarían ${Math.round(justo)}.`,
+    }
+  })()
 
   const enMesa: AsientoEnMesa[] = asientos.map((a) => {
     const r = repartoDe(a.indice)
@@ -362,9 +485,15 @@ export default function Simulador({
 
   /** El tablero de 52 cartas: las que ya están puestas salen tachadas y no se tocan. */
   const Mazo = () => (
-    <div className="mt-2 mb-3 rounded-xl border border-paper-line bg-paper-soft p-2">
+    <div className="mb-3 rounded-xl border border-paper-line bg-paper-soft p-2">
       <div className="mb-1.5 flex items-center justify-between px-1">
-        <span className="text-[12px] font-semibold text-ink-soft">Elige la carta</span>
+        <span className="text-[12px] font-semibold text-ink-soft">
+          {eligiendo?.tipo === 'mesa'
+            ? `Carta ${eligiendo.i + 1} de la mesa`
+            : eligiendo
+              ? `Carta de ${nombreDe(eligiendo.s)}`
+              : 'Elige la carta'}
+        </span>
         <button
           type="button"
           onClick={() => eligiendo && vaciarHueco(eligiendo)}
@@ -399,31 +528,12 @@ export default function Simulador({
   )
 
   return (
-    <Sheet abierta={abierta} onCerrar={onCerrar} titulo="Simulador de manos">
-      <p className="mt-0 mb-3 text-[13px] leading-snug text-ink-soft">
-        Siéntate en la mesa, pon tus cartas y las que vayan saliendo. La app reparte la mano
-        veinte mil veces y cuenta cuántas gana cada quien.
-      </p>
-
-      <p className="field-label mt-0 mb-1.5">Cuántos en la mesa</p>
-      <div className="mb-3 flex gap-1">
-        {Array.from(
-          { length: MAX_JUGADORES - MIN_JUGADORES + 1 },
-          (_, i) => i + MIN_JUGADORES,
-        ).map((n) => (
-          <button
-            key={n}
-            type="button"
-            onClick={() => setJugadores(n)}
-            className={`flex-1 cursor-pointer rounded-lg border-none py-2 text-[13px] font-bold transition-colors ${
-              jugadores === n ? 'bg-marca text-white' : 'bg-[#e6e1d8] text-ink-soft'
-            }`}
-          >
-            {n}
-          </button>
-        ))}
-      </div>
-
+    /* El fondo del tab es la respuesta: verde se paga, amarillo está parejo, rojo se
+       tira. Se ve antes de leer nada, que es como se decide en la mesa. */
+    <div
+      className="-mx-3.5 -mt-3.5 px-3.5 pt-3.5 pb-24 transition-[background] duration-500"
+      style={{ background: FONDOS[veredicto.tono] }}
+    >
       <Mesa
         asientos={enMesa}
         mesa={mesaCartas}
@@ -434,25 +544,27 @@ export default function Simulador({
           setPanel((p) => (p === s ? null : s))
           setEligiendo(null)
         }}
-        onCarta={(i) =>
+        onCarta={(i) => {
+          setPanel(null)
           setEligiendo((e) => (mismoHueco(e, { tipo: 'mesa', i }) ? null : { tipo: 'mesa', i }))
-        }
+        }}
       />
 
-      <p className="mt-1 mb-3 text-center text-[12px] leading-snug text-ink-soft">
-        Toca a alguien para sentarlo o verle las cartas, y las de en medio para ponerlas.
-        Estás en <b className="text-ink">{miAsiento.nombre.toLowerCase()}</b>, posición{' '}
+      <p className="mt-1 mb-2.5 text-center text-[11.5px] leading-snug text-tiza-suave">
+        Toca una carta de en medio para ponerla, o a alguien para darle las suyas. Estás en{' '}
+        <b className="text-white">{miAsiento.nombre.toLowerCase()}</b>, posición{' '}
         {NOMBRE_POSICION[miAsiento.posicion]}.
       </p>
 
-      {eligiendo?.tipo === 'mesa' && <Mazo />}
-
-      {/* ---- el asiento que se está tocando ---- */}
+      {/* ---- el asiento que se está tocando ----
+          Va pegado a la mesa y no al final de la pantalla: se abre tocando una silla y
+          lo que sigue es poner sus cartas, no bajar a buscarlas. */}
       {panel !== null && (
         <div className="mb-3 rounded-xl border border-paper-line bg-paper-soft px-3 py-2.5">
-          <div className="mb-2 flex items-center justify-between">
-            <b className="text-[13.5px] text-ink">
+          <div className="mb-2 flex items-center gap-2">
+            <b className="min-w-0 flex-1 truncate text-[13.5px] text-ink">
               {asientos.find((a) => a.indice === panel)?.nombre ?? 'El asiento'}
+              {panel === asiento && ' · tú'}
             </b>
             <button
               type="button"
@@ -461,135 +573,184 @@ export default function Simulador({
                 setPanel(null)
                 setEligiendo(null)
               }}
-              className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg border-none bg-ink/8 text-ink-soft active:scale-95"
+              className="flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-lg border-none bg-ink/8 text-ink-soft active:scale-95"
             >
               <X size={13} strokeWidth={2.6} />
             </button>
           </div>
 
-          {panel !== asiento && (
-            <button
-              type="button"
-              className="btn btn-ghost mb-2"
-              onClick={() => {
-                setAsiento(panel)
-                setPanel(null)
-              }}
-            >
-              <UserRound size={16} strokeWidth={2.4} />
-              Aquí me siento yo
-            </button>
-          )}
-
-          <p className="field-label mt-0 mb-1.5">Quién se sienta aquí</p>
-          {miembros.length === 0 ? (
-            <p className="mt-0 mb-2 text-[12px] leading-snug text-ink-soft">
-              La liga todavía no tiene jugadores a los que ponerles la cara.
-            </p>
-          ) : (
-            <div className="mb-2 flex flex-wrap gap-1.5">
-              {miembros.map((m) => {
-                const aqui = quien[panel] === m.id
-                return (
-                  <button
-                    key={m.id}
-                    type="button"
-                    onClick={() =>
-                      setQuien((q) =>
-                        /* Nadie se sienta en dos sillas: se levanta de la otra. */
-                        q.map((x, s) =>
-                          s === panel ? (aqui ? null : m.id) : x === m.id ? null : x,
-                        ),
-                      )
-                    }
-                    className={`flex cursor-pointer items-center gap-1.5 rounded-full border-none py-1 pr-2.5 pl-1 text-[12.5px] font-semibold active:scale-95 ${
-                      aqui ? 'bg-marca text-white' : 'bg-white text-ink'
-                    }`}
-                  >
-                    <Cara nombre={m.nombre} foto={m.foto} size={20} />
-                    {m.nombre}
-                  </button>
-                )
-              })}
-            </div>
-          )}
-
-        </div>
-      )}
-
-      {/* ---- lo que trae cada quien ----
-          Las cartas también se ponen tocando a alguien en la mesa, pero ahí hay que
-          saber que se puede. Esta lista lo deja a la vista: un renglón por silla, el
-          tuyo primero, y el que no se sabe se queda en blanco. */}
-      <p className="field-label mt-0 mb-1.5">Lo que trae cada quien</p>
-      <ul className="m-0 mb-1 list-none p-0">
-        {Array.from({ length: jugadores }, (_, s) => s).map((s) => {
-          const silla = asientos.find((a) => a.indice === s)
-          const fuera = !sigue(s)
-          return (
-            <li key={s} className="mb-1.5 flex items-center gap-2 last:mb-0">
+          <div className="mb-2 flex items-center gap-2">
+            <span className="shrink-0 text-[12px] font-semibold text-ink-soft">
+              {panel === asiento ? 'Tus cartas' : 'Lo que enseñó'}
+            </span>
+            <span className="flex gap-1.5">
+              {[0, 1].map((i) => (
+                <Carta
+                  key={i}
+                  valor={manos[panel][i]}
+                  tam="chica"
+                  activa={mismoHueco(eligiendo, { tipo: 'asiento', s: panel, i })}
+                  onClick={() =>
+                    setEligiendo((e) =>
+                      mismoHueco(e, { tipo: 'asiento', s: panel, i })
+                        ? null
+                        : { tipo: 'asiento', s: panel, i },
+                    )
+                  }
+                />
+              ))}
+            </span>
+            {panel !== asiento && (
               <button
                 type="button"
                 onClick={() => {
-                  setPanel((x) => (x === s ? null : s))
-                  setEligiendo(null)
+                  setAsiento(panel)
+                  setPanel(null)
                 }}
-                className={`flex min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-xl border border-paper-line bg-paper-soft px-2 py-1.5 text-left active:scale-[.99] ${
-                  fuera ? 'opacity-45' : ''
-                }`}
+                className="ml-auto flex shrink-0 cursor-pointer items-center gap-1 rounded-full border-none bg-ink/8 px-2 py-1 text-[11px] font-bold text-ink-soft active:scale-95"
               >
-                {/* Sin nadie sentado no hay cara que poner: la inicial de "ciega grande"
-                    no es de nadie. */}
-                {quien[s] !== null && <Cara nombre={nombreDe(s)} foto={fotoDe(s)} size={24} />}
-                <span className="min-w-0 flex-1">
-                  <b className="block truncate text-[13px] text-ink">
-                    {s === asiento ? 'Tú' : nombreDe(s)}
-                  </b>
-                  <span className="block truncate text-[10.5px] leading-tight text-ink-soft">
-                    {silla?.nombre}
-                    {fuera && ' · se fue'}
-                  </span>
-                </span>
+                <UserRound size={12} strokeWidth={2.8} />
+                Aquí voy yo
               </button>
-              <span className="flex shrink-0 gap-1.5">
-                {[0, 1].map((i) => (
-                  <Carta
-                    key={i}
-                    valor={manos[s][i]}
-                    tam="chica"
-                    activa={mismoHueco(eligiendo, { tipo: 'asiento', s, i })}
-                    onClick={() =>
-                      setEligiendo((e) =>
-                        mismoHueco(e, { tipo: 'asiento', s, i })
-                          ? null
-                          : { tipo: 'asiento', s, i },
-                      )
-                    }
-                  />
-                ))}
-              </span>
-            </li>
-          )
-        })}
-      </ul>
-      <p className="mt-0 mb-3 text-[11.5px] leading-snug text-ink-soft">
-        Toca el nombre para decir quién se sienta ahí. Al que dejes en blanco se le siguen
-        repartiendo cartas al azar, que es justo lo que sabes de él.
-      </p>
+            )}
+          </div>
 
-      {eligiendo?.tipo === 'asiento' && <Mazo />}
+          {miembros.length > 0 && (
+            <>
+              <p className="field-label mt-2 mb-1.5">Quién se sienta aquí</p>
+              <div className="flex flex-wrap gap-1.5">
+                {miembros.map((m) => {
+                  const aqui = quien[panel] === m.id
+                  return (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() =>
+                        setQuien((q) =>
+                          /* Nadie se sienta en dos sillas: se levanta de la otra. */
+                          q.map((x, s) =>
+                            s === panel ? (aqui ? null : m.id) : x === m.id ? null : x,
+                          ),
+                        )
+                      }
+                      className={`flex cursor-pointer items-center gap-1.5 rounded-full border-none py-1 pr-2.5 pl-1 text-[12.5px] font-semibold active:scale-95 ${
+                        aqui ? 'bg-marca text-white' : 'bg-white text-ink'
+                      }`}
+                    >
+                      <Cara nombre={m.nombre} foto={m.foto} size={20} />
+                      {m.nombre}
+                    </button>
+                  )
+                })}
+              </div>
+            </>
+          )}
+        </div>
+      )}
 
-      {/* ---- cómo se fue jugando ---- */}
+      {eligiendo && <Mazo />}
+
+      {/* ---- la respuesta, con la cuenta hecha a la vista ---- */}
       <section className="panel">
         <p className="panel-title">
-          <span>Cómo se fue la mano</span>
+          <span>{trae ? `Traes ${trae.toLowerCase()}` : '¿Voy o no voy?'}</span>
         </p>
 
+        {!usandoMano && (
+          /* Sin apuntar la mano, los dos números se teclean. Van arriba porque sin ellos
+             no hay nada que contestar. */
+          <div className="mb-3 flex gap-2">
+            <label className="min-w-0 flex-1">
+              <span className="mb-1 block text-[11.5px] text-ink-soft">En el bote hay</span>
+              <span className="field-box block">
+                <NumInput
+                  value={boteManual}
+                  mode="decimal"
+                  aria-label="Lo que hay en el bote"
+                  onChange={setBoteManual}
+                />
+              </span>
+            </label>
+            <label className="min-w-0 flex-1">
+              <span className="mb-1 block text-[11.5px] text-ink-soft">Te piden</span>
+              <span className="field-box block">
+                <NumInput
+                  value={apuestaManual}
+                  mode="decimal"
+                  aria-label="Lo que te toca pagar"
+                  onChange={setApuestaManual}
+                />
+              </span>
+            </label>
+          </div>
+        )}
+
+        <div
+          className={`rounded-xl px-3.5 py-3 text-center ${
+            veredicto.tono === 'verde'
+              ? 'bg-win/12'
+              : veredicto.tono === 'ambar'
+                ? 'bg-[#f0a81e]/18'
+                : veredicto.tono === 'rojo'
+                  ? 'bg-loss/12'
+                  : 'bg-ink/6'
+          }`}
+        >
+          <b
+            className={`block font-display text-[26px] leading-none tracking-[.5px] uppercase ${
+              veredicto.tono === 'verde'
+                ? 'text-win-tinta'
+                : veredicto.tono === 'ambar'
+                  ? 'text-[#8a5c00]'
+                  : veredicto.tono === 'rojo'
+                    ? 'text-loss'
+                    : 'text-ink-soft'
+            }`}
+          >
+            {veredicto.titulo}
+          </b>
+          <span className="mt-1.5 block text-[12.5px] leading-snug text-ink">
+            {veredicto.linea}
+          </span>
+        </div>
+
+        {cuentas && (
+          <>
+            <Barras ganas={cuentas.tienes} necesitas={cuentas.necesitas} tono={veredicto.tono} />
+
+            {/* La cuenta completa, contada como se cuenta en la mesa. */}
+            <p className="mt-3 mb-0 text-[12.5px] leading-relaxed text-ink">
+              Pones <b>{money(laApuesta)}</b> para llevarte los <b>{money(elBote)}</b> que ya hay.
+              Poniendo {money(laApuesta)} para ganar {money(elBote)}, con acertar{' '}
+              <b>{Math.round(cuentas.necesitas)} de cada 100</b> sales a mano. Tú aciertas{' '}
+              <b>{Math.round(cuentas.tienes)}</b>.
+            </p>
+            <p className="mt-2 mb-0 text-[12.5px] leading-relaxed text-ink-soft">
+              Dicho en dinero: cada vez que se jugara esta mano, pagar te{' '}
+              {cuentas.esperado >= 0 ? 'dejaría' : 'costaría'}{' '}
+              <b className={cuentas.esperado >= 0 ? 'text-win' : 'text-loss'}>
+                {money(Math.abs(cuentas.esperado))}
+              </b>
+              .
+            </p>
+            <p className="mt-2 mb-0 text-[11.5px] leading-snug text-ink-soft/80">
+              Esto cuenta sólo esta carta. Si te van a volver a apostar después, te hace falta
+              más margen del que dice aquí.
+            </p>
+          </>
+        )}
+      </section>
+
+      {/* ---- cómo va la mano ---- */}
+      <section className="panel">
         {!mano ? (
           <>
+            <p className="panel-title">
+              <span>Apunta la mano</span>
+            </p>
             <p className="mt-0 mb-2.5 text-[12.5px] leading-snug text-ink-soft">
-              Apúntala como pasó —las ciegas, quién subió, quién se fue— y la app lleva el bote
-              y te dice, cuando te toque, si sale a cuentas pagar.
+              Si la apuntas —las ciegas, quién subió, quién se fue—, el bote y lo que te piden
+              salen solos y ya no hay que teclearlos.
             </p>
             <div className="mb-2 flex gap-2">
               <label className="min-w-0 flex-1">
@@ -627,27 +788,6 @@ export default function Simulador({
                 Bote <b className="font-display text-ink tabular-nums">{money(bote)}</b>
               </span>
             </div>
-
-            {/* El repaso, calle por calle: es lo que se cuenta después —"subió en el turn y
-                los demás se fueron"— y aquí queda escrito. */}
-            <ul className="m-0 mb-2.5 list-none p-0">
-              {mano.movimientos.map((x, i) => {
-                const abreCalle = i === 0 || mano.movimientos[i - 1].calle !== x.calle
-                return (
-                  <li key={i}>
-                    {abreCalle && x.calle !== 'preflop' && (
-                      <p className="mt-2 mb-1 text-[11px] font-bold tracking-[.5px] text-ink-soft uppercase">
-                        {NOMBRE_CALLE[x.calle]}
-                      </p>
-                    )}
-                    <p className="my-0 text-[12.5px] leading-relaxed text-ink">
-                      <b>{nombreDe(x.jugador)}</b>{' '}
-                      <span className="text-ink-soft">{comoSeDice(x, money)}</span>
-                    </p>
-                  </li>
-                )
-              })}
-            </ul>
 
             {mano.terminada ? (
               <p className="mt-0 mb-2 rounded-xl bg-ink/6 px-3 py-2.5 text-[12.5px] leading-snug text-ink">
@@ -727,6 +867,34 @@ export default function Simulador({
               )
             )}
 
+            {/* El repaso, calle por calle: es lo que se cuenta después —"subió en el turn
+                y los demás se fueron"—. Va plegado para no alargar la pantalla. */}
+            {mano.movimientos.length > 0 && (
+              <details className="mt-2.5">
+                <summary className="cursor-pointer list-none text-[11.5px] font-semibold text-ink-soft underline">
+                  Ver cómo se fue jugando
+                </summary>
+                <ul className="m-0 mt-1.5 list-none p-0">
+                  {mano.movimientos.map((x, i) => {
+                    const abreCalle = i === 0 || mano.movimientos[i - 1].calle !== x.calle
+                    return (
+                      <li key={i}>
+                        {abreCalle && x.calle !== 'preflop' && (
+                          <p className="mt-2 mb-1 text-[11px] font-bold tracking-[.5px] text-ink-soft uppercase">
+                            {NOMBRE_CALLE[x.calle]}
+                          </p>
+                        )}
+                        <p className="my-0 text-[12.5px] leading-relaxed text-ink">
+                          <b>{nombreDe(x.jugador)}</b>{' '}
+                          <span className="text-ink-soft">{comoSeDice(x, money)}</span>
+                        </p>
+                      </li>
+                    )
+                  })}
+                </ul>
+              </details>
+            )}
+
             <div className="mt-2.5 flex gap-1.5">
               <button
                 type="button"
@@ -745,238 +913,186 @@ export default function Simulador({
         )}
       </section>
 
-      {/* ---- si conviene pagar ----
-          La pregunta de la mesa no es "¿voy ganando?" sino "¿me alcanza para pagar esto?".
-          Pagar $100 a un bote de $900 necesita ganar una de cada diez; a un bote de $100,
-          una de cada dos. Apuntando la mano, el bote y lo que te piden salen solos: no hay
-          que volver a teclear lo que ya se apuntó. */}
-      <section className="panel">
-        <p className="panel-title">
-          <span>
-            <Coins size={14} strokeWidth={2.6} className="-mt-0.5 mr-1 inline" />
-            ¿Conviene pagar?
-          </span>
-        </p>
-
-        {usandoMano ? (
-          <div className="mb-2 flex gap-2">
-            <div className="flex-1 rounded-xl bg-ink/6 px-3 py-2">
-              <span className="block text-[11px] text-ink-soft">En el bote hay</span>
-              <b className="block font-display text-[19px] leading-tight text-ink tabular-nums">
-                {money(elBote)}
-              </b>
-            </div>
-            <div className="flex-1 rounded-xl bg-ink/6 px-3 py-2">
-              <span className="block text-[11px] text-ink-soft">
-                {meToca ? 'Te toca poner' : 'Para seguir pones'}
-              </span>
-              <b className="block font-display text-[19px] leading-tight text-ink tabular-nums">
-                {money(laApuesta)}
-              </b>
-            </div>
-          </div>
-        ) : (
-          <div className="mb-2 flex gap-2">
-            <label className="min-w-0 flex-1">
-              <span className="mb-1 block text-[11.5px] text-ink-soft">En el bote hay</span>
-              <span className="field-box block">
-                <NumInput
-                  value={boteManual}
-                  mode="decimal"
-                  aria-label="Lo que hay en el bote"
-                  onChange={setBoteManual}
-                />
-              </span>
-            </label>
-            <label className="min-w-0 flex-1">
-              <span className="mb-1 block text-[11.5px] text-ink-soft">Te toca pagar</span>
-              <span className="field-box block">
-                <NumInput
-                  value={apuestaManual}
-                  mode="decimal"
-                  aria-label="Lo que te toca pagar"
-                  onChange={setApuestaManual}
-                />
-              </span>
-            </label>
-          </div>
-        )}
-
-        {cuentas ? (
-          <>
-            <div
-              className={`rounded-xl px-3 py-2.5 ${cuentas.conviene ? 'bg-win/12' : 'bg-loss/12'}`}
+      {/* ---- lo que no se mira a cada rato ---- */}
+      <Plegable titulo="Quiénes están en la mesa" abierta={verMesa} onTocar={() => setVerMesa((v) => !v)}>
+        <p className="field-label mt-0 mb-1.5">Cuántos juegan</p>
+        <div className="mb-3 flex gap-1">
+          {Array.from(
+            { length: MAX_JUGADORES - MIN_JUGADORES + 1 },
+            (_, i) => i + MIN_JUGADORES,
+          ).map((n) => (
+            <button
+              key={n}
+              type="button"
+              onClick={() => setJugadores(n)}
+              className={`flex-1 cursor-pointer rounded-lg border-none py-1.5 text-[12.5px] font-bold transition-colors ${
+                jugadores === n ? 'bg-marca text-white' : 'bg-[#e6e1d8] text-ink-soft'
+              }`}
             >
-              <b
-                className={`block font-display text-[14.5px] ${
-                  cuentas.conviene ? 'text-win-tinta' : 'text-loss'
-                }`}
-              >
-                {cuentas.conviene ? 'Sí sale a cuentas pagar' : 'No sale a cuentas pagar'}
-              </b>
-              <p className="mt-1 mb-0 text-[12.5px] leading-snug text-ink">
-                Pagar {money(laApuesta)} a un bote de {money(elBote)} te pide ganar{' '}
-                <b>{cuentas.necesitas.toFixed(1)}%</b> de las veces, y te llevas{' '}
-                <b>{cuentas.tienes.toFixed(1)}%</b>.
-              </p>
-              <p className="mt-1 mb-0 text-[12.5px] leading-snug text-ink">
-                Cada vez que se jugara esta mano, pagar te{' '}
-                {cuentas.esperado >= 0 ? 'deja' : 'cuesta'}{' '}
-                <b className={cuentas.esperado >= 0 ? 'text-win' : 'text-loss'}>
-                  {money(Math.abs(cuentas.esperado))}
-                </b>
-                .
-              </p>
-            </div>
-            <p className="mt-2 mb-0 text-[11.5px] leading-snug text-ink-soft/80">
-              La apuesta es {(cuentas.parteDelBote * 100).toFixed(0)}% del bote. Esto sólo cuenta
-              esta carta: si te van a volver a apostar después, te hace falta más margen del que
-              dice aquí.
-            </p>
-          </>
-        ) : (
-          <p className="mt-0 mb-0 text-[12.5px] leading-snug text-ink-soft">
-            {meFui
-              ? 'Te fuiste de la mano: ya no hay nada que pagar.'
-              : !resultado
-                ? 'Falta poner tus dos cartas para saber cuánto te llevas y poder comparar.'
-                : usandoMano && laApuesta <= 0
-                  ? `Ahora mismo no te piden nada: estás al corriente y en el bote hay ${money(elBote)}.`
-                  : 'Pon lo que hay en el bote y lo que te piden, y la app dice si sale a cuentas pagar con la mano que traes.'}
-          </p>
-        )}
-      </section>
-
-      {/* ---- el resultado ---- */}
-      {!listo ? (
-        <div className="balance balance-ok mb-2">
-          <span>
-            {meFui
-              ? 'Te fuiste de la mano: ya no hay nada que calcular.'
-              : rivalesVivos.length === 0
-                ? 'Ya no queda nadie contra quien jugar.'
-                : miMano.length < 2
-                  ? 'Pon tus dos cartas para empezar. La mesa puedes dejarla vacía.'
-                  : 'El flop va completo: pon las tres o quítalas.'}
-          </span>
+              {n}
+            </button>
+          ))}
         </div>
-      ) : (
-        <section className="panel">
-          <p className="panel-title">
-            <span>{trae ? `Traes ${trae.toLowerCase()}` : 'Antes del flop'}</span>
+
+        <ul className="m-0 list-none p-0">
+          {Array.from({ length: jugadores }, (_, s) => s).map((s) => {
+            const silla = asientos.find((a) => a.indice === s)
+            return (
+              <li key={s} className="mb-1.5 flex items-center gap-2 last:mb-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPanel(s)
+                    setEligiendo(null)
+                    setVerMesa(false)
+                  }}
+                  className={`flex min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-xl border border-paper-line bg-paper-soft px-2 py-1.5 text-left active:scale-[.99] ${
+                    sigue(s) ? '' : 'opacity-45'
+                  }`}
+                >
+                  {quien[s] !== null && <Cara nombre={nombreDe(s)} foto={fotoDe(s)} size={22} />}
+                  <span className="min-w-0 flex-1">
+                    <b className="block truncate text-[13px] text-ink">
+                      {s === asiento ? 'Tú' : nombreDe(s)}
+                    </b>
+                    <span className="block truncate text-[10.5px] leading-tight text-ink-soft">
+                      {silla?.nombre}
+                      {!sigue(s) && ' · se fue'}
+                    </span>
+                  </span>
+                </button>
+                {cartasDe(s).length === 2 ? (
+                  <Par cartas={cartasDe(s)} />
+                ) : (
+                  <span className="w-[42px] shrink-0 text-right text-[10.5px] text-ink-soft">
+                    a ciegas
+                  </span>
+                )}
+              </li>
+            )
+          })}
+        </ul>
+      </Plegable>
+
+      {resultado && !calculando && (
+        <Plegable
+          titulo="Las cuentas completas"
+          abierta={verDetalle}
+          onTocar={() => setVerDetalle((v) => !v)}
+        >
+          <div className="text-center">
+            <div className="font-display text-[40px] leading-none font-bold text-ink">
+              {resultado.gano.toFixed(1)}%
+            </div>
+            <div className="mt-1 text-[12px] text-ink-soft">
+              de las veces ganas
+              {resultado.manos === 1 && ' · la mano ya está jugada, esto es exacto'}
+            </div>
+          </div>
+
+          <ul className="m-0 mt-3 list-none p-0">
+            {[
+              { k: 'Ganas', v: resultado.gano, color: 'bg-win' },
+              { k: 'Empatas', v: resultado.empate, color: 'bg-tiza' },
+              { k: 'Pierdes', v: resultado.perdi, color: 'bg-loss' },
+            ].map((f) => (
+              <li key={f.k} className="mb-1.5 last:mb-0">
+                <div className="mb-1 flex items-baseline justify-between text-[12.5px]">
+                  <span className="text-ink-soft">{f.k}</span>
+                  <b className="font-display text-ink tabular-nums">{f.v.toFixed(1)}%</b>
+                </div>
+                <div className="h-2 overflow-hidden rounded-full bg-ink/10">
+                  <div
+                    className={`h-full rounded-full ${f.color}`}
+                    style={{ width: `${Math.max(0, f.v)}%` }}
+                  />
+                </div>
+              </li>
+            ))}
+          </ul>
+
+          {/* Los porcentajes de los demás. Al que se le sabe la mano trae el suyo de
+              verdad; al que no, el de una mano cualquiera, que es lo que se sabe de él.
+              Suman 100 porque el bote siempre se lo lleva alguien. */}
+          <p className="field-label mt-4 mb-1">Lo que se lleva cada quien</p>
+          <ul className="m-0 mb-1 list-none p-0">
+            {[asiento, ...rivalesVivos].map((s) => {
+              const r = repartoDe(s)
+              if (!r) return null
+              const suyas = cartasDe(s)
+              const silla = asientos.find((a) => a.indice === s)
+              const manda = r.parte >= mejorParte - 1e-9
+              return (
+                <li
+                  key={s}
+                  className="flex items-center gap-2 border-b border-dashed border-paper-line py-1.5 last:border-b-0"
+                >
+                  <Cara nombre={nombreDe(s)} foto={fotoDe(s)} size={26} />
+                  <span className="min-w-0 flex-1">
+                    <b className={`block truncate text-[12.5px] ${manda ? 'text-win' : 'text-ink'}`}>
+                      {nombreDe(s)}
+                    </b>
+                    <span className="block text-[10.5px] leading-tight text-ink-soft">
+                      {silla?.nombre}
+                      {suyas.length === 2 ? '' : ' · a ciegas'}
+                    </span>
+                  </span>
+                  {suyas.length === 2 && <Par cartas={suyas} />}
+                  <b
+                    className={`w-12 shrink-0 text-right font-display text-[15px] tabular-nums ${
+                      manda ? 'text-win' : 'text-ink'
+                    }`}
+                  >
+                    {r.parte.toFixed(1)}%
+                  </b>
+                </li>
+              )
+            })}
+          </ul>
+          <p className="mt-0 mb-0 text-right text-[11px] text-ink-soft/80">
+            Contando que los empates se parten el bote.
           </p>
 
-          {calculando || !resultado ? (
-            <p className="m-0 py-6 text-center text-[13px] text-ink-soft">Repartiendo manos…</p>
-          ) : (
-            <>
-              <div className={`mb-3 rounded-xl px-3 py-2 text-center ${TONOS.caja}`}>
-                <b className="font-display text-[15px] tracking-[.5px] uppercase">
-                  {banda.etiqueta}
-                </b>
-              </div>
+          <p className="mt-3 mb-0 text-[12.5px] leading-snug text-ink-soft">
+            Repartiendo a ciegas entre {vivos.length} te tocaría{' '}
+            <b className="text-ink">{justo.toFixed(1)}%</b>, y desde{' '}
+            <b className="text-ink">{miAsiento.nombre.toLowerCase()}</b> conviene pedirle un{' '}
+            {Math.round((EXIGENCIA[miAsiento.posicion] - 1) * 100)}% más que eso.
+            {sabidas > 0 &&
+              ` Contando ${sabidas === 1 ? 'la mano que ya sabes' : `las ${sabidas} manos que ya sabes`}.`}
+          </p>
 
-              <div className="text-center">
-                <div className={`font-display text-[46px] leading-none font-bold ${TONOS.texto}`}>
-                  {resultado.gano.toFixed(1)}%
-                </div>
-                <div className="mt-1 text-[12px] text-ink-soft">
-                  de las veces ganas
-                  {resultado.manos === 1 && ' · la mano ya está jugada, esto es exacto'}
-                </div>
-              </div>
-
-              <ul className="m-0 mt-3 list-none p-0">
-                {[
-                  { k: 'Ganas', v: resultado.gano, color: 'bg-win' },
-                  { k: 'Empatas', v: resultado.empate, color: 'bg-tiza' },
-                  { k: 'Pierdes', v: resultado.perdi, color: 'bg-loss' },
-                ].map((f) => (
-                  <li key={f.k} className="mb-1.5 last:mb-0">
-                    <div className="mb-1 flex items-baseline justify-between text-[12.5px]">
-                      <span className="text-ink-soft">{f.k}</span>
-                      <b className="font-display text-ink tabular-nums">{f.v.toFixed(1)}%</b>
-                    </div>
-                    <div className="h-2 overflow-hidden rounded-full bg-ink/10">
-                      <div
-                        className={`h-full rounded-full ${f.color}`}
-                        style={{ width: `${Math.max(0, f.v)}%` }}
-                      />
-                    </div>
-                  </li>
-                ))}
-              </ul>
-
-              {/* Los porcentajes de los demás. Al que se le sabe la mano trae el suyo de
-                  verdad; al que no, el de una mano cualquiera, que es lo que se sabe de
-                  él. Suman 100 porque el bote siempre se lo lleva alguien. */}
-              <p className="field-label mt-4 mb-1">Lo que se lleva cada quien</p>
-              <ul className="m-0 mb-1 list-none p-0">
-                {[asiento, ...rivalesVivos].map((s) => {
-                  const r = repartoDe(s)
-                  if (!r) return null
-                  const suyas = cartasDe(s)
-                  const silla = asientos.find((a) => a.indice === s)
-                  const manda = r.parte >= mejorParte - 1e-9
-                  return (
-                    <li
-                      key={s}
-                      className="flex items-center gap-2 border-b border-dashed border-paper-line py-1.5 last:border-b-0"
-                    >
-                      <Cara nombre={nombreDe(s)} foto={fotoDe(s)} size={26} />
-                      <span className="min-w-0 flex-1">
-                        <b
-                          className={`block truncate text-[12.5px] ${manda ? 'text-win' : 'text-ink'}`}
-                        >
-                          {nombreDe(s)}
-                        </b>
-                        <span className="block text-[10.5px] leading-tight text-ink-soft">
-                          {silla?.nombre}
-                          {suyas.length === 2 ? '' : ' · a ciegas'}
-                        </span>
-                      </span>
-                      {suyas.length === 2 && <Par cartas={suyas} />}
-                      <b
-                        className={`w-12 shrink-0 text-right font-display text-[15px] tabular-nums ${
-                          manda ? 'text-win' : 'text-ink'
-                        }`}
-                      >
-                        {r.parte.toFixed(1)}%
-                      </b>
-                    </li>
-                  )
-                })}
-              </ul>
-              <p className="mt-0 mb-0 text-right text-[11px] text-ink-soft/80">
-                Contando que los empates se parten el bote.
-              </p>
-
-              <p className="mt-3 mb-0 text-[12.5px] leading-snug text-ink-soft">
-                Repartiendo a ciegas entre {vivos.length} te tocaría{' '}
-                <b className="text-ink">{justo.toFixed(1)}%</b>, y desde{' '}
-                <b className="text-ink">{miAsiento.nombre.toLowerCase()}</b> conviene pedirle un{' '}
-                {Math.round((EXIGENCIA[miAsiento.posicion] - 1) * 100)}% más que eso.
-                {sabidas > 0 &&
-                  ` Contando ${sabidas === 1 ? 'la mano que ya sabes' : `las ${sabidas} manos que ya sabes`}.`}
-              </p>
-
-              <p className="mt-2 mb-0 text-[11.5px] leading-snug text-ink-soft/80">
-                La posición no cambia el porcentaje —las cartas ganan lo mismo desde donde sea—;
-                cambia cuánto margen necesitas, porque hablando primero juegas sin saber qué
-                hicieron los demás.
-              </p>
-
-            </>
-          )}
-        </section>
+          <p className="mt-2 mb-0 text-[11.5px] leading-snug text-ink-soft/80">
+            La posición no cambia el porcentaje —las cartas ganan lo mismo desde donde sea—;
+            cambia cuánto margen necesitas, porque hablando primero juegas sin saber qué
+            hicieron los demás.
+          </p>
+        </Plegable>
       )}
 
       {(usadas.size > 0 || mano) && (
-        <button type="button" className="btn btn-ghost mb-2" onClick={limpiar}>
+        <button type="button" className="btn btn-ghost" onClick={limpiar}>
           <RotateCcw size={16} strokeWidth={2.4} />
           Empezar de nuevo
         </button>
       )}
-    </Sheet>
+
+      {/* ---- la respuesta, pegada abajo ----
+          Es lo único que se consulta a cada rato, así que no se busca: siempre está. */}
+      <div
+        className={`fixed inset-x-0 bottom-0 z-40 px-3.5 pt-2.5 pb-[max(0.75rem,env(safe-area-inset-bottom))] text-white shadow-[0_-6px_18px_rgba(0,0,0,.35)] ${
+          PEGADA[veredicto.tono]
+        }`}
+      >
+        <div className="mx-auto flex max-w-[640px] items-center gap-3">
+          <b className="shrink-0 font-display text-[19px] leading-none tracking-[.5px] uppercase">
+            {veredicto.titulo}
+          </b>
+          <span className="min-w-0 flex-1 text-right text-[11.5px] leading-tight text-white/85">
+            {veredicto.linea}
+          </span>
+        </div>
+      </div>
+    </div>
   )
 }

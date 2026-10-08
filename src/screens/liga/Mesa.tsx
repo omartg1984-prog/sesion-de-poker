@@ -50,7 +50,7 @@ function CartaChica({ valor, chica }: { valor: number; chica?: boolean }) {
   return (
     <span
       className={`flex flex-col items-center justify-center rounded-[3px] bg-white font-display leading-none font-bold shadow-sm ${
-        chica ? 'h-[26px] w-[19px] text-[11px]' : 'h-10 w-[30px] text-[15px]'
+        chica ? 'h-[23px] w-[17px] text-[10px]' : 'h-9 w-[26px] text-[13px]'
       } ${ROJO(valor) ? 'text-loss' : 'text-ink'}`}
     >
       <span>{VALORES[valorDe(valor)]}</span>
@@ -103,13 +103,13 @@ export default function Mesa({
 }: Props) {
   const de = asientos.length
   /* Con mucha gente las placas se estorban: la mesa crece para que quepan. */
-  const alto = de <= 6 ? 330 : 366
+  const alto = de <= 6 ? 268 : 298
 
   return (
-    <div className="relative mx-auto select-none" style={{ height: alto, maxWidth: 340 }}>
+    <div className="relative mx-auto select-none" style={{ height: alto, maxWidth: 300 }}>
       {/* el mueble */}
       <div
-        className="absolute inset-x-[34px] inset-y-[64px] rounded-[999px]"
+        className="absolute inset-x-[30px] inset-y-[52px] rounded-[999px]"
         style={{
           background: 'linear-gradient(180deg,#7a4e28 0%,#5a3718 55%,#331d0c 100%)',
           boxShadow: '0 12px 26px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.22)',
@@ -117,14 +117,14 @@ export default function Mesa({
       />
       {/* el paño, con su luz al centro como la de la tele */}
       <div
-        className="absolute inset-x-[48px] inset-y-[78px] rounded-[999px]"
+        className="absolute inset-x-[42px] inset-y-[64px] rounded-[999px]"
         style={{
           background: 'radial-gradient(ellipse at 50% 34%, #17985a 0%, #0c7540 44%, #064a28 100%)',
           boxShadow: 'inset 0 0 0 2px rgba(255,255,255,.08), inset 0 10px 26px rgba(0,0,0,.33)',
         }}
       />
       {/* la línea de la pista, que es lo que le da el aire de mesa de verdad */}
-      <div className="absolute inset-x-[56px] inset-y-[86px] rounded-[999px] border border-white/10" />
+      <div className="absolute inset-x-[49px] inset-y-[71px] rounded-[999px] border border-white/10" />
 
       {/* las cartas de en medio y el bote */}
       <div className="absolute inset-x-0 top-1/2 flex -translate-y-1/2 flex-col items-center gap-2">
@@ -135,7 +135,7 @@ export default function Mesa({
               type="button"
               onClick={() => onCarta(i)}
               aria-label={`Carta ${i + 1} de la mesa`}
-              className={`flex h-10 w-[30px] cursor-pointer items-center justify-center rounded-[3px] border-none p-0 active:scale-95 ${
+              className={`flex h-9 w-[26px] cursor-pointer items-center justify-center rounded-[3px] border-none p-0 active:scale-95 ${
                 c === null
                   ? `border border-dashed bg-black/20 ${
                       eligiendo === i ? 'border-[#ffd98a] bg-black/35' : 'border-white/30'
@@ -169,7 +169,7 @@ export default function Mesa({
       {asientos.map((a, i) => (
         <div
           key={a.indice}
-          className="absolute z-10 flex w-[68px] -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-[3px]"
+          className="absolute z-10 flex w-[62px] -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-[2px]"
           style={sitio(i, de, 40, 40)}
         >
           {/* El botón del repartidor va pegado a su placa y no suelto en el paño: suelto
@@ -179,7 +179,7 @@ export default function Mesa({
               D
             </span>
           )}
-          <span className="flex h-[26px] gap-[3px]">
+          <span className="flex h-[23px] gap-[2px]">
             {a.cartas.length === 2 ? (
               a.cartas.map((c) => <CartaChica key={c} valor={c} chica />)
             ) : a.fuera ? null : (

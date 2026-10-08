@@ -94,7 +94,9 @@ export default function LigaScreen() {
    * que ves; las noches jugadas, con quién ganó cada una, se leen de un vistazo y son
    * de lo que se habla al día siguiente. La tabla sigue a un toque.
    */
-  const [pestana, setPestana] = useState<'partidas' | 'posiciones' | 'reglas'>('partidas')
+  const [pestana, setPestana] = useState<'partidas' | 'posiciones' | 'simulador' | 'reglas'>(
+    'partidas',
+  )
   const [borrando, setBorrando] = useState(false)
   const [confirmaNombre, setConfirmaNombre] = useState('')
 
@@ -102,7 +104,6 @@ export default function LigaScreen() {
   const [editandoLiga, setEditandoLiga] = useState(false)
   const [creando, setCreando] = useState(false)
   const [fichas, setFichas] = useState(false)
-  const [simulador, setSimulador] = useState(false)
   const [puntosAbierto, setPuntosAbierto] = useState(false)
   const [gente, setGente] = useState(false)
   const [ocupado, setOcupado] = useState(false)
@@ -229,7 +230,13 @@ ${link}`
     else setLiga(liga)
   }
 
-  const guardarLaLiga = async ({ nombre, descripcion }: { nombre: string; descripcion: string }) => {
+  const guardarLaLiga = async ({
+    nombre,
+    descripcion,
+  }: {
+    nombre: string
+    descripcion: string
+  }) => {
     if (!liga) return
     const antes = liga
     setLiga({ ...liga, nombre, descripcion: descripcion || null })
@@ -365,61 +372,61 @@ ${link}`
         )}
       </header>
 
-      {/* invitar: se manda un link que se abre y se acepta, no un código que teclear */}
-      <button
-        type="button"
-        onClick={() => void invitar()}
-        className="mb-3.5 flex w-full cursor-pointer items-center gap-3 rounded-xl border border-marca/25 bg-gradient-to-br from-[#2a1016] to-[#100e12] px-4 py-3 text-left active:scale-[.99]"
-      >
-        <div className="min-w-0 flex-1">
-          <div className="text-[10px] font-semibold tracking-[1px] text-tiza-suave uppercase">
-            Invitar a la liga
-          </div>
-          <div className="font-display text-2xl font-bold tracking-[4px] text-marca-alta">
-            {liga.codigo}
-          </div>
-          <div className="mt-0.5 text-[11px] text-tiza-suave">
-            Manda el link; con abrirlo y aceptar ya están dentro.
-          </div>
-        </div>
-        <Share2 size={18} className="shrink-0 text-marca-alta" />
-      </button>
+      {/* En el simulador se está a media mano y con prisa: el código de invitación, los
+          cuartos de atrás de la liga y el micrófono del ganador no pintan nada ahí y lo
+          único que hacen es empujar la mesa fuera de la pantalla. */}
+      {pestana !== 'simulador' && (
+        <>
+          {/* invitar: se manda un link que se abre y se acepta, no un código que teclear */}
+          <button
+            type="button"
+            onClick={() => void invitar()}
+            className="mb-3.5 flex w-full cursor-pointer items-center gap-3 rounded-xl border border-marca/25 bg-gradient-to-br from-[#2a1016] to-[#100e12] px-4 py-3 text-left active:scale-[.99]"
+          >
+            <div className="min-w-0 flex-1">
+              <div className="text-[10px] font-semibold tracking-[1px] text-tiza-suave uppercase">
+                Invitar a la liga
+              </div>
+              <div className="font-display text-2xl font-bold tracking-[4px] text-marca-alta">
+                {liga.codigo}
+              </div>
+              <div className="mt-0.5 text-[11px] text-tiza-suave">
+                Manda el link; con abrirlo y aceptar ya están dentro.
+              </div>
+            </div>
+            <Share2 size={18} className="shrink-0 text-marca-alta" />
+          </button>
 
-      {/* Los dos cuartos de atrás de la liga: quién juega aquí y qué fichas hay. Arriba,
-          porque son lo que se consulta al armar la noche, no al final de todo. */}
-      <div className="mb-3.5 flex gap-2.5">
-        <button type="button" className="btn btn-ghost" onClick={() => setGente(true)}>
-          <Users size={17} strokeWidth={2.4} />
-          Jugadores en la liga
-        </button>
-        <button type="button" className="btn btn-ghost" onClick={() => setFichas(true)}>
-          <Coins size={17} strokeWidth={2.4} />
-          Inventario de fichas
-        </button>
-      </div>
-
-      {/* Para la discusión de media noche: "¿eso se juega?". En vez de opinar, reparte
-          la mano veinte mil veces y enseña cuántas se gana. */}
-      <button type="button" className="btn btn-ghost mb-3.5" onClick={() => setSimulador(true)}>
-        <Calculator size={17} strokeWidth={2.4} />
-        Simulador de manos
-      </button>
-
-      {/* El que ganó la última noche tiene la palabra. Va sobre el fondo oscuro de la
-          liga y no sobre una tarjeta crema, por eso el texto es claro: con tinta oscura
-          aquí no se lee nada. */}
-      {presume && (
-        <div className="mb-3.5 flex items-start gap-3 rounded-xl border border-win/35 bg-noche-honda bg-gradient-to-br from-[#12291d] to-[#100e12] px-3.5 py-3">
-          <Megaphone size={18} className="mt-0.5 shrink-0 text-win-alto" strokeWidth={2.4} />
-          <div className="min-w-0 flex-1">
-            <p className="m-0 text-[14px] leading-snug font-semibold text-white">
-              “{presume.texto}”
-            </p>
-            <p className="mt-1 mb-0 text-[11px] text-tiza-suave">
-              {presume.autor ?? 'El ganador'} · ganó {presume.etiqueta}
-            </p>
+          {/* Los dos cuartos de atrás de la liga: quién juega aquí y qué fichas hay.
+              Arriba, porque son lo que se consulta al armar la noche, no al final. */}
+          <div className="mb-3.5 flex gap-2.5">
+            <button type="button" className="btn btn-ghost" onClick={() => setGente(true)}>
+              <Users size={17} strokeWidth={2.4} />
+              Jugadores en la liga
+            </button>
+            <button type="button" className="btn btn-ghost" onClick={() => setFichas(true)}>
+              <Coins size={17} strokeWidth={2.4} />
+              Inventario de fichas
+            </button>
           </div>
-        </div>
+
+          {/* El que ganó la última noche tiene la palabra. Va sobre el fondo oscuro de
+              la liga y no sobre una tarjeta crema, por eso el texto es claro: con tinta
+              oscura aquí no se lee nada. */}
+          {presume && (
+            <div className="mb-3.5 flex items-start gap-3 rounded-xl border border-win/35 bg-noche-honda bg-gradient-to-br from-[#12291d] to-[#100e12] px-3.5 py-3">
+              <Megaphone size={18} className="mt-0.5 shrink-0 text-win-alto" strokeWidth={2.4} />
+              <div className="min-w-0 flex-1">
+                <p className="m-0 text-[14px] leading-snug font-semibold text-white">
+                  “{presume.texto}”
+                </p>
+                <p className="mt-1 mb-0 text-[11px] text-tiza-suave">
+                  {presume.autor ?? 'El ganador'} · ganó {presume.etiqueta}
+                </p>
+              </div>
+            </div>
+          )}
+        </>
       )}
 
       <div className="mb-3.5 flex gap-1 rounded-xl bg-black/30 p-1">
@@ -427,6 +434,9 @@ ${link}`
           [
             ['partidas', 'Partidas'],
             ['posiciones', 'Posiciones'],
+            /* La discusión de media noche —"¿eso se juega?"— es tan de la liga como la
+               tabla: por eso vive aquí y no detrás de un botón. */
+            ['simulador', '¿Voy?'],
             ['reglas', 'Reglas'],
           ] as const
         ).map(([id, texto]) => (
@@ -435,7 +445,7 @@ ${link}`
             type="button"
             aria-current={pestana === id ? 'page' : undefined}
             onClick={() => setPestana(id)}
-            className={`flex-1 cursor-pointer rounded-[9px] border-none py-2 text-[13px] font-bold transition-colors ${
+            className={`flex-1 cursor-pointer rounded-[9px] border-none px-1 py-2 text-[12.5px] font-bold transition-colors ${
               pestana === id ? 'bg-marca text-white' : 'bg-transparent text-tiza-suave'
             }`}
           >
@@ -459,6 +469,8 @@ ${link}`
           <TablaPosiciones tabla={tabla} nombreLiga={liga.nombre} partidas={partidas} />
         </>
       )}
+
+      {pestana === 'simulador' && <Simulador miembros={miembros} />}
 
       {pestana === 'reglas' && (
         <Reglas
@@ -685,8 +697,8 @@ ${link}`
             <label className="mb-4 block">
               <span className="field-label">Empieza a las</span>
               <p className="mt-0.5 mb-1 text-[12px] leading-snug text-ink-soft">
-                A esa hora se cierra el registro solo. Tú puedes seguir metiendo a los que
-                lleguen tarde.
+                A esa hora se cierra el registro solo. Tú puedes seguir metiendo a los que lleguen
+                tarde.
               </p>
               <input
                 type="time"
@@ -753,8 +765,8 @@ ${link}`
           <div className="mb-3 rounded-xl border border-paper-line bg-paper-soft px-3 py-3">
             <p className="field-label mt-0 mb-1">Jugador invitado</p>
             <p className="mt-0 mb-2.5 text-[12px] leading-snug text-ink-soft">
-              Para el que no va a bajar la app. Cuenta igual que los demás en las partidas
-              y en la tabla, pero no entra: tú le apuntas sus fichas y su dinero.
+              Para el que no va a bajar la app. Cuenta igual que los demás en las partidas y en la
+              tabla, pero no entra: tú le apuntas sus fichas y su dinero.
             </p>
             <div className="flex items-end gap-3">
               <label className="block min-w-0 flex-1">
@@ -863,11 +875,6 @@ ${link}`
       </Sheet>
 
       {/* ---- el simulador ---- */}
-      <Simulador
-        abierta={simulador}
-        miembros={miembros}
-        onCerrar={() => setSimulador(false)}
-      />
 
       {/* ---- cómo se reparten los puntos ---- */}
       <Puntos
