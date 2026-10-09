@@ -20,6 +20,13 @@ import {
   nombreDeLaMano,
   simular,
 } from '../../lib/poker'
+import {
+  MANOS_PARA_PERFIL,
+  RESUMEN_VACIO,
+  perfilDe,
+  punteria,
+  type Resumen,
+} from '../../lib/perfil'
 import { ESTILOS, estiloPorId, rivalesAlAzar, type Rival } from '../../lib/rival'
 import Mesa, { type AsientoEnMesa } from './Mesa'
 import { BarraConRaya, BarraPegada, CAJA, FONDOS, TINTA, TiraConRaya, type Tono } from './tonos'
@@ -55,6 +62,13 @@ const CARTAS_DE_CALLE: Record<string, number> = { preflop: 0, flop: 3, turn: 4, 
 
 const MIN_JUGADORES = 2
 const MAX_JUGADORES = 9
+
+/** Un renglón del historial: lo que se hizo en una mano y cómo salió. */
+interface Apunte {
+  mano: number
+  texto: string
+  bien: boolean | null
+}
 
 /** Nombres para la mesa, que jugar contra "Asiento 4" no se parece a nada. */
 const NOMBRES = ['Chuy', 'Lalo', 'Memo', 'Beto', 'Nacho', 'Tono', 'Pancho', 'Chepe', 'Moy']
@@ -92,6 +106,11 @@ export default function Entrenador() {
   const [caja, setCaja] = useState({ manos: 0, saldo: 0 })
   const [subirA, setSubirA] = useState(0)
   const [verEstilos, setVerEstilos] = useState(true)
+  /* Lo que se ha hecho en toda la sesión, para decir qué tipo de jugador es. */
+  const [resumen, setResumen] = useState<Resumen>(RESUMEN_VACIO)
+  const [historial, setHistorial] = useState<Apunte[]>([])
+  /* Lo de esta mano, que se suma al resumen cuando se acaba. */
+  const deLaMano = useRef({ jugada: false, subio: false })
 
   /* Un solo azar para toda la sesión: así las manos no se repiten al volver a entrar. */
   const azar = useRef(azarCon((Date.now() % 1000000) + 1))
@@ -125,6 +144,7 @@ export default function Entrenador() {
     setEnAsiento(sillas)
     setAnuncio(null)
     setMostradas(0)
+    deLaMano.current = { jugada: false, subio: false }
     setGiro((g) => g + 1)
     setConsejo(null)
     setE(
@@ -150,6 +170,8 @@ export default function Entrenador() {
     setE(null)
     setConsejo(null)
     setCaja({ manos: 0, saldo: 0 })
+    setResumen(RESUMEN_VACIO)
+    setHistorial([])
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jugadores, entrada])
 
@@ -202,6 +224,12 @@ export default function Entrenador() {
         return { ...p, fichas: r.mano.resto[s] + (r.final?.gana[s] ?? 0) }
       }),
     )
+    setResumen((x) => ({
+      ...x,
+      manos: x.manos + 1,
+      jugadas: x.jugadas + (deLaMano.current.jugada ? 1 : 0),
+      subio: x.subio + (deLaMano.current.subio ? 1 : 0),
+    }))
   }, [e])
 
   const mano = e?.mano ?? null
@@ -235,6 +263,9 @@ export default function Entrenador() {
   /* Lo que traigo enfrente: durante la mano, lo que queda; entre manos, lo de la cuenta. */
   const misFichas = mano ? mano.resto[heroe] + (e?.final?.gana[heroe] ?? 0) : (personas[0]?.fichas ?? entrada)
 
+  const perfil = perfilDe(resumen)
+  const tino = punteria(resumen)
+
   const minimo = o?.minimo ?? 0
   useEffect(() => {
     setSubirA((v) => (v >= minimo ? v : minimo))
@@ -248,6 +279,39 @@ export default function Entrenador() {
    */
   const mover = (tipo: Parameters<typeof mueveElHeroe>[1], hasta?: number) => {
     if (!e) return
+
+    /* Lo que cuenta como "entrar a la mano" es poner dinero por gusto antes del flop:
+       las ciegas no se eligen y por eso no dicen nada de cómo juega uno. */
+    if (e.mano.calle === 'preflop') {
+      if (tipo === 'paga' || tipo === 'sube' || tipo === 'apuesta')
+        deLaMano.current.jugada = true
+      if (tipo === 'sube' || tipo === 'apuesta') deLaMano.current.subio = true
+    }
+
+    /* Sólo se califica lo que tiene con qué calificarse: con algo que pagar y con las
+       cuentas hechas. Subir no se juzga aquí, que eso depende de a quién se le sube. */
+    if (cuentas && (tipo === 'seVa' || tipo === 'paga')) {
+      const bien = tipo === 'paga' ? cuentas.conviene : !cuentas.conviene
+      setResumen((x) => ({
+        ...x,
+        decisiones: x.decisiones + 1,
+        buenas: x.buenas + (bien ? 1 : 0),
+        pagosDeMas: x.pagosDeMas + (tipo === 'paga' && !cuentas.conviene ? 1 : 0),
+        tiradasDeMas: x.tiradasDeMas + (tipo === 'seVa' && cuentas.conviene ? 1 : 0),
+      }))
+      setHistorial((h) =>
+        [
+          {
+            mano: caja.manos + 1,
+            texto: `${NOMBRE_CALLE[e.mano.calle].toLowerCase()}: ${
+              tipo === 'paga' ? `pagaste ${money(meFalta)}` : 'te fuiste'
+            } con ${Math.round(cuentas.tienes)} de cada 100 y pedían ${Math.round(cuentas.necesitas)}`,
+            bien,
+          },
+          ...h,
+        ].slice(0, 12),
+      )
+    }
     if (cuentas && (tipo === 'seVa' || tipo === 'paga')) {
       const gana = Math.round(cuentas.tienes)
       const pide = Math.round(cuentas.necesitas)
@@ -324,7 +388,9 @@ export default function Entrenador() {
 
   const enMesa: AsientoEnMesa[] = comoSeVe.map((a) => {
     const s = a.indice
-    const suyas = !e ? [] : s === heroe || e.final?.alGolpe ? e.cartas[s] : []
+    /* Acabando la mano se enseña todo, se haya llegado al golpe o no: la mitad de lo
+       que se aprende es ver contra qué se estaba jugando. */
+    const suyas = !e ? [] : s === heroe || e.final ? e.cartas[s] : []
     const ultimo = mano
       ? [...mano.movimientos].reverse().find((m) => m.jugador === s && m.calle === mano.calle)
       : undefined
@@ -457,6 +523,39 @@ export default function Entrenador() {
               </div>
             )}
 
+            {/* Lo que hubiera pasado si te quedas. Es la pregunta que deja una tirada, y
+                sin contestarla no se puede saber si estuvo bien hecha. */}
+            {e.final && (
+              <div
+                className={`mb-2.5 rounded-xl px-3 py-2.5 text-[12.5px] leading-snug ${
+                  e.final.eraLaMejor ? 'bg-[#f0a81e]/18 text-ink' : 'bg-ink/6 text-ink'
+                }`}
+              >
+                {e.final.eraLaMejor ? (
+                  sigoVivo ? (
+                    <>
+                      <b>Tu mano era la mejor de la mesa.</b> Bien jugada.
+                    </>
+                  ) : consejo && !consejo.bien ? (
+                    <>
+                      <b>Tu mano era la mejor de la mesa</b> y te fuiste. Ahí sí se dejó ir
+                      dinero.
+                    </>
+                  ) : (
+                    <>
+                      <b>Tu mano era la mejor de la mesa</b>, pero con esas cuentas tirarla era
+                      lo correcto. No se juzga por cómo salió: a la larga eso gana.
+                    </>
+                  )
+                ) : (
+                  <>
+                    La mejor era la de <b>{e.final.mejorDeTodas.map(nombreDe).join(' y ')}</b>
+                    {sigoVivo ? '.' : ', así que no te perdiste de nada.'}
+                  </>
+                )}
+              </div>
+            )}
+
             {e.final ? (
               misFichas <= 0 ? (
                 <>
@@ -565,6 +664,78 @@ export default function Entrenador() {
               necesitas={cuentas.necesitas}
               tono={veredicto.tono}
             />
+        </section>
+      )}
+
+      {/* ---- qué tipo de jugador eres ----
+          Una mano no dice nada: se gana con basura y se pierde con ases. Lo que dice
+          algo es lo que se repite, y eso sólo se ve después de un rato. */}
+      {resumen.manos > 0 && (
+        <section className="panel">
+          <p className="panel-title">
+            <span>Cómo vas jugando</span>
+          </p>
+
+          {perfil ? (
+            <div className="mb-3 rounded-xl bg-noche-linea px-3.5 py-3 text-paper">
+              <span className="block text-[10.5px] font-bold tracking-[.6px] text-paper/70 uppercase">
+                Juegas como
+              </span>
+              <b className="block font-display text-[24px] leading-tight">{perfil.nombre}</b>
+              <span className="mt-1 block text-[12.5px] leading-snug text-paper/85">
+                {perfil.ayuda}
+              </span>
+              <span className="mt-1.5 block text-[12.5px] leading-snug text-[#ffd98a]">
+                {perfil.consejo}
+              </span>
+            </div>
+          ) : (
+            <p className="mt-0 mb-3 text-[12.5px] leading-snug text-ink-soft">
+              Con {MANOS_PARA_PERFIL} manos te digo qué tipo de jugador eres. Llevas{' '}
+              <b className="text-ink">{resumen.manos}</b>.
+            </p>
+          )}
+
+          <ul className="m-0 mb-3 grid grid-cols-3 gap-2 list-none p-0">
+            {[
+              { k: 'Entras a', v: `${Math.round((resumen.jugadas / Math.max(1, resumen.manos)) * 100)}%` },
+              {
+                k: 'Y subes',
+                v: `${Math.round((resumen.subio / Math.max(1, resumen.jugadas)) * 100)}%`,
+              },
+              { k: 'Le atinas', v: tino === null ? '—' : `${Math.round(tino)}%` },
+            ].map((x) => (
+              <li key={x.k} className="rounded-xl bg-ink/6 px-2 py-2 text-center">
+                <span className="block text-[10.5px] leading-tight text-ink-soft">{x.k}</span>
+                <b className="block font-display text-[19px] leading-tight text-ink tabular-nums">
+                  {x.v}
+                </b>
+              </li>
+            ))}
+          </ul>
+
+          {historial.length > 0 && (
+            <>
+              <p className="field-label mt-0 mb-1.5">Lo que llevas decidido</p>
+              <ul className="m-0 list-none p-0">
+                {historial.map((a, i) => (
+                  <li
+                    key={i}
+                    className="flex items-start gap-2 border-b border-dashed border-paper-line py-1.5 last:border-b-0"
+                  >
+                    {a.bien ? (
+                      <Check size={13} strokeWidth={3} className="mt-0.5 shrink-0 text-win" />
+                    ) : (
+                      <X size={13} strokeWidth={3} className="mt-0.5 shrink-0 text-loss" />
+                    )}
+                    <span className="min-w-0 flex-1 text-[12px] leading-snug text-ink">
+                      <b className="text-ink-soft">Mano {a.mano}</b> · {a.texto}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
         </section>
       )}
 

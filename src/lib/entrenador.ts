@@ -60,15 +60,24 @@ export interface Final {
   gana: number[]
   /** Lo que gana o pierde el héroe en esta mano. */
   heroe: number
-  /** Si se llegó al golpe: ahí se enseñan las cartas de todos. */
+  /** Si se llegó al golpe de verdad, con dos o más vivos. */
   alGolpe: boolean
+  /** Si la mano del que practica era la mejor de las que se repartieron. */
+  eraLaMejor: boolean
+  /** Quién tenía la mejor de todas, se haya quedado o no. */
+  mejorDeTodas: number[]
 }
 
-/** Las de en medio que ya se pueden ver, según la calle que se esté jugando. */
+/**
+ * Las de en medio que ya se pueden ver.
+ *
+ * Mientras se juega, las de la calle. Acabando la mano se enseñan las cinco aunque todos
+ * se hayan ido: en una mesa de verdad eso no se ve nunca, pero aquí se está practicando
+ * y la mitad de lo que se aprende es qué hubiera pasado si te quedas.
+ */
 export function cartasVisibles(e: Entrenamiento): number[] {
   const hasta = { preflop: 0, flop: 3, turn: 4, river: 5 }[e.mano.calle]
-  /* Terminada la mano se enseña todo: es lo que se mira al revisar qué pasó. */
-  return e.final && e.final.alGolpe ? e.mesa : e.mesa.slice(0, hasta)
+  return e.final ? e.mesa : e.mesa.slice(0, hasta)
 }
 
 /** Reparte una mano nueva: baraja, cartas para todos y las ciegas puestas. */
@@ -190,6 +199,18 @@ export function resolver(e: Entrenamiento): Entrenamiento {
   const ganadores = vivos.filter((s) => gana[s] > 0)
   const conQue = alGolpe && ganadores.length > 0 ? CATEGORIAS[categoriaDe(fuerza(ganadores[0]))] : ''
 
+  /*
+   * Quién tenía la mejor mano de la mesa, contando a los que se fueron.
+   *
+   * No decide nada —el bote ya se repartió— pero es lo que contesta la pregunta que
+   * queda después de tirar una mano: "¿y si me quedo?". Sabiendo eso se aprende a
+   * distinguir una buena tirada de una mala, que no es lo mismo que ganar o perder.
+   */
+  const todos = Array.from({ length: e.cfg.jugadores }, (_, s) => s)
+  const alRiver = todos.map((s) => evaluar([...e.cartas[s], ...e.mesa]))
+  const laMejor = Math.max(...alRiver)
+  const mejorDeTodas = todos.filter((s) => alRiver[s] === laMejor)
+
   return {
     ...e,
     final: {
@@ -199,6 +220,8 @@ export function resolver(e: Entrenamiento): Entrenamiento {
       gana,
       heroe: (gana[e.cfg.heroe] ?? 0) - puesto,
       alGolpe,
+      eraLaMejor: mejorDeTodas.includes(e.cfg.heroe),
+      mejorDeTodas,
     },
   }
 }
