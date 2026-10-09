@@ -22,7 +22,7 @@ import {
 } from '../../lib/poker'
 import { ESTILOS, estiloPorId, rivalesAlAzar, type Rival } from '../../lib/rival'
 import Mesa, { type AsientoEnMesa } from './Mesa'
-import { BarraPegada, Barras, CAJA, FONDOS, TINTA, type Tono } from './tonos'
+import { BarraConRaya, BarraPegada, CAJA, FONDOS, TINTA, type Tono } from './tonos'
 
 /*
  * Practicar manos contra la máquina.
@@ -37,8 +37,21 @@ import { BarraPegada, Barras, CAJA, FONDOS, TINTA, type Tono } from './tonos'
  * cuentas contra manos que no conoce, igual que una persona.
  */
 
-/** Lo que tarda cada rival en mover. Suficiente para alcanzar a ver qué hizo. */
-const PAUSA = 750
+/** Lo que tarda cada rival en mover. Sin esto la mano pasa antes de poder leerla. */
+const PAUSA = 1200
+
+/** Lo que se queda en pantalla el aviso de que viene una carta nueva. */
+const ANUNCIO = 1700
+
+/** Cómo se anuncia cada calle antes de destapar las cartas. */
+const VIENE: Record<string, string> = {
+  flop: 'Ahí viene el flop',
+  turn: 'Ahí viene el turn',
+  river: 'Ahí viene el river',
+}
+
+/** Cuántas cartas de en medio se ven en cada calle. */
+const CARTAS_DE_CALLE: Record<string, number> = { preflop: 0, flop: 3, turn: 4, river: 5 }
 
 const MIN_JUGADORES = 2
 const MAX_JUGADORES = 9
@@ -47,7 +60,7 @@ const MAX_JUGADORES = 9
 const NOMBRES = ['Chuy', 'Lalo', 'Memo', 'Beto', 'Nacho', 'Tono', 'Pancho', 'Chepe', 'Moy']
 
 /** Con cuánto se sienta cada quien. Con ciegas de $1 y $2, 200 son cien ciegas. */
-const ENTRADAS = [100, 200, 400]
+const ENTRADA_POR_DEFECTO = 200
 
 /*
  * Una persona de la mesa, no una silla.
@@ -70,7 +83,11 @@ export default function Entrenador() {
   /** Quién se sienta en cada silla esta mano. El 0 de la lista es el que practica. */
   const [enAsiento, setEnAsiento] = useState<number[]>([])
   const [giro, setGiro] = useState(0)
-  const [entrada, setEntrada] = useState(200)
+  const [entrada, setEntrada] = useState(ENTRADA_POR_DEFECTO)
+  /* Lo que se está anunciando ahora mismo, y cuántas cartas se destapan al acabar. */
+  const [anuncio, setAnuncio] = useState<{ texto: string; hasta: number } | null>(null)
+  /** Cuántas de en medio se están viendo. Sube cuando el aviso se quita, no antes. */
+  const [mostradas, setMostradas] = useState(0)
   const [consejo, setConsejo] = useState<{ bien: boolean; texto: string } | null>(null)
   const [caja, setCaja] = useState({ manos: 0, saldo: 0 })
   const [subirA, setSubirA] = useState(0)
@@ -106,6 +123,8 @@ export default function Entrenador() {
 
     setPersonas(listos)
     setEnAsiento(sillas)
+    setAnuncio(null)
+    setMostradas(0)
     setGiro((g) => g + 1)
     setConsejo(null)
     setE(
@@ -134,12 +153,40 @@ export default function Entrenador() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jugadores, entrada])
 
-  /* Los rivales mueven solos, de uno en uno, para poder ver quién hizo qué. */
+  /*
+   * Las cartas de en medio no aparecen de golpe: primero se avisa.
+   *
+   * En la mesa el repartidor quema una carta, la pone y todos la ven llegar. Sin esa
+   * pausa la mano pasa de una calle a otra sin que dé tiempo de entender qué cambió.
+   */
   useEffect(() => {
-    if (!e || e.mano.terminada || tocaAlHeroe(e)) return
+    if (!e || anuncio) return
+    const toca = e.final?.alGolpe ? 5 : CARTAS_DE_CALLE[e.mano.calle]
+    if (toca <= mostradas) return
+    /* Del golpe no se avisa: ahí lo que se enseña son las manos de todos. */
+    const texto = e.final ? '' : VIENE[e.mano.calle]
+    if (!texto) setMostradas(toca)
+    else setAnuncio({ texto, hasta: toca })
+  }, [e, mostradas, anuncio])
+
+  /* El reloj del aviso vive aparte: colgado del mismo efecto que lo pone, volver a
+     pintar la pantalla lo cancelaba y el aviso se quedaba ahí para siempre. */
+  useEffect(() => {
+    if (!anuncio) return
+    const t = setTimeout(() => {
+      setMostradas(anuncio.hasta)
+      setAnuncio(null)
+    }, ANUNCIO)
+    return () => clearTimeout(t)
+  }, [anuncio])
+
+  /* Los rivales mueven solos, de uno en uno, para poder ver quién hizo qué. Mientras hay
+     un aviso en pantalla nadie mueve: primero se ve la carta. */
+  useEffect(() => {
+    if (!e || e.mano.terminada || tocaAlHeroe(e) || anuncio) return
     const t = setTimeout(() => setE((x) => (x ? mueveElSiguiente(x, azar.current) : x)), PAUSA)
     return () => clearTimeout(t)
-  }, [e])
+  }, [e, anuncio])
 
   /* Al acabarse la mano se reparte el bote: cada quien se queda con lo que no puso más
      lo que se llevó, y con eso arranca la siguiente. */
@@ -160,7 +207,8 @@ export default function Entrenador() {
   const mano = e?.mano ?? null
   const vivos = mano ? mano.vivo.filter(Boolean).length : 0
   const sigoVivo = Boolean(mano?.vivo[heroe])
-  const mesa = e ? cartasVisibles(e) : []
+  /* Lo que se ve de la mesa es lo ya destapado, que va un paso detrás del aviso. */
+  const mesa = e ? cartasVisibles(e).slice(0, mostradas) : []
   const bote = mano ? boteDe(mano) : 0
   const o = mano && !mano.terminada ? opciones(mano) : null
   const meToca = Boolean(e && tocaAlHeroe(e))
@@ -306,15 +354,25 @@ export default function Entrenador() {
       className="-mx-3.5 -mt-3.5 px-3.5 pt-3.5 pb-24 transition-[background] duration-500"
       style={{ background: FONDOS[veredicto.tono] }}
     >
-      <Mesa
-        asientos={enMesa}
-        mesa={[...mesa, ...Array(5 - mesa.length).fill(null)]}
-        eligiendo={null}
-        bote={bote}
-        dinero={money}
-        onAsiento={() => {}}
-        onCarta={() => {}}
-      />
+      {/* El aviso de que viene una carta, encima de la mesa y sin empujar nada. */}
+      <div className="relative">
+        {anuncio && (
+          <div className="pointer-events-none absolute inset-x-0 top-1/2 z-20 flex -translate-y-1/2 justify-center">
+            <span className="rounded-full bg-black/80 px-4 py-2 font-display text-[15px] font-bold tracking-[.5px] text-white uppercase shadow-lg ring-1 ring-white/25">
+              {anuncio.texto}
+            </span>
+          </div>
+        )}
+        <Mesa
+          asientos={enMesa}
+          mesa={[...mesa, ...Array(5 - mesa.length).fill(null)]}
+          eligiendo={null}
+          bote={bote}
+          dinero={money}
+          onAsiento={() => {}}
+          onCarta={() => {}}
+        />
+      </div>
 
       {/* La cuenta de la sesión: sin esto, practicar no se siente ir a ningún lado. */}
       <div className="mt-1 mb-3 flex items-center justify-center gap-2 text-[12px] text-tiza-suave">
@@ -360,6 +418,13 @@ export default function Entrenador() {
             <div className="mb-2 flex items-baseline justify-between">
               <b className="font-display text-[14px] text-ink">
                 {e.final ? 'Se acabó' : NOMBRE_CALLE[e.mano.calle]}
+                {!e.final && (
+                  /* De dónde juegas esta mano: el botón se mueve y con él cambia todo. */
+                  <span className="font-sans text-[12px] font-semibold text-ink-soft">
+                    {' · vas de '}
+                    {(asientos.find((a) => a.indice === heroe)?.nombre ?? '').toLowerCase()}
+                  </span>
+                )}
               </b>
               <span className="text-[12.5px] text-ink-soft">
                 Traes <b className="font-display text-ink tabular-nums">{money(misFichas)}</b>
@@ -485,7 +550,11 @@ export default function Entrenador() {
               Pones {money(meFalta)} para llevarte los {money(bote)} que ya hay.
             </span>
           </div>
-          <Barras ganas={cuentas.tienes} necesitas={cuentas.necesitas} tono={veredicto.tono} />
+          <BarraConRaya
+              ganas={cuentas.tienes}
+              necesitas={cuentas.necesitas}
+              tono={veredicto.tono}
+            />
         </section>
       )}
 
@@ -513,21 +582,21 @@ export default function Entrenador() {
           ))}
         </div>
 
-        <p className="field-label mt-0 mb-1.5">Con cuánto se sientan</p>
-        <div className="mb-3 flex gap-1.5">
-          {ENTRADAS.map((v) => (
-            <button
-              key={v}
-              type="button"
-              onClick={() => setEntrada(v)}
-              className={`flex-1 cursor-pointer rounded-lg border-none py-1.5 text-[12.5px] font-bold transition-colors ${
-                entrada === v ? 'bg-marca text-white' : 'bg-[#e6e1d8] text-ink-soft'
-              }`}
-            >
-              {money(v)}
-            </button>
-          ))}
-        </div>
+        <label className="mb-3 block">
+          <span className="field-label mt-0 mb-1.5 block">Con cuánto se sientan</span>
+          <span className="field-box block">
+            <NumInput
+              value={entrada}
+              mode="decimal"
+              aria-label="Con cuánto se sienta cada quien"
+              onChange={(v) => setEntrada(Math.max(0, v))}
+            />
+          </span>
+          <span className="mt-1 block text-[11.5px] leading-snug text-ink-soft">
+            Con ciegas de $1 y $2, {money(200)} son cien ciegas grandes, que es lo normal.
+            Ponle lo que juegan en tu mesa.
+          </span>
+        </label>
 
         <button
           type="button"

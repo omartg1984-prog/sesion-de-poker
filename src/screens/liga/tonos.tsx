@@ -73,13 +73,17 @@ export function BarraPegada({
 }
 
 /**
- * Las dos barras con las que se decide.
+ * La barra con la raya: la gráfica de si se paga o no.
  *
- * Arriba lo que de verdad ganas, abajo lo que te bastaría ganar para que pagar salga a
- * mano. Si la de arriba es más larga, se paga. No hace falta entender un porcentaje para
- * leer dos barras, y es exactamente la misma cuenta.
+ * Dos barras una encima de la otra pedían compararlas de un vistazo y eso no se hace
+ * solo. Esto es una sola barra —lo que ganas— y una raya donde está el mínimo para que
+ * pagar valga la pena. Si la barra pasa la raya, se paga; si no llega, se tira. No hay
+ * nada más que entender, y es exactamente la misma cuenta.
+ *
+ * Lo que queda del otro lado de la raya también se pinta: es el margen que sobra, y es
+ * lo que de verdad se está ganando al pagar.
  */
-export function Barras({
+export function BarraConRaya({
   ganas,
   necesitas,
   tono,
@@ -88,26 +92,50 @@ export function Barras({
   necesitas: number
   tono: Tono
 }) {
-  const fila = (k: string, v: number, color: string) => (
-    <div className="mb-2 last:mb-0">
-      <div className="mb-1 flex items-baseline justify-between">
-        <span className="text-[12px] font-semibold text-ink-soft">{k}</span>
-        <b className="font-display text-[14px] text-ink tabular-nums">
-          {Math.round(v)} de cada 100
-        </b>
-      </div>
-      <div className="h-3 overflow-hidden rounded-full bg-ink/10">
-        <div
-          className={`h-full rounded-full ${color}`}
-          style={{ width: `${Math.max(2, Math.min(100, v))}%` }}
-        />
-      </div>
-    </div>
-  )
+  const raya = Math.max(0, Math.min(100, necesitas))
+  const barra = Math.max(0, Math.min(100, ganas))
+  const pasa = barra >= raya
+
   return (
     <div className="mt-3">
-      {fila('Las veces que ganas', ganas, BARRAS[tono])}
-      {fila('Las que te bastarían', necesitas, 'bg-ink/35')}
+      {/* La raya, con su nombre encima, para que se lea antes que la barra. */}
+      <div className="relative mb-1 h-4">
+        <span
+          className="absolute -translate-x-1/2 text-[10px] leading-none font-bold tracking-[.3px] text-ink-soft uppercase whitespace-nowrap"
+          style={{ left: `${Math.min(88, Math.max(12, raya))}%` }}
+        >
+          Mínimo {Math.round(raya)}
+        </span>
+      </div>
+
+      <div className="relative h-7 overflow-hidden rounded-lg bg-ink/10">
+        <div
+          className={`h-full ${BARRAS[tono]} transition-[width] duration-300`}
+          style={{ width: `${barra}%` }}
+        />
+        {/* La raya va encima de todo: es contra lo que se compara. */}
+        <div
+          className="absolute inset-y-0 w-[3px] bg-ink"
+          style={{ left: `calc(${raya}% - 1.5px)` }}
+        />
+        <span className="absolute inset-y-0 right-2 flex items-center font-display text-[13px] font-bold text-ink tabular-nums">
+          {Math.round(barra)} de cada 100
+        </span>
+      </div>
+
+      <p className="mt-1.5 mb-0 text-[12.5px] leading-snug text-ink">
+        {pasa ? (
+          <>
+            Tu barra <b>pasa la raya</b>: ganas más veces de las que te hacen falta, así que
+            pagar sale a cuentas.
+          </>
+        ) : (
+          <>
+            Tu barra <b>no llega a la raya</b>: ganas menos veces de las que te hacen falta,
+            así que pagar sale caro.
+          </>
+        )}
+      </p>
     </div>
   )
 }

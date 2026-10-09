@@ -31,7 +31,7 @@ import {
   type Simulacion,
 } from '../../lib/poker'
 import Mesa, { type AsientoEnMesa } from './Mesa'
-import { Barras, BarraPegada, CAJA, FONDOS, TINTA, type Tono } from './tonos'
+import { BarraConRaya, BarraPegada, CAJA, FONDOS, TINTA, type Tono } from './tonos'
 
 /*
  * El simulador: ¿voy o no voy?
@@ -858,14 +858,16 @@ export default function Simulador({ miembros }: { miembros: Miembro[] }) {
 
         {cuentas && (
           <>
-            <Barras ganas={cuentas.tienes} necesitas={cuentas.necesitas} tono={veredicto.tono} />
+            <BarraConRaya
+              ganas={cuentas.tienes}
+              necesitas={cuentas.necesitas}
+              tono={veredicto.tono}
+            />
 
-            {/* La cuenta completa, contada como se cuenta en la mesa. */}
-            <p className="mt-3 mb-0 text-[12.5px] leading-relaxed text-ink">
-              Pones <b>{money(laApuesta)}</b> para llevarte los <b>{money(elBote)}</b> que ya hay.
-              Poniendo {money(laApuesta)} para ganar {money(elBote)}, con acertar{' '}
-              <b>{Math.round(cuentas.necesitas)} de cada 100</b> sales a mano. Tú aciertas{' '}
-              <b>{Math.round(cuentas.tienes)}</b>.
+            {/* De dónde sale la raya: pones esto para llevarte aquello. */}
+            <p className="mt-3 mb-0 text-[12.5px] leading-relaxed text-ink-soft">
+              La raya sale de ahí: pones <b className="text-ink">{money(laApuesta)}</b> para
+              llevarte los <b className="text-ink">{money(elBote)}</b> que ya hay.
             </p>
             <p className="mt-2 mb-0 text-[12.5px] leading-relaxed text-ink-soft">
               Dicho en dinero: cada vez que se jugara esta mano, pagar te{' '}

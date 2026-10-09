@@ -179,8 +179,15 @@ export default function Mesa({
           {/* El botón del repartidor va pegado a su placa y no suelto en el paño: suelto
               le caía encima a las cartas del que está en esa silla. */}
           {a.marca === 'D' && (
-            <span className="absolute -right-1.5 bottom-0 z-10 flex h-[17px] w-[17px] items-center justify-center rounded-full bg-white font-display text-[9.5px] leading-none font-bold text-ink shadow">
+            <span className="absolute -right-2 bottom-1 z-20 flex h-[22px] w-[22px] items-center justify-center rounded-full bg-white font-display text-[11px] leading-none font-bold text-ink shadow-[0_2px_6px_rgba(0,0,0,.5)] ring-2 ring-[#f0c419]">
               D
+            </span>
+          )}
+          {/* Las ciegas también se marcan: saber quién las puso es la mitad de leer la
+              mano, y en la placa ya no cabían porque ahí van las fichas. */}
+          {(a.marca === 'CCH' || a.marca === 'CG') && (
+            <span className="absolute -right-2 bottom-1 z-20 flex h-[18px] items-center justify-center rounded-full bg-black/80 px-1.5 font-display text-[9px] leading-none font-bold text-white ring-1 ring-white/30">
+              {a.marca}
             </span>
           )}
           {/* La burbuja de lo que acaba de hacer, como en las transmisiones: con eso se
