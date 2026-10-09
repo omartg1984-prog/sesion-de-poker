@@ -317,6 +317,43 @@ export default function Entrenador({ miembros, liga }: { miembros: Miembro[]; li
   const o = mano && !mano.terminada ? opciones(mano) : null
   const meToca = Boolean(e && tocaAlHeroe(e))
 
+  /* Lo más alto que hay puesto en esta calle: desde ahí se cuenta lo que es subir. */
+  const alto = mano ? Math.max(...mano.puesto) : 0
+  const ciegaGrande = e?.cfg.ciegaGrande ?? 2
+
+  /*
+   * Las cantidades de siempre, cada una con su cifra en pesos.
+   *
+   * En la mesa nadie dice "subo a diecisiete": se sube a dos ciegas, a tres, o al
+   * tamaño del bote. Teniendo los botones no hay que sacar la cuenta de cabeza, y
+   * trayendo la cifra puesta no hay que imaginarse de cuánto se está hablando.
+   */
+  const tamanos = (() => {
+    if (!o) return [] as { k: string; v: number }[]
+    const cabe = (v: number) => Math.min(o.maximo, Math.max(o.minimo, Math.round(v)))
+    /* Subir "el bote" es pagar lo que falta y subir lo que quede en el bote; por eso
+       la cuenta va sobre el bote con la pagada ya dentro. */
+    const delBote = (parte: number) => cabe(alto + (bote + o.paga) * parte)
+
+    /* Los múltiplos se cuentan sobre lo que hay apostado, no sobre la ciega: si ya
+       subieron a $5, "el triple" son $15 y no $6, que ni siquiera alcanzaría. Antes
+       del flop, mientras nadie suba, lo apostado es la ciega grande y así se dice. */
+    const enCiegas = mano?.calle === 'preflop' && alto === ciegaGrande
+    const veces = (n: number) => ({
+      k: enCiegas ? `${n} ciegas` : `${n}× la apuesta`,
+      v: cabe(alto * n),
+    })
+
+    return [
+      /* Sin nada apostado no hay de qué sacar el doble ni el triple: lo único que se
+         puede medir ahí es el bote. */
+      ...(o.esApuesta ? [{ k: 'Un tercio del bote', v: delBote(1 / 3) }] : [veces(2), veces(3)]),
+      { k: 'Medio bote', v: delBote(0.5) },
+      { k: 'El bote', v: delBote(1) },
+      { k: 'Todo', v: o.maximo },
+    ]
+  })()
+
   /* Lo que se lleva el héroe contra los que siguen, con las manos de ellos tapadas:
      exactamente lo que él sabe en ese momento. */
   const equidad = useMemo(() => {
@@ -591,7 +628,9 @@ export default function Entrenador({ miembros, liga }: { miembros: Miembro[]; li
       </div>
 
       {/* ---- lo que te toca hacer ---- */}
-      <section className="panel">
+      {/* Cuando te toca, el panel se resalta: con la mesa moviendo sola no siempre
+          era evidente en qué momento la decisión había pasado a ser tuya. */}
+      <section className={`panel ${meToca ? 'ring-2 ring-marca/40' : ''}`}>
         {!e ? (
           <>
             <p className="panel-title">
@@ -702,7 +741,43 @@ export default function Entrenador({ miembros, liga }: { miembros: Miembro[]; li
               )
             ) : meToca && o ? (
               <>
-                <div className="mb-2 flex gap-1.5">
+                {/*
+                 * Lo que te piden, en grande.
+                 *
+                 * Iba de letra chiquita dentro de un botón, y es justo el número con el
+                 * que se decide: cuánto cuesta seguir en la mano.
+                 */}
+                <div className={`mb-2.5 rounded-xl px-3.5 py-3 ${CAJA[veredicto.tono]}`}>
+                  <span className="block text-[10.5px] font-bold tracking-[.6px] text-ink-soft uppercase">
+                    Te toca {o.pasa ? '· no te piden nada' : '· para seguir pones'}
+                  </span>
+                  {o.pasa ? (
+                    <>
+                      <b className="block font-display text-[22px] leading-tight text-ink">
+                        Pasas gratis
+                      </b>
+                      <span className="mt-0.5 block text-[12px] leading-snug text-ink">
+                        Nadie ha apostado. Te quedas en la mano sin poner un peso, o apuestas
+                        tú y que paguen los demás.
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <b
+                        className={`block font-display text-[34px] leading-none tabular-nums ${TINTA[veredicto.tono]}`}
+                      >
+                        {money(o.paga)}
+                      </b>
+                      <span className="mt-1 block text-[12px] leading-snug text-ink">
+                        {o.pagarEsTodo
+                          ? `Es todo lo que traes. Si pagas, el bote queda en ${money(bote + o.paga)}.`
+                          : `En el bote hay ${money(bote)}. Si pagas, queda en ${money(bote + o.paga)}.`}
+                      </span>
+                    </>
+                  )}
+                </div>
+
+                <div className="mb-2.5 flex gap-1.5">
                   <button
                     type="button"
                     className="flex-1 cursor-pointer rounded-lg border-none bg-[#e6e1d8] py-2.5 text-[13px] font-bold text-ink-soft active:scale-95"
@@ -715,8 +790,37 @@ export default function Entrenador({ miembros, liga }: { miembros: Miembro[]; li
                     className="flex-1 cursor-pointer rounded-lg border-none bg-[#e6e1d8] py-2.5 text-[13px] font-bold text-ink active:scale-95"
                     onClick={() => mover(o.pasa ? 'pasa' : 'paga')}
                   >
-                    {o.pasa ? 'Paso' : o.pagarEsTodo ? `Voy con todo ${money(o.paga)}` : `Pago ${money(o.paga)}`}
+                    {o.pasa ? (
+                      'Paso'
+                    ) : (
+                      <>
+                        {o.pagarEsTodo ? 'Voy con todo ' : 'Pago '}
+                        <b className="font-display text-[16px] tabular-nums">{money(o.paga)}</b>
+                      </>
+                    )}
                   </button>
+                </div>
+
+                <p className="field-label mt-0 mb-1.5">
+                  {o.esApuesta ? 'O apuestas tú' : 'O subes a'}
+                </p>
+                <div className="mb-1.5 flex flex-wrap gap-1.5">
+                  {tamanos.map((x) => (
+                    <button
+                      key={x.k}
+                      type="button"
+                      aria-pressed={subirA === x.v}
+                      onClick={() => setSubirA(x.v)}
+                      className={`min-w-[30%] flex-1 cursor-pointer rounded-lg border-none px-1 py-1.5 transition-colors active:scale-95 ${
+                        subirA === x.v ? 'bg-marca text-white' : 'bg-[#e6e1d8] text-ink-soft'
+                      }`}
+                    >
+                      <span className="block text-[10.5px] leading-tight font-semibold">{x.k}</span>
+                      <b className="block font-display text-[13px] leading-tight tabular-nums">
+                        {money(x.v)}
+                      </b>
+                    </button>
+                  ))}
                 </div>
                 <div className="flex gap-1.5">
                   <span className="field-box flex-1">
@@ -735,22 +839,10 @@ export default function Entrenador({ miembros, liga }: { miembros: Miembro[]; li
                     {o.esApuesta ? 'Apuesto' : 'Subo'}
                   </button>
                 </div>
-                <div className="mt-1 flex gap-1.5">
-                  {[
-                    { k: 'Medio bote', v: Math.round(bote / 2) },
-                    { k: 'El bote', v: bote },
-                    { k: 'Todo', v: o.maximo },
-                  ].map((x) => (
-                    <button
-                      key={x.k}
-                      type="button"
-                      onClick={() => setSubirA(Math.min(o.maximo, Math.max(o.minimo, x.v)))}
-                      className="flex-1 cursor-pointer border-none bg-transparent py-1 text-[11.5px] font-semibold text-ink-soft underline active:scale-95"
-                    >
-                      {x.k}
-                    </button>
-                  ))}
-                </div>
+                <p className="mt-1 mb-0 text-[11px] leading-snug text-ink-soft">
+                  Lo menos que puedes {o.esApuesta ? 'apostar' : 'subir'} son {money(o.minimo)} y lo
+                  más {money(o.maximo)}. En la casilla pones la cantidad que se te ocurra.
+                </p>
               </>
             ) : (
               <p className="mt-0 mb-0 text-[12.5px] leading-snug text-ink-soft">
