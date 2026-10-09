@@ -492,7 +492,7 @@ ${link}`
         </>
       )}
 
-      {pestana === 'simulador' && <VoyONoVoy miembros={miembros} />}
+      {pestana === 'simulador' && <VoyONoVoy miembros={miembros} liga={ligaId} />}
 
       {pestana === 'reglas' && (
         <Reglas

@@ -37,8 +37,6 @@ export interface AsientoEnMesa {
   activo: boolean
   /** Lo último que hizo en esta calle: 'Paga $8', 'Sube $20', 'Se fue'… */
   accion: string
-  /** Cómo juega, cuando se está entrenando contra la máquina. */
-  estilo?: string
   /** Va ganando la mano. */
   manda: boolean
   /** Lo que se llevó del bote, al acabar. */
@@ -303,13 +301,6 @@ export default function Mesa({
           {a.gano !== undefined && a.gano > 0 && (
             <span className="rounded-full bg-win px-1.5 py-[1px] font-display text-[10px] leading-none font-bold text-white ring-1 ring-white/40">
               +{dinero(a.gano)}
-            </span>
-          )}
-          {/* Cómo juega ése, para poder leerlo: en la mesa de verdad eso se aprende con
-              los años, aquí se dice para que la práctica sirva de algo. */}
-          {a.estilo && (
-            <span className="max-w-full truncate text-[8.5px] leading-none font-bold tracking-[.2px] text-white/55 uppercase">
-              {a.estilo}
             </span>
           )}
         </div>

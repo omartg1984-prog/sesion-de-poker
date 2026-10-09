@@ -13,7 +13,7 @@ import Simulador from './Simulador'
  * Las dos contestan igual y con los mismos colores a propósito: lo que se aprende
  * entrenando tiene que servir tal cual el viernes.
  */
-export default function VoyONoVoy({ miembros }: { miembros: Miembro[] }) {
+export default function VoyONoVoy({ miembros, liga }: { miembros: Miembro[]; liga: string }) {
   const [modo, setModo] = useState<'mesa' | 'entrenar'>('mesa')
 
   return (
@@ -39,7 +39,11 @@ export default function VoyONoVoy({ miembros }: { miembros: Miembro[] }) {
         ))}
       </div>
 
-      {modo === 'mesa' ? <Simulador miembros={miembros} /> : <Entrenador miembros={miembros} />}
+      {modo === 'mesa' ? (
+        <Simulador miembros={miembros} />
+      ) : (
+        <Entrenador miembros={miembros} liga={liga} />
+      )}
     </>
   )
 }

@@ -1,6 +1,5 @@
-import { Check, Play, RotateCcw, X } from 'lucide-react'
+import { Check, Flag, Play, RotateCcw, Square, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import Cara from '../../components/Cara'
 import NumInput from '../../components/NumInput'
 import {
   cartasVisibles,
@@ -24,10 +23,13 @@ import {
 } from '../../lib/poker'
 import {
   MANOS_PARA_PERFIL,
-  RESUMEN_VACIO,
+  RENGLONES,
+  TANTEO_VACIO,
+  guardarTanteo,
+  leerTanteo,
   perfilDe,
-  punteria,
-  type Resumen,
+  sumar,
+  type Tanteo,
 } from '../../lib/perfil'
 import { ESTILOS, estiloPorId, rivalesAlAzar, type Rival } from '../../lib/rival'
 import Mesa, { type AsientoEnMesa } from './Mesa'
@@ -97,7 +99,7 @@ interface Persona {
   subio: number
 }
 
-export default function Entrenador({ miembros }: { miembros: Miembro[] }) {
+export default function Entrenador({ miembros, liga }: { miembros: Miembro[]; liga: string }) {
   const [jugadores, setJugadores] = useState(6)
   const [e, setE] = useState<Entrenamiento | null>(null)
   const [personas, setPersonas] = useState<Persona[]>([])
@@ -112,12 +114,32 @@ export default function Entrenador({ miembros }: { miembros: Miembro[] }) {
   const [consejo, setConsejo] = useState<{ bien: boolean; texto: string } | null>(null)
   const [caja, setCaja] = useState({ manos: 0, saldo: 0 })
   const [subirA, setSubirA] = useState(0)
-  const [verEstilos, setVerEstilos] = useState(true)
-  /* Lo que se ha hecho en toda la sesión, para decir qué tipo de jugador es. */
-  const [resumen, setResumen] = useState<Resumen>(RESUMEN_VACIO)
+  /* Los estilos van tapados: saber de antemano que ese de ahí es un farolero es
+     justo lo que no se puede saber en la mesa, y entrenar con esa ayuda no entrena. */
+  const [verEstilos, setVerEstilos] = useState(false)
+
+  /*
+   * La sesión de entrenamiento: se abre, se juega y se cierra.
+   *
+   * Entre una cosa y otra uno reparte manos nomás por ver, y esas no deberían contar.
+   * Así que se apunta sólo con la sesión abierta, y lo que se junta se suma a lo de
+   * las noches anteriores: un número de cien manos dice algo, uno de seis no.
+   */
+  const [enSesion, setEnSesion] = useState(false)
+  /** Lo de esta sesión. */
+  const [tanteo, setTanteo] = useState<Tanteo>(TANTEO_VACIO)
+  /** Lo de todas las anteriores, leído al entrar. */
+  const [antes, setAntes] = useState<Tanteo>(TANTEO_VACIO)
+  /** La última sesión cerrada, para poder verla acabando. */
+  const [cerrada, setCerrada] = useState<Tanteo | null>(null)
+  const [borrando, setBorrando] = useState(false)
   const [historial, setHistorial] = useState<Apunte[]>([])
-  /* Lo de esta mano, que se suma al resumen cuando se acaba. */
-  const deLaMano = useRef({ jugada: false, subio: false })
+  /* Lo de esta mano, que se suma al tanteo cuando se acaba. */
+  const deLaMano = useRef<{ jugada: boolean; subio: boolean; debio: boolean | null }>({
+    jugada: false,
+    subio: false,
+    debio: null,
+  })
 
   /* Un solo azar para toda la sesión: así las manos no se repiten al volver a entrar. */
   const azar = useRef(azarCon((Date.now() % 1000000) + 1))
@@ -166,7 +188,7 @@ export default function Entrenador({ miembros }: { miembros: Miembro[] }) {
     setEnAsiento(sillas)
     setAnuncio(null)
     setMostradas(0)
-    deLaMano.current = { jugada: false, subio: false }
+    deLaMano.current = { jugada: false, subio: false, debio: null }
     setGiro((g) => g + 1)
     setConsejo(null)
     setE(
@@ -192,10 +214,16 @@ export default function Entrenador({ miembros }: { miembros: Miembro[] }) {
     setE(null)
     setConsejo(null)
     setCaja({ manos: 0, saldo: 0 })
-    setResumen(RESUMEN_VACIO)
     setHistorial([])
+    /* El tanteo no se toca: cambiar de mesa no borra lo que llevas jugado. */
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jugadores, entrada])
+
+  /* Lo acumulado de antes se lee una vez, al entrar: vive en el teléfono, no en la
+     liga, porque es una libreta de práctica y no un dato de nadie más. */
+  useEffect(() => {
+    setAntes(leerTanteo(liga))
+  }, [liga])
 
   /*
    * Las cartas de en medio no aparecen de golpe: primero se avisa.
@@ -246,12 +274,16 @@ export default function Entrenador({ miembros }: { miembros: Miembro[] }) {
         return { ...p, fichas: r.mano.resto[s] + (r.final?.gana[s] ?? 0) }
       }),
     )
-    setResumen((x) => ({
-      ...x,
-      manos: x.manos + 1,
-      jugadas: x.jugadas + (deLaMano.current.jugada ? 1 : 0),
-      subio: x.subio + (deLaMano.current.subio ? 1 : 0),
-    }))
+    /* Lo tuyo, que es lo único que se apunta: la máquina no está aprendiendo nada. */
+    if (enSesion)
+      setTanteo((x) => ({
+        ...x,
+        manos: x.manos + 1,
+        entro: x.entro + (deLaMano.current.jugada ? 1 : 0),
+        debioEntrar: x.debioEntrar + (deLaMano.current.debio ? 1 : 0),
+        subioPreflop: x.subioPreflop + (deLaMano.current.subio ? 1 : 0),
+        fichas: x.fichas + (r.final?.heroe ?? 0),
+      }))
 
     /* Lo que hizo cada quien antes del flop, que es de donde sale leer a alguien: las
        ciegas no cuentan porque no se eligen. */
@@ -307,8 +339,40 @@ export default function Entrenador({ miembros }: { miembros: Miembro[] }) {
   /* Lo que traigo enfrente: durante la mano, lo que queda; entre manos, lo de la cuenta. */
   const misFichas = mano ? mano.resto[heroe] + (e?.final?.gana[heroe] ?? 0) : (personas[0]?.fichas ?? entrada)
 
-  const perfil = perfilDe(resumen)
-  const tino = punteria(resumen)
+  /* Lo de siempre más lo de hoy: el tipo de jugador sale de todo junto, que para eso
+     se guarda de una noche a otra. */
+  const total = useMemo(() => sumar(antes, tanteo), [antes, tanteo])
+  const perfil = perfilDe(total)
+
+  /* Se guarda en cuanto cambia algo, no al cerrar la sesión: cerrar la app a media
+     noche no debería costarte la práctica. */
+  useEffect(() => {
+    if (enSesion) guardarTanteo(liga, total)
+  }, [liga, enSesion, total])
+
+  const empezarSesion = () => {
+    setTanteo(TANTEO_VACIO)
+    setCerrada(null)
+    setHistorial([])
+    setEnSesion(true)
+  }
+
+  const borrarTodo = () => {
+    guardarTanteo(liga, TANTEO_VACIO)
+    setAntes(TANTEO_VACIO)
+    setTanteo(TANTEO_VACIO)
+    setCerrada(null)
+    setHistorial([])
+    setBorrando(false)
+  }
+
+  const terminarSesion = () => {
+    guardarTanteo(liga, total)
+    setCerrada(tanteo)
+    setAntes(total)
+    setTanteo(TANTEO_VACIO)
+    setEnSesion(false)
+  }
 
   const minimo = o?.minimo ?? 0
   useEffect(() => {
@@ -330,19 +394,29 @@ export default function Entrenador({ miembros }: { miembros: Miembro[] }) {
       if (tipo === 'paga' || tipo === 'sube' || tipo === 'apuesta')
         deLaMano.current.jugada = true
       if (tipo === 'sube' || tipo === 'apuesta') deLaMano.current.subio = true
+      /* Si entrar salía a cuentas se mide en la primera decisión de la mano y no
+         después: después ya se sabe cómo acabó y no es la misma pregunta. Y sólo
+         cuando hay algo que pagar: pasar de gratis desde la ciega no es entrar. */
+      if (deLaMano.current.debio === null && cuentas && meFalta > 0)
+        deLaMano.current.debio = cuentas.conviene
     }
+
+    /* Apostar y subir, en cualquier calle: de ahí sale si eres de los que arriesgan. */
+    if (enSesion && (tipo === 'sube' || tipo === 'apuesta'))
+      setTanteo((x) => ({ ...x, subidas: x.subidas + 1 }))
 
     /* Sólo se califica lo que tiene con qué calificarse: con algo que pagar y con las
        cuentas hechas. Subir no se juzga aquí, que eso depende de a quién se le sube. */
     if (cuentas && (tipo === 'seVa' || tipo === 'paga')) {
       const bien = tipo === 'paga' ? cuentas.conviene : !cuentas.conviene
-      setResumen((x) => ({
-        ...x,
-        decisiones: x.decisiones + 1,
-        buenas: x.buenas + (bien ? 1 : 0),
-        pagosDeMas: x.pagosDeMas + (tipo === 'paga' && !cuentas.conviene ? 1 : 0),
-        tiradasDeMas: x.tiradasDeMas + (tipo === 'seVa' && cuentas.conviene ? 1 : 0),
-      }))
+      if (enSesion)
+        setTanteo((x) => ({
+          ...x,
+          tiradas: x.tiradas + (tipo === 'seVa' ? 1 : 0),
+          tiradasBien: x.tiradasBien + (tipo === 'seVa' && bien ? 1 : 0),
+          pagadas: x.pagadas + (tipo === 'paga' ? 1 : 0),
+          pagadasBien: x.pagadasBien + (tipo === 'paga' && bien ? 1 : 0),
+        }))
       setHistorial((h) =>
         [
           {
@@ -454,8 +528,6 @@ export default function Entrenador({ miembros }: { miembros: Miembro[] }) {
       activo: mano?.turno === s,
       accion: mano && !mano.vivo[s] ? 'Se fue' : ultimo ? comoSeDiceCorto(ultimo, money) : '',
       gano: e?.final?.gana[s],
-      estilo:
-        verEstilos && e && s !== heroe ? estiloPorId(e.estilos[s]).nombre.toLowerCase() : undefined,
       manda: Boolean(e?.final?.ganadores.includes(s)),
     }
   })
@@ -715,131 +787,200 @@ export default function Entrenador({ miembros }: { miembros: Miembro[] }) {
         </section>
       )}
 
-      {/* ---- qué tipo de jugador eres ----
-          Una mano no dice nada: se gana con basura y se pierde con ases. Lo que dice
-          algo es lo que se repite, y eso sólo se ve después de un rato. */}
-      {resumen.manos > 0 && (
-        <section className="panel">
-          <p className="panel-title">
-            <span>Cómo vas jugando</span>
-          </p>
+      {/* ---- tu entrenamiento ----
+          Sólo tus manos. Lo que haga la máquina da igual: no está aprendiendo nada, y
+          mirar sus números distrae de los únicos que se pueden cambiar. */}
+      <section className="panel">
+        <p className="panel-title">
+          <span>Tu entrenamiento</span>
+        </p>
 
-          {perfil ? (
-            <div className="mb-3 rounded-xl bg-noche-linea px-3.5 py-3 text-paper">
-              <span className="block text-[10.5px] font-bold tracking-[.6px] text-paper/70 uppercase">
-                Juegas como
+        {enSesion ? (
+          <div className="mb-3 flex items-center gap-2 rounded-xl bg-win/12 px-3 py-2.5">
+            <span className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-win" />
+            <span className="min-w-0 flex-1 text-[12.5px] leading-snug text-ink">
+              <b>En sesión</b> · {tanteo.manos}{' '}
+              {tanteo.manos === 1 ? 'mano apuntada' : 'manos apuntadas'}
+            </span>
+            <button
+              type="button"
+              className="flex shrink-0 cursor-pointer items-center gap-1 rounded-lg border-none bg-ink/10 px-3 py-1.5 text-[12px] font-bold text-ink active:scale-95"
+              onClick={terminarSesion}
+            >
+              <Square size={11} strokeWidth={3} />
+              Terminar
+            </button>
+          </div>
+        ) : (
+          <>
+            <p className="mt-0 mb-2.5 text-[12.5px] leading-snug text-ink-soft">
+              Abre una sesión y se van apuntando tus manos mientras juegas: a cuántas
+              entras, a cuántas se debía entrar, cuántas tiras bien. Al terminar te digo
+              cómo te fue, y se guarda para las siguientes.
+            </p>
+            <button type="button" className="btn btn-marca mb-3" onClick={empezarSesion}>
+              <Flag size={17} strokeWidth={2.6} />
+              Empezar sesión de entrenamiento
+            </button>
+          </>
+        )}
+
+        {/* Lo que dejó la sesión que se acaba de cerrar. */}
+        {!enSesion && cerrada && cerrada.manos > 0 && (
+          <div className="mb-3 rounded-xl bg-ink/6 px-3.5 py-3">
+            <span className="block text-[10.5px] font-bold tracking-[.6px] text-ink-soft uppercase">
+              La sesión que cerraste
+            </span>
+            <b className="block font-display text-[19px] leading-tight text-ink">
+              {cerrada.manos} {cerrada.manos === 1 ? 'mano' : 'manos'} ·{' '}
+              <span className={cerrada.fichas >= 0 ? 'text-win' : 'text-loss'}>
+                {cerrada.fichas >= 0 ? '+' : '−'}
+                {money(Math.abs(cerrada.fichas))}
               </span>
-              <b className="block font-display text-[24px] leading-tight">{perfil.nombre}</b>
-              <span className="mt-1 block text-[12.5px] leading-snug text-paper/85">
-                {perfil.ayuda}
+            </b>
+            <span className="mt-1 block text-[12px] leading-snug text-ink-soft">
+              Ya quedó sumada en la columna de todo lo que llevas.
+            </span>
+          </div>
+        )}
+
+        {/*
+         * La tabla, con las dos columnas que importan.
+         *
+         * La de la sesión dice cómo vas hoy; la de todo dice cómo juegas. Una noche
+         * suelta engaña —se gana con basura y se pierde con ases— y por eso las dos
+         * tienen que poder verse al mismo tiempo.
+         */}
+        <div className="no-scrollbar -mx-1 mb-1 overflow-x-auto px-1">
+          <table className="w-full border-collapse text-[13px]">
+            <thead>
+              <tr className="text-[10px] tracking-[.5px] text-ink-soft uppercase">
+                <th className="px-1 pb-2 text-left font-semibold">Dato</th>
+                <th className="px-1 pb-2 text-right font-semibold">Esta sesión</th>
+                <th className="px-1 pb-2 text-right font-semibold">Todo lo que llevas</th>
+              </tr>
+            </thead>
+            <tbody>
+              {RENGLONES.map((r) => (
+                <tr key={r.que} className="border-t border-dashed border-paper-line align-top">
+                  <td className="px-1 py-2">
+                    <b className="block font-semibold text-ink">{r.que}</b>
+                    <span className="block text-[10.5px] leading-tight text-ink-soft">
+                      {r.ayuda}
+                    </span>
+                  </td>
+                  <td className="px-1 py-2 text-right font-display whitespace-nowrap text-ink tabular-nums">
+                    {r.valor(tanteo) ?? '—'}
+                  </td>
+                  <td className="px-1 py-2 text-right font-display whitespace-nowrap text-ink-soft tabular-nums">
+                    {r.valor(total) ?? '—'}
+                  </td>
+                </tr>
+              ))}
+              {/* Las fichas van aparte, que el renglón tendría que saber escribir dinero. */}
+              <tr className="border-t border-dashed border-paper-line align-top">
+                <td className="px-1 py-2">
+                  <b className="block font-semibold text-ink">Fichas</b>
+                  <span className="block text-[10.5px] leading-tight text-ink-soft">
+                    Lo que llevas ganado o perdido jugando así.
+                  </span>
+                </td>
+                {[tanteo, total].map((t, i) => (
+                  <td
+                    key={i}
+                    className={`px-1 py-2 text-right font-display whitespace-nowrap tabular-nums ${
+                      t.fichas >= 0 ? 'text-win' : 'text-loss'
+                    }`}
+                  >
+                    {t.fichas >= 0 ? '+' : '−'}
+                    {money(Math.abs(t.fichas))}
+                  </td>
+                ))}
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p className="mt-0 mb-3 text-[11px] leading-snug text-ink-soft/85">
+          Los guiones son datos que todavía no tienen de dónde salir: les hacen falta manos.
+        </p>
+
+        {perfil ? (
+          <div className="mb-3 rounded-xl bg-noche-linea px-3.5 py-3 text-paper">
+            <span className="block text-[10.5px] font-bold tracking-[.6px] text-paper/70 uppercase">
+              Juegas como
+            </span>
+            <b className="block font-display text-[24px] leading-tight">{perfil.nombre}</b>
+            <span className="mt-1 block text-[12.5px] leading-snug text-paper/85">
+              {perfil.ayuda}
+            </span>
+            <span className="mt-1.5 block text-[12.5px] leading-snug text-[#ffd98a]">
+              {perfil.consejo}
+            </span>
+          </div>
+        ) : (
+          <p className="mt-0 mb-3 text-[12.5px] leading-snug text-ink-soft">
+            Con {MANOS_PARA_PERFIL} manos te digo qué tipo de jugador eres. Llevas{' '}
+            <b className="text-ink">{total.manos}</b>.
+          </p>
+        )}
+
+        {historial.length > 0 && (
+          <>
+            <p className="field-label mt-0 mb-1.5">Lo que llevas decidido</p>
+            <ul className="m-0 mb-3 list-none p-0">
+              {historial.map((a, i) => (
+                <li
+                  key={i}
+                  className="flex items-start gap-2 border-b border-dashed border-paper-line py-1.5 last:border-b-0"
+                >
+                  {a.bien ? (
+                    <Check size={13} strokeWidth={3} className="mt-0.5 shrink-0 text-win" />
+                  ) : (
+                    <X size={13} strokeWidth={3} className="mt-0.5 shrink-0 text-loss" />
+                  )}
+                  <span className="min-w-0 flex-1 text-[12px] leading-snug text-ink">
+                    <b className="text-ink-soft">Mano {a.mano}</b> · {a.texto}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+
+        {/* Borrar lo guardado, con una pregunta en medio: pueden ser meses de manos y no
+            hay de dónde sacarlas otra vez. */}
+        {total.manos > 0 &&
+          (borrando ? (
+            <div className="flex items-center gap-2 rounded-xl bg-loss/10 px-3 py-2.5">
+              <span className="min-w-0 flex-1 text-[12px] leading-snug text-ink">
+                ¿Borro las {total.manos} manos que llevas apuntadas? No se pueden recuperar.
               </span>
-              <span className="mt-1.5 block text-[12.5px] leading-snug text-[#ffd98a]">
-                {perfil.consejo}
-              </span>
+              <button
+                type="button"
+                className="shrink-0 cursor-pointer rounded-lg border-none bg-loss px-3 py-1.5 text-[12px] font-bold text-white active:scale-95"
+                onClick={borrarTodo}
+              >
+                Sí, borrar
+              </button>
+              <button
+                type="button"
+                className="shrink-0 cursor-pointer border-none bg-transparent text-[12px] font-semibold text-ink-soft underline active:scale-95"
+                onClick={() => setBorrando(false)}
+              >
+                No
+              </button>
             </div>
           ) : (
-            <p className="mt-0 mb-3 text-[12.5px] leading-snug text-ink-soft">
-              Con {MANOS_PARA_PERFIL} manos te digo qué tipo de jugador eres. Llevas{' '}
-              <b className="text-ink">{resumen.manos}</b>.
-            </p>
-          )}
-
-          {/*
-           * La tabla de la mesa: tú y cada quien, con lo que se les ha visto hacer.
-           *
-           * Es la misma información con la que un jugador lee a otro en una noche larga
-           * —a cuántas entra, cuántas sube— y verla al lado de la tuya es lo que enseña
-           * a leerse a uno mismo.
-           */}
-          <div className="no-scrollbar -mx-1 mb-3 overflow-x-auto px-1">
-            <table className="w-full border-collapse text-[13px] whitespace-nowrap">
-              <thead>
-                <tr className="text-left text-[10px] tracking-[.5px] text-ink-soft uppercase">
-                  <th className="px-1 pb-2 font-semibold">Jugador</th>
-                  <th className="px-1 pb-2 text-right font-semibold">Fichas</th>
-                  <th className="px-1 pb-2 text-right font-semibold">Entra</th>
-                  <th className="px-1 pb-2 text-right font-semibold">Sube</th>
-                  <th className="px-1 pb-2 text-right font-semibold">Manos</th>
-                </tr>
-              </thead>
-              <tbody>
-                {personas.map((p, i) => {
-                  const yo = i === 0
-                  const entra = p.manos > 0 ? Math.round((p.jugadas / p.manos) * 100) : null
-                  const sube = p.jugadas > 0 ? Math.round((p.subio / p.jugadas) * 100) : null
-                  return (
-                    <tr key={i} className="border-t border-dashed border-paper-line">
-                      <td className="max-w-[108px] truncate px-1 py-2">
-                        <span className="flex items-center gap-1.5">
-                          {p.foto && <Cara nombre={p.nombre} foto={p.foto} size={20} />}
-                          <span className={`truncate font-semibold ${yo ? 'text-marca-tinta' : 'text-ink'}`}>
-                            {p.nombre}
-                          </span>
-                        </span>
-                        {verEstilos && !yo && (
-                          <span className="block text-[10px] leading-tight text-ink-soft">
-                            {estiloPorId(p.rival.base).nombre}
-                          </span>
-                        )}
-                        {yo && perfil && (
-                          <span className="block text-[10px] leading-tight text-ink-soft">
-                            {perfil.nombre}
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-1 py-2 text-right font-display tabular-nums text-ink">
-                        {money(p.fichas)}
-                      </td>
-                      <td className="px-1 py-2 text-right tabular-nums text-ink-soft">
-                        {entra === null ? '—' : `${entra}%`}
-                      </td>
-                      <td className="px-1 py-2 text-right tabular-nums text-ink-soft">
-                        {sube === null ? '—' : `${sube}%`}
-                      </td>
-                      <td className="px-1 py-2 text-right tabular-nums text-ink-soft">{p.manos}</td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-
-          <p className="mt-0 mb-3 text-[11.5px] leading-snug text-ink-soft">
-            <b className="text-ink">Entra</b> es a cuántas manos le pone dinero por gusto, sin
-            contar las ciegas; <b className="text-ink">sube</b>, de ésas, en cuántas toma la
-            iniciativa. El que entra a muchas y casi no sube es el que paga la cena.
-            {tino !== null && (
-              <>
-                {' '}De tus decisiones con algo que pagar, le has atinado al{' '}
-                <b className="text-ink">{Math.round(tino)}%</b>.
-              </>
-            )}
-          </p>
-
-          {historial.length > 0 && (
-            <>
-              <p className="field-label mt-0 mb-1.5">Lo que llevas decidido</p>
-              <ul className="m-0 list-none p-0">
-                {historial.map((a, i) => (
-                  <li
-                    key={i}
-                    className="flex items-start gap-2 border-b border-dashed border-paper-line py-1.5 last:border-b-0"
-                  >
-                    {a.bien ? (
-                      <Check size={13} strokeWidth={3} className="mt-0.5 shrink-0 text-win" />
-                    ) : (
-                      <X size={13} strokeWidth={3} className="mt-0.5 shrink-0 text-loss" />
-                    )}
-                    <span className="min-w-0 flex-1 text-[12px] leading-snug text-ink">
-                      <b className="text-ink-soft">Mano {a.mano}</b> · {a.texto}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </>
-          )}
-        </section>
-      )}
+            <button
+              type="button"
+              className="cursor-pointer border-none bg-transparent p-0 text-[11.5px] font-semibold text-ink-soft underline active:scale-95"
+              onClick={() => setBorrando(true)}
+            >
+              Empezar la cuenta de cero
+            </button>
+          ))}
+      </section>
 
       {/* ---- la mesa con la que se está jugando ---- */}
       <section className="panel">
