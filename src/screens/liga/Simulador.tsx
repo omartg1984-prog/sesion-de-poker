@@ -31,6 +31,7 @@ import {
   type Simulacion,
 } from '../../lib/poker'
 import Mesa, { type AsientoEnMesa } from './Mesa'
+import { Barras, BarraPegada, CAJA, FONDOS, TINTA, type Tono } from './tonos'
 
 /*
  * El simulador: ¿voy o no voy?
@@ -69,31 +70,6 @@ const mismoHueco = (a: Eligiendo | null, b: Eligiendo) => {
 
 const manosVacias = (): (number | null)[][] =>
   Array.from({ length: MAX_JUGADORES }, () => [null, null])
-
-/* Los tres colores con los que se contesta: verde se paga, amarillo está parejo, rojo se
-   tira. El gris es "todavía no hay nada que decidir", no un cuarto consejo. */
-type Tono = 'verde' | 'ambar' | 'rojo' | 'gris'
-
-const FONDOS: Record<Tono, string> = {
-  verde: 'linear-gradient(180deg, rgba(23,152,90,.42) 0%, rgba(23,152,90,.10) 55%, rgba(23,152,90,.04) 100%)',
-  ambar: 'linear-gradient(180deg, rgba(240,168,30,.40) 0%, rgba(240,168,30,.10) 55%, rgba(240,168,30,.04) 100%)',
-  rojo: 'linear-gradient(180deg, rgba(200,45,45,.42) 0%, rgba(200,45,45,.10) 55%, rgba(200,45,45,.04) 100%)',
-  gris: 'linear-gradient(180deg, rgba(255,255,255,.07) 0%, rgba(255,255,255,.02) 60%, transparent 100%)',
-}
-
-const BARRAS: Record<Tono, string> = {
-  verde: 'bg-[#17985a]',
-  ambar: 'bg-[#e09612]',
-  rojo: 'bg-[#c82d2d]',
-  gris: 'bg-ink/30',
-}
-
-const PEGADA: Record<Tono, string> = {
-  verde: 'bg-[#13713f]',
-  ambar: 'bg-[#9a6207]',
-  rojo: 'bg-[#9c2020]',
-  gris: 'bg-noche-linea',
-}
 
 function Carta({
   valor,
@@ -190,38 +166,6 @@ function Plegable({
       </button>
       {abierta && <div className="mt-3">{children}</div>}
     </section>
-  )
-}
-
-/**
- * Las dos barras con las que se decide.
- *
- * Arriba lo que de verdad ganas, abajo lo que te bastaría ganar para que pagar salga a
- * mano. Si la de arriba es más larga, se paga. No hace falta entender un porcentaje para
- * leer dos barras, y es exactamente la misma cuenta.
- */
-function Barras({ ganas, necesitas, tono }: { ganas: number; necesitas: number; tono: Tono }) {
-  const fila = (k: string, v: number, color: string) => (
-    <div className="mb-2 last:mb-0">
-      <div className="mb-1 flex items-baseline justify-between">
-        <span className="text-[12px] font-semibold text-ink-soft">{k}</span>
-        <b className="font-display text-[14px] text-ink tabular-nums">
-          {Math.round(v)} de cada 100
-        </b>
-      </div>
-      <div className="h-3 overflow-hidden rounded-full bg-ink/10">
-        <div
-          className={`h-full rounded-full ${color}`}
-          style={{ width: `${Math.max(2, Math.min(100, v))}%` }}
-        />
-      </div>
-    </div>
-  )
-  return (
-    <div className="mt-3">
-      {fila('Las veces que ganas', ganas, BARRAS[tono])}
-      {fila('Las que te bastarían', necesitas, 'bg-ink/35')}
-    </div>
   )
 }
 
@@ -901,27 +845,9 @@ export default function Simulador({ miembros }: { miembros: Miembro[] }) {
           tan seguido gana tu mano. Nada más.
         </p>
 
-        <div
-          className={`rounded-xl px-3.5 py-3 text-center ${
-            veredicto.tono === 'verde'
-              ? 'bg-win/12'
-              : veredicto.tono === 'ambar'
-                ? 'bg-[#f0a81e]/18'
-                : veredicto.tono === 'rojo'
-                  ? 'bg-loss/12'
-                  : 'bg-ink/6'
-          }`}
-        >
+        <div className={`rounded-xl px-3.5 py-3 text-center ${CAJA[veredicto.tono]}`}>
           <b
-            className={`block font-display text-[26px] leading-none tracking-[.5px] uppercase ${
-              veredicto.tono === 'verde'
-                ? 'text-win-tinta'
-                : veredicto.tono === 'ambar'
-                  ? 'text-[#8a5c00]'
-                  : veredicto.tono === 'rojo'
-                    ? 'text-loss'
-                    : 'text-ink-soft'
-            }`}
+            className={`block font-display text-[26px] leading-none tracking-[.5px] uppercase ${TINTA[veredicto.tono]}`}
           >
             {veredicto.titulo}
           </b>
@@ -1122,22 +1048,7 @@ export default function Simulador({ miembros }: { miembros: Miembro[] }) {
         </button>
       )}
 
-      {/* ---- la respuesta, pegada abajo ----
-          Es lo único que se consulta a cada rato, así que no se busca: siempre está. */}
-      <div
-        className={`fixed inset-x-0 bottom-0 z-40 px-3.5 pt-2.5 pb-[max(0.75rem,env(safe-area-inset-bottom))] text-white shadow-[0_-6px_18px_rgba(0,0,0,.35)] ${
-          PEGADA[veredicto.tono]
-        }`}
-      >
-        <div className="mx-auto flex max-w-[640px] items-center gap-3">
-          <b className="shrink-0 font-display text-[19px] leading-none tracking-[.5px] uppercase">
-            {veredicto.titulo}
-          </b>
-          <span className="min-w-0 flex-1 text-right text-[11.5px] leading-tight text-white/85">
-            {veredicto.linea}
-          </span>
-        </div>
-      </div>
+      <BarraPegada tono={veredicto.tono} titulo={veredicto.titulo} linea={veredicto.linea} />
     </div>
   )
 }

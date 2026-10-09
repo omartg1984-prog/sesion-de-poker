@@ -26,7 +26,7 @@ import Avatar, { AvatarEditable } from '../components/Avatar'
 import Cara from '../components/Cara'
 import LaLiga from './liga/LaLiga'
 import CrearTorneo from './liga/CrearTorneo'
-import Simulador from './liga/Simulador'
+import VoyONoVoy from './liga/VoyONoVoy'
 import Puntos from './liga/Puntos'
 import Reglas from './liga/Reglas'
 import type { SeccionReglas } from '../lib/reglas'
@@ -492,7 +492,7 @@ ${link}`
         </>
       )}
 
-      {pestana === 'simulador' && <Simulador miembros={miembros} />}
+      {pestana === 'simulador' && <VoyONoVoy miembros={miembros} />}
 
       {pestana === 'reglas' && (
         <Reglas

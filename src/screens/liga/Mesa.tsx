@@ -37,6 +37,8 @@ export interface AsientoEnMesa {
   activo: boolean
   /** Lo último que hizo en esta calle: 'Paga $8', 'Sube $20', 'Se fue'… */
   accion: string
+  /** Cómo juega, cuando se está entrenando contra la máquina. */
+  estilo?: string
   /** Va ganando la mano. */
   manda: boolean
 }
@@ -240,6 +242,13 @@ export default function Mesa({
               </span>
             </span>
           </button>
+          {/* Cómo juega ése, para poder leerlo: en la mesa de verdad eso se aprende con
+              los años, aquí se dice para que la práctica sirva de algo. */}
+          {a.estilo && (
+            <span className="max-w-full truncate text-[8.5px] leading-none font-bold tracking-[.2px] text-white/55 uppercase">
+              {a.estilo}
+            </span>
+          )}
         </div>
       ))}
 
