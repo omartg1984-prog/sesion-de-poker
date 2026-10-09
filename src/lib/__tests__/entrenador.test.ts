@@ -121,7 +121,7 @@ describe('el final', () => {
       expect(e.final.ganadores).toHaveLength(1)
       expect(e.final.conQue).toBe('')
       /* Se fue: pierde lo que haya puesto, ni un peso más. */
-      expect(e.final.heroe).toBe(-e.mano.total[0])
+      expect(e.final.heroe).toBeCloseTo(-e.mano.total[0], 6)
     }
   })
 
@@ -168,5 +168,96 @@ describe('el final', () => {
     }
     const una = resolver(e)
     expect(resolver(una)).toBe(una)
+  })
+})
+
+/*
+ * Con fichas contadas. Es lo que hace que apostar duela: se acaba lo que traes, hay que
+ * irse con todo y el bote se parte entre los que alcanzaron a pagar.
+ */
+describe('las fichas de enfrente', () => {
+  const conFichas = (fichas: number[], heroe = 0): ConfigEntreno => ({
+    jugadores: fichas.length,
+    heroe,
+    ciegaChica: 1,
+    ciegaGrande: 2,
+    fichas,
+  })
+
+  const repartida = (semilla: number, fichas: number[]) => {
+    const azar = azarCon(semilla)
+    return repartir(conFichas(fichas), rivalesAlAzar(fichas.length, azar), azar)
+  }
+
+  it('cada quien arranca con lo suyo', () => {
+    const e = repartida(5, [100, 200, 300, 80])
+    /* Las ciegas ya salieron de lo que traían. */
+    expect(e.mano.resto[1]).toBe(199)
+    expect(e.mano.resto[2]).toBe(298)
+    expect(e.mano.resto[0]).toBe(100)
+  })
+
+  it('nadie acaba debiendo: lo puesto nunca pasa de lo que traía', () => {
+    for (let s = 1; s <= 25; s++) {
+      const azar = azarCon(s * 17)
+      const fichas = [60, 120, 200, 45]
+      let e = repartida(s, fichas)
+      for (let i = 0; i < 80 && !e.mano.terminada; i++) {
+        e = tocaAlHeroe(e) ? mueveElHeroe(e, 'paga') : mueveElSiguiente(e, azar)
+        if (tocaAlHeroe(e) && (e.mano.puesto[0] ?? 0) >= Math.max(...e.mano.puesto))
+          e = mueveElHeroe(e, 'pasa')
+      }
+      for (let k = 0; k < fichas.length; k++) {
+        expect(e.mano.total[k]).toBeLessThanOrEqual(fichas[k])
+        expect(e.mano.resto[k]).toBeGreaterThanOrEqual(0)
+      }
+    }
+  })
+
+  it('lo que se reparte es exactamente el bote', () => {
+    for (let s = 1; s <= 25; s++) {
+      const azar = azarCon(s * 29 + 3)
+      let e = repartida(s, [70, 70, 150, 40, 90])
+      for (let i = 0; i < 90 && !e.mano.terminada; i++) {
+        if (tocaAlHeroe(e)) {
+          const falta = Math.max(...e.mano.puesto) - e.mano.puesto[0]
+          e = mueveElHeroe(e, falta > 0 ? 'paga' : 'pasa')
+        } else e = mueveElSiguiente(e, azar)
+      }
+      e = resolver(e)
+      const repartido = e.final!.gana.reduce((a, b) => a + b, 0)
+      expect(repartido).toBe(e.final!.bote)
+    }
+  })
+
+  it('las fichas de la mesa no se crean ni se pierden de una mano a otra', () => {
+    const fichas = [100, 100, 100, 100]
+    const azar = azarCon(77)
+    let e = repartida(77, fichas)
+    for (let i = 0; i < 90 && !e.mano.terminada; i++) {
+      if (tocaAlHeroe(e)) {
+        const falta = Math.max(...e.mano.puesto) - e.mano.puesto[0]
+        e = mueveElHeroe(e, falta > 0 ? 'paga' : 'pasa')
+      } else e = mueveElSiguiente(e, azar)
+    }
+    e = resolver(e)
+    const despues = fichas.map((f, s) => f - e.mano.total[s] + e.final!.gana[s])
+    expect(despues.reduce((a, b) => a + b, 0)).toBe(400)
+    expect(despues.every((x) => x >= 0)).toBe(true)
+  })
+
+  it('al héroe sin fichas no se le piden más', () => {
+    const azar = azarCon(13)
+    let e = repartida(13, [6, 200, 200, 200])
+    for (let i = 0; i < 90 && !e.mano.terminada; i++) {
+      if (tocaAlHeroe(e)) {
+        /* Pagar cuando no hay nada que pagar no es un movimiento: ahí se pasa. */
+        const falta = Math.max(...e.mano.puesto) - e.mano.puesto[0]
+        e = mueveElHeroe(e, falta > 0 ? 'paga' : 'pasa')
+      } else e = mueveElSiguiente(e, azar)
+    }
+    e = resolver(e)
+    expect(e.mano.total[0]).toBeLessThanOrEqual(6)
+    expect(e.final!.heroe).toBeGreaterThanOrEqual(-6)
   })
 })

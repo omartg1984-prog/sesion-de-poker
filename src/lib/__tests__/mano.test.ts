@@ -7,6 +7,7 @@ import {
   jugar,
   opciones,
   paraIgualar,
+  repartirElBote,
   siguenVivos,
   type ConfigMano,
   type Mano,
@@ -233,5 +234,105 @@ describe('cómo se dice en la mesa', () => {
     m = correr(m, [['paga'], ['paga'], ['pasa']])
     m = jugar(m, 'apuesta', 10)
     expect(comoSeDiceCorto(m.movimientos[m.movimientos.length - 1], pesos)).toBe('Apuesta $10')
+  })
+})
+
+/*
+ * Las fichas de enfrente. Sin ellas se puede pagar todo y apostar no duele; con ellas
+ * aparece el irse con todo y, detrás, los botes partidos, que es la cuenta del poker que
+ * más se hace mal en la mesa.
+ */
+describe('cuando hay fichas contadas', () => {
+  const conFichas = (fichas: number[]): ConfigMano => ({
+    jugadores: fichas.length,
+    ciegaChica: 1,
+    ciegaGrande: 2,
+    fichas,
+  })
+
+  it('nadie puede apostar lo que no trae', () => {
+    let m = arrancarMano(conFichas([50, 50, 50, 50]))
+    m = jugar(m, 'sube', 10000)
+    expect(m.movimientos[m.movimientos.length - 1].hasta).toBe(50)
+    expect(m.resto[3]).toBe(0)
+  })
+
+  it('pagar nunca cuesta más de lo que queda enfrente', () => {
+    let m = arrancarMano(conFichas([500, 500, 500, 20]))
+    m = jugar(m, 'sube', 200) // el 3, con 20, se va con todo
+    expect(m.resto[3]).toBe(0)
+    const o = opciones(m)!
+    /* Al botón le piden igualar los 20 que alcanzó a poner, no los 200. */
+    expect(o.paga).toBe(20)
+  })
+
+  it('al que se fue con todo ya no le vuelve a tocar', () => {
+    let m = arrancarMano(conFichas([500, 500, 500, 20]))
+    m = correr(m, [['sube', 20], ['paga'], ['paga'], ['paga']])
+    expect(m.calle).toBe('flop')
+    /* Sigue en la mano, pero sin fichas no habla. */
+    expect(m.vivo[3]).toBe(true)
+    expect(m.turno).not.toBe(3)
+  })
+
+  it('con uno solo que pueda apostar, se corren las calles hasta el river', () => {
+    let m = arrancarMano(conFichas([30, 30]))
+    /* De a dos: el botón se va con todo y el otro paga. Ya nadie trae nada. */
+    m = correr(m, [['sube', 30], ['paga']])
+    expect(m.terminada).toBe(true)
+    expect(bote(m)).toBe(60)
+  })
+
+  it('la ciega de quien no alcanza se pone con lo que trae', () => {
+    const m = arrancarMano(conFichas([500, 500, 1, 500]))
+    expect(m.total[2]).toBe(1)
+    expect(m.resto[2]).toBe(0)
+  })
+
+  it('sin fichas en la configuración, todo sigue como siempre', () => {
+    const m = arrancarMano(mesa(4))
+    expect(m.resto.every((r) => r === Infinity)).toBe(true)
+    expect(opciones(m)!.maximo).toBe(Infinity)
+  })
+})
+
+describe('cómo se parte el bote', () => {
+  /* Cuatro pusieron distinto; gana el que menos puso. */
+  it('el que se fue con todo sólo cobra hasta donde alcanzó a poner', () => {
+    const gana = repartirElBote([50, 200, 200, 0], [true, true, true, false], (s) =>
+      s === 0 ? 100 : s === 1 ? 50 : 10,
+    )
+    /* El 0 se lleva su capa: 50 de cada uno de los tres que pusieron. */
+    expect(gana[0]).toBe(150)
+    /* Lo de arriba se lo pelean el 1 y el 2, y gana el 1. */
+    expect(gana[1]).toBe(300)
+    expect(gana[2]).toBe(0)
+    expect(gana[0] + gana[1] + gana[2]).toBe(450)
+  })
+
+  it('el bote completo se reparte, ni un peso de más ni de menos', () => {
+    const total = [35, 120, 120, 7, 0]
+    const gana = repartirElBote(total, [true, true, true, true, false], (s) => s)
+    expect(gana.reduce((a, b) => a + b, 0)).toBe(total.reduce((a, b) => a + b, 0))
+  })
+
+  it('un empate se parte, y lo que no se puede partir se queda con el primero', () => {
+    const gana = repartirElBote([25, 25, 25], [true, true, true], () => 10)
+    expect(gana.reduce((a, b) => a + b, 0)).toBe(75)
+    expect(gana[0]).toBe(25)
+    expect(gana[1]).toBe(25)
+  })
+
+  it('al que apostó más de lo que nadie igualó se le devuelve el sobrante', () => {
+    /* El 1 apostó 200, el 0 sólo alcanzó a pagar 50 y los demás se fueron. */
+    const gana = repartirElBote([50, 200, 0], [true, true, false], (s) => (s === 0 ? 99 : 1))
+    expect(gana[0]).toBe(100)
+    /* Los 150 que nadie igualó vuelven a su dueño. */
+    expect(gana[1]).toBe(150)
+  })
+
+  it('si todos se fueron menos uno, el bote entero es suyo', () => {
+    const gana = repartirElBote([10, 40, 10], [false, true, false], () => 1)
+    expect(gana[1]).toBe(60)
   })
 })

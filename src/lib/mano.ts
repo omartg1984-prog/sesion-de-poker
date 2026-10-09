@@ -42,6 +42,13 @@ export interface ConfigMano {
   jugadores: number
   ciegaChica: number
   ciegaGrande: number
+  /*
+   * Lo que trae cada quien enfrente. Sin esto todos traen de sobra, que es lo que hace
+   * falta para repasar una mano de la mesa: ahí las fichas ya se vieron y lo que se
+   * quiere saber es otra cosa. Entrenando sí se ponen, porque sin ellas pagar nunca
+   * duele y no se aprende nada.
+   */
+  fichas?: number[]
 }
 
 export interface Mano {
@@ -54,6 +61,8 @@ export interface Mano {
   vivo: boolean[]
   /** Si ya habló en esta calle. Las ciegas no cuentan como hablar. */
   actuo: boolean[]
+  /** Lo que le queda enfrente a cada quien. Infinito cuando se juega sin fichas. */
+  resto: number[]
   /** A quién le toca, o null si la mano se acabó. */
   turno: number | null
   movimientos: Movimiento[]
@@ -79,29 +88,46 @@ export interface Opciones {
   paga: number
   /** El "sube a" más chico que se vale. */
   minimo: number
+  /** Lo más a lo que puede subir: todo lo que trae. */
+  maximo: number
   /** Nadie ha apostado todavía en esta calle: lo suyo sería apostar, no subir. */
   esApuesta: boolean
+  /** Pagar le deja sin nada enfrente. */
+  pagarEsTodo: boolean
 }
 
 export function opciones(m: Mano): Opciones | null {
   if (m.turno === null || m.terminada) return null
+  const t = m.turno
   const alto = Math.max(...m.puesto)
-  const falta = alto - m.puesto[m.turno]
+  /* Nadie puede poner lo que no trae: lo que le falte lo cubre con lo que le queda y se
+     queda sin fichas, que es lo que de verdad pasa en la mesa. */
+  const falta = Math.min(alto - m.puesto[t], m.resto[t])
+  const maximo = m.puesto[t] + m.resto[t]
   return {
-    pasa: falta === 0,
+    pasa: alto - m.puesto[t] === 0,
     paga: falta,
     /* Subir es al menos otra ciega grande encima de lo que haya; apostar de cero es al
-       menos una ciega grande. Es la regla de siempre y evita subidas de un peso. */
-    minimo: alto + m.cfg.ciegaGrande,
+       menos una ciega grande. Si no le alcanza para tanto, puede irse con todo. */
+    minimo: Math.min(alto + m.cfg.ciegaGrande, maximo),
+    maximo,
     esApuesta: alto === 0,
+    pagarEsTodo: falta > 0 && falta >= m.resto[t],
   }
 }
+
+/** Si ya no trae nada enfrente: sigue en la mano pero ya no habla. */
+export const estaConTodo = (m: Mano, s: number) => m.vivo[s] && m.resto[s] <= 0
+
+/** Los que todavía pueden apostar algo. */
+const puedenHablar = (m: Mano) =>
+  m.vivo.filter((v, s) => v && m.resto[s] > 0).length
 
 /** Quién habla primero del flop en adelante: la ciega chica, o el que siga vivo. */
 function primeroDespues(m: Mano): number | null {
   for (let k = 0; k < m.cfg.jugadores; k++) {
     const s = (1 + k) % m.cfg.jugadores
-    if (m.vivo[s]) return s
+    if (m.vivo[s] && m.resto[s] > 0) return s
   }
   return null
 }
@@ -115,7 +141,14 @@ function cerrarCalle(m: Mano): Mano {
     puesto: m.puesto.map(() => 0),
     actuo: m.actuo.map(() => false),
   }
-  return { ...siguiente, turno: primeroDespues(siguiente) }
+  const quien = primeroDespues(siguiente)
+  /*
+   * Con uno solo que pueda apostar ya no hay nada que hablar: los demás se fueron con
+   * todo y lo que falta es ver las cartas. Se siguen cerrando calles hasta el river para
+   * que salgan las cinco, que es lo que decide quién se lleva el bote.
+   */
+  if (quien === null || puedenHablar(siguiente) <= 1) return cerrarCalle(siguiente)
+  return { ...siguiente, turno: quien }
 }
 
 function avanzar(m: Mano): Mano {
@@ -127,6 +160,8 @@ function avanzar(m: Mano): Mano {
   for (let k = 1; k <= m.cfg.jugadores; k++) {
     const s = (desde + k) % m.cfg.jugadores
     if (!m.vivo[s]) continue
+    /* El que se fue con todo ya no habla: no le queda con qué. */
+    if (m.resto[s] <= 0) continue
     /* Le toca al que no ha hablado —la ciega grande siempre tiene su oportunidad— o al
        que habló pero se quedó corto porque alguien subió después. */
     if (!m.actuo[s] || m.puesto[s] < alto) return { ...m, turno: s }
@@ -141,6 +176,7 @@ export function arrancarMano(cfg: ConfigMano): Mano {
     jugadores: n,
     ciegaChica: Math.max(0, cfg.ciegaChica),
     ciegaGrande: Math.max(0, cfg.ciegaGrande),
+    ...(cfg.fichas ? { fichas: cfg.fichas.slice(0, n) } : {}),
   }
   const ceros = Array.from({ length: n }, () => 0)
   const m: Mano = {
@@ -150,6 +186,7 @@ export function arrancarMano(cfg: ConfigMano): Mano {
     total: [...ceros],
     vivo: Array.from({ length: n }, () => true),
     actuo: Array.from({ length: n }, () => false),
+    resto: Array.from({ length: n }, (_, s) => Math.max(0, cfg.fichas?.[s] ?? Infinity)),
     turno: null,
     movimientos: [],
     terminada: false,
@@ -160,20 +197,25 @@ export function arrancarMano(cfg: ConfigMano): Mano {
   const chica = n === 2 ? 0 : 1
   const grande = n === 2 ? 1 : 2
   const poner = (quien: number, cuanto: number) => {
-    m.puesto[quien] = cuanto
-    m.total[quien] = cuanto
+    /* Al que no le alcanza para la ciega la pone con lo que trae y ahí se queda. */
+    const va = Math.min(cuanto, m.resto[quien])
+    m.puesto[quien] = va
+    m.total[quien] = va
+    m.resto[quien] -= va
     m.movimientos.push({
       jugador: quien,
       calle: 'preflop',
       tipo: 'ciega',
-      monto: cuanto,
-      hasta: cuanto,
+      monto: va,
+      hasta: va,
     })
   }
   poner(chica, limpia.ciegaChica)
   poner(grande, limpia.ciegaGrande)
 
+  /* Si los demás ya no traen nada, no hay ronda que jugar. */
   m.turno = n === 2 ? 0 : 3 % n
+  if (m.resto[m.turno] <= 0 || puedenHablar(m) <= 1) return avanzar(m)
   return m
 }
 
@@ -196,6 +238,7 @@ export function jugar(m: Mano, tipo: TipoMovimiento, hasta = 0): Mano {
     total: [...m.total],
     vivo: [...m.vivo],
     actuo: [...m.actuo],
+    resto: [...m.resto],
     movimientos: [...m.movimientos],
   }
 
@@ -212,15 +255,18 @@ export function jugar(m: Mano, tipo: TipoMovimiento, hasta = 0): Mano {
     queda = siguiente.puesto[t] + monto
   } else if (tipo === 'apuesta' || tipo === 'sube') {
     /* Una subida por debajo del mínimo se sube al mínimo en vez de rebotarse: el que la
-       escribió quiso subir, y discutirle el número es pelearse con el usuario. */
-    queda = Math.max(Math.round(hasta), o.minimo)
+       escribió quiso subir, y discutirle el número es pelearse con el usuario. Por
+       arriba manda lo que trae: nadie apuesta fichas que no tiene. */
+    queda = Math.min(Math.max(Math.round(hasta), o.minimo), o.maximo)
     monto = queda - siguiente.puesto[t]
+    if (monto <= 0) return m
   } else {
     return m
   }
 
   siguiente.puesto[t] = queda
   siguiente.total[t] += monto
+  siguiente.resto[t] -= monto
   siguiente.actuo[t] = true
   siguiente.movimientos.push({ jugador: t, calle: siguiente.calle, tipo, monto, hasta: queda })
 
@@ -275,4 +321,61 @@ export function comoSeDice(x: Movimiento, dinero: (n: number) => string): string
     case 'seVa':
       return 'se va'
   }
+}
+
+/**
+ * Cómo se parte el bote cuando alguien se fue con todo.
+ *
+ * El que puso $50 no puede llevarse más de $50 de cada uno, por mucho que traiga la
+ * mejor mano: lo que los demás apostaron de más es un bote aparte y se lo pelean entre
+ * ellos. Eso son los botes partidos, y es la única cuenta del poker que de verdad se
+ * presta a hacerse mal.
+ *
+ * Se arma por capas: se ordenan las cantidades que puso cada quien y, de capa en capa,
+ * se junta lo que cada uno metió en ella y se le da al mejor de los que llegaron a esa
+ * altura. Lo que no se pueda partir en pesos enteros se le deja al primero, que es como
+ * se resuelve en la mesa.
+ *
+ * `fuerza` dice qué tan buena es la mano de cada quien: a mayor número, mejor.
+ */
+export function repartirElBote(
+  total: number[],
+  vivo: boolean[],
+  fuerza: (asiento: number) => number,
+): number[] {
+  const n = total.length
+  const gana = Array.from({ length: n }, () => 0)
+
+  const niveles = [...new Set(total.filter((t) => t > 0))].sort((a, b) => a - b)
+  let anterior = 0
+
+  for (const nivel of niveles) {
+    /* La capa: lo que cada quien metió entre el nivel anterior y éste. */
+    let capa = 0
+    for (let s = 0; s < n; s++) {
+      capa += Math.min(total[s], nivel) - Math.min(total[s], anterior)
+    }
+    anterior = nivel
+    if (capa <= 0) continue
+
+    /* A esta capa sólo le tiran los que siguen vivos y pusieron por lo menos esto. */
+    const elegibles = []
+    for (let s = 0; s < n; s++) if (vivo[s] && total[s] >= nivel) elegibles.push(s)
+
+    /* Si nadie vivo llegó a esta altura, se le devuelve al que la puso: es lo que
+       sobró de una apuesta que nadie alcanzó a igualar. */
+    if (elegibles.length === 0) {
+      for (let s = 0; s < n; s++) if (total[s] >= nivel) gana[s] += capa
+      continue
+    }
+
+    const mejor = Math.max(...elegibles.map(fuerza))
+    const ganadores = elegibles.filter((s) => fuerza(s) === mejor)
+    const parte = Math.floor(capa / ganadores.length)
+    ganadores.forEach((s, i) => {
+      gana[s] += parte + (i === 0 ? capa - parte * ganadores.length : 0)
+    })
+  }
+
+  return gana
 }

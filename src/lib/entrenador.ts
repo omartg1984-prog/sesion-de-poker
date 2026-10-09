@@ -4,6 +4,7 @@ import {
   bote as boteDe,
   jugar,
   opciones,
+  repartirElBote,
   siguenVivos,
   type ConfigMano,
   type Mano,
@@ -23,9 +24,9 @@ import { decidir, estiloDeLaMano, estiloPorId, type Rival } from './rival'
  * distintos no es la información, es cuánto margen le pide cada quien a la mano y qué
  * tan seguido se tira un farol.
  *
- * No hay stacks ni all-in. Se juega como si todos trajeran de sobra, que es lo que deja
- * practicar lo único que importa aquí: si pagar sale a cuentas. Meter fichas contadas
- * traería botes partidos, que es otro tema y no el que se está aprendiendo.
+ * Cada quien trae sus fichas contadas. Sin eso se puede pagar todo y apostar no duele,
+ * que es justo lo contrario de lo que hay que aprender: lo que enseña a jugar es que las
+ * malas cuesten.
  */
 
 /** Cuántas manos reparte cada rival para medir lo que se lleva. Alcanza y es rápido. */
@@ -55,6 +56,8 @@ export interface Final {
   /** Cómo se llama la mano con la que se ganó, o vacío si todos se fueron. */
   conQue: string
   bote: number
+  /** Lo que se lleva del bote cada asiento, sin restarle lo que puso. */
+  gana: number[]
   /** Lo que gana o pierde el héroe en esta mano. */
   heroe: number
   /** Si se llegó al golpe: ahí se enseñan las cartas de todos. */
@@ -175,34 +178,27 @@ export function resolver(e: Entrenamiento): Entrenamiento {
   const bote = boteDe(e.mano)
   const vivos = Array.from({ length: e.cfg.jugadores }, (_, s) => s).filter((s) => e.mano.vivo[s])
   const puesto = e.mano.total[e.cfg.heroe] ?? 0
+  const alGolpe = vivos.length > 1
 
-  if (vivos.length <= 1) {
-    const ganador = vivos[0] ?? e.cfg.heroe
-    return {
-      ...e,
-      final: {
-        ganadores: [ganador],
-        conQue: '',
-        bote,
-        heroe: ganador === e.cfg.heroe ? bote - puesto : -puesto,
-        alGolpe: false,
-      },
-    }
-  }
+  /* Sin golpe no hay cartas que comparar: el único que queda se lleva todo. Con golpe
+     manda la mano, y el reparto por capas se encarga de los que se fueron con todo. */
+  const fuerza = alGolpe
+    ? (s: number) => evaluar([...e.cartas[s], ...e.mesa])
+    : () => 0
 
-  const puntajes = vivos.map((s) => evaluar([...e.cartas[s], ...e.mesa]))
-  const mejor = Math.max(...puntajes)
-  const ganadores = vivos.filter((_, i) => puntajes[i] === mejor)
-  const parte = bote / ganadores.length
+  const gana = repartirElBote(e.mano.total, e.mano.vivo, fuerza)
+  const ganadores = vivos.filter((s) => gana[s] > 0)
+  const conQue = alGolpe && ganadores.length > 0 ? CATEGORIAS[categoriaDe(fuerza(ganadores[0]))] : ''
 
   return {
     ...e,
     final: {
-      ganadores,
-      conQue: CATEGORIAS[categoriaDe(mejor)],
+      ganadores: ganadores.length > 0 ? ganadores : vivos,
+      conQue,
       bote,
-      heroe: ganadores.includes(e.cfg.heroe) ? parte - puesto : -puesto,
-      alGolpe: true,
+      gana,
+      heroe: (gana[e.cfg.heroe] ?? 0) - puesto,
+      alGolpe,
     },
   }
 }

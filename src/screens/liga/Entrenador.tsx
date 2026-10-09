@@ -46,10 +46,31 @@ const MAX_JUGADORES = 9
 /** Nombres para la mesa, que jugar contra "Asiento 4" no se parece a nada. */
 const NOMBRES = ['Chuy', 'Lalo', 'Memo', 'Beto', 'Nacho', 'Tono', 'Pancho', 'Chepe', 'Moy']
 
+/** Con cuánto se sienta cada quien. Con ciegas de $1 y $2, 200 son cien ciegas. */
+const ENTRADAS = [100, 200, 400]
+
+/*
+ * Una persona de la mesa, no una silla.
+ *
+ * Las fichas y el modo de jugar son de la persona y se quedan con ella aunque cambie de
+ * lugar. Y cambia: el botón se mueve mano con mano, como debe ser, porque jugar siempre
+ * desde el mismo asiento no enseña lo que de verdad cuesta aprender, que es que la misma
+ * mano vale distinto según desde dónde se juegue.
+ */
+interface Persona {
+  nombre: string
+  rival: Rival
+  fichas: number
+}
+
 export default function Entrenador() {
   const [jugadores, setJugadores] = useState(6)
   const [e, setE] = useState<Entrenamiento | null>(null)
-  const [rivales, setRivales] = useState<Rival[]>([])
+  const [personas, setPersonas] = useState<Persona[]>([])
+  /** Quién se sienta en cada silla esta mano. El 0 de la lista es el que practica. */
+  const [enAsiento, setEnAsiento] = useState<number[]>([])
+  const [giro, setGiro] = useState(0)
+  const [entrada, setEntrada] = useState(200)
   const [consejo, setConsejo] = useState<{ bien: boolean; texto: string } | null>(null)
   const [caja, setCaja] = useState({ manos: 0, saldo: 0 })
   const [subirA, setSubirA] = useState(0)
@@ -58,26 +79,60 @@ export default function Entrenador() {
   /* Un solo azar para toda la sesión: así las manos no se repiten al volver a entrar. */
   const azar = useRef(azarCon((Date.now() % 1000000) + 1))
 
-  const heroe = 0
   const asientos = useMemo(() => asientosDe(jugadores), [jugadores])
-  const nombreDe = (s: number) => (s === heroe ? 'Tú' : NOMBRES[s % NOMBRES.length])
+  const heroe = e?.cfg.heroe ?? 0
+  const personaEn = (s: number) => personas[enAsiento[s]] as Persona | undefined
+  const nombreDe = (s: number) =>
+    enAsiento[s] === 0 ? 'Tú' : (personaEn(s)?.nombre ?? NOMBRES[s % NOMBRES.length])
 
-  const repartirOtra = (cuantos = jugadores) => {
-    const suyos = rivales.length === cuantos ? rivales : rivalesAlAzar(cuantos, azar.current)
-    if (suyos !== rivales) setRivales(suyos)
+  const nuevaMesa = (cuantos: number): Persona[] => {
+    const suyos = rivalesAlAzar(cuantos, azar.current)
+    return suyos.map((rival, i) => ({
+      nombre: i === 0 ? 'Tú' : NOMBRES[(i - 1) % NOMBRES.length],
+      rival,
+      fichas: entrada,
+    }))
+  }
+
+  const repartirOtra = (gente?: Persona[]) => {
+    const cuantos = jugadores
+    const base = gente ?? (personas.length === cuantos ? personas : nuevaMesa(cuantos))
+    /* Al que se quedó sin fichas lo vuelven a sentar: es la mesa de casa, no un torneo. */
+    const listos = base.map((p, i) => (i === 0 || p.fichas > 0 ? p : { ...p, fichas: entrada }))
+
+    /* El botón se mueve: la silla 0 siempre es el botón, así que lo que gira es la gente. */
+    const sillas = Array.from({ length: cuantos }, (_, s) => (s + giro) % cuantos)
+    const miSilla = sillas.indexOf(0)
+
+    setPersonas(listos)
+    setEnAsiento(sillas)
+    setGiro((g) => g + 1)
     setConsejo(null)
     setE(
-      repartir({ jugadores: cuantos, heroe, ciegaChica: 1, ciegaGrande: 2 }, suyos, azar.current),
+      repartir(
+        {
+          jugadores: cuantos,
+          heroe: miSilla,
+          ciegaChica: 1,
+          ciegaGrande: 2,
+          fichas: sillas.map((i) => listos[i].fichas),
+        },
+        sillas.map((i) => listos[i].rival),
+        azar.current,
+      ),
     )
   }
 
-  /* Cambiar el tamaño de la mesa es empezar otra mesa: otros rivales y otra repartida. */
+  /* Cambiar el tamaño de la mesa, o con cuánto se entra, es empezar otra mesa. */
   useEffect(() => {
-    setRivales([])
+    setPersonas([])
+    setEnAsiento([])
+    setGiro(0)
     setE(null)
     setConsejo(null)
+    setCaja({ manos: 0, saldo: 0 })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [jugadores])
+  }, [jugadores, entrada])
 
   /* Los rivales mueven solos, de uno en uno, para poder ver quién hizo qué. */
   useEffect(() => {
@@ -86,12 +141,20 @@ export default function Entrenador() {
     return () => clearTimeout(t)
   }, [e])
 
-  /* Al acabarse la mano se reparte el bote y se apunta en la cuenta de la sesión. */
+  /* Al acabarse la mano se reparte el bote: cada quien se queda con lo que no puso más
+     lo que se llevó, y con eso arranca la siguiente. */
   useEffect(() => {
     if (!e || !e.mano.terminada || e.final) return
     const r = resolver(e)
     setE(r)
     setCaja((c) => ({ manos: c.manos + 1, saldo: c.saldo + (r.final?.heroe ?? 0) }))
+    setPersonas((ps) =>
+      ps.map((p, i) => {
+        const s = enAsiento.indexOf(i)
+        if (s < 0) return p
+        return { ...p, fichas: r.mano.resto[s] + (r.final?.gana[s] ?? 0) }
+      }),
+    )
   }, [e])
 
   const mano = e?.mano ?? null
@@ -120,6 +183,9 @@ export default function Entrenador() {
 
   const meFalta = mano && sigoVivo ? Math.max(...mano.puesto) - mano.puesto[heroe] : 0
   const cuentas = equidad !== null ? cuentasDeLaApuesta(equidad, bote, meFalta) : null
+
+  /* Lo que traigo enfrente: durante la mano, lo que queda; entre manos, lo de la cuenta. */
+  const misFichas = mano ? mano.resto[heroe] + (e?.final?.gana[heroe] ?? 0) : (personas[0]?.fichas ?? entrada)
 
   const minimo = o?.minimo ?? 0
   useEffect(() => {
@@ -199,7 +265,16 @@ export default function Entrenador() {
     }
   })()
 
-  const enMesa: AsientoEnMesa[] = asientos.map((a) => {
+  /*
+   * El que juega va siempre abajo, aunque el botón se mueva.
+   *
+   * Las sillas se cuentan desde el botón, así que al girar la mesa uno acabaría dibujado
+   * en un lugar distinto cada mano y no se reconocería a sí mismo. Se rota el dibujo para
+   * dejarlo abajo: lo que se ve moverse es el botón, que es lo que de verdad se mueve.
+   */
+  const comoSeVe = [...asientos.slice(heroe), ...asientos.slice(0, heroe)]
+
+  const enMesa: AsientoEnMesa[] = comoSeVe.map((a) => {
     const s = a.indice
     const suyas = !e ? [] : s === heroe || e.final?.alGolpe ? e.cartas[s] : []
     const ultimo = mano
@@ -213,7 +288,9 @@ export default function Entrenador() {
       marca: a.marca,
       yo: s === heroe,
       cartas: suyas,
-      pct: '',
+      /* El renglón de abajo de la placa lleva lo que trae enfrente: es lo primero que se
+         mira antes de apostarle a alguien. */
+      pct: mano ? money(mano.resto[s]) : '',
       apuesta: mano ? mano.puesto[s] : 0,
       fuera: Boolean(mano && !mano.vivo[s]),
       activo: mano?.turno === s,
@@ -251,9 +328,13 @@ export default function Entrenador() {
               {caja.saldo >= 0 ? '+' : '−'}
               {money(Math.abs(caja.saldo))}
             </b>
+            <span>·</span>
+            <span>traes {money(misFichas)}</span>
           </>
         ) : (
-          <span>Se juega con ciegas de $1 y $2, y todos traen de sobra.</span>
+          <span>
+            Ciegas de $1 y $2, y cada quien se sienta con {money(entrada)}.
+          </span>
         )}
       </div>
 
@@ -281,7 +362,8 @@ export default function Entrenador() {
                 {e.final ? 'Se acabó' : NOMBRE_CALLE[e.mano.calle]}
               </b>
               <span className="text-[12.5px] text-ink-soft">
-                {trae ? `Traes ${trae.toLowerCase()}` : `Bote ${money(bote)}`}
+                Traes <b className="font-display text-ink tabular-nums">{money(misFichas)}</b>
+                {trae && ` · ${trae.toLowerCase()}`}
               </span>
             </div>
 
@@ -301,10 +383,29 @@ export default function Entrenador() {
             )}
 
             {e.final ? (
-              <button type="button" className="btn btn-marca" onClick={() => repartirOtra()}>
-                <Play size={17} strokeWidth={2.6} />
-                Otra mano
-              </button>
+              misFichas <= 0 ? (
+                <>
+                  <p className="mt-0 mb-2 text-[12.5px] leading-snug text-ink">
+                    Te quedaste sin fichas. Pasa, le pasa a todos; lo que no se vale es
+                    volver a entrar sin saber qué salió mal.
+                  </p>
+                  <button
+                    type="button"
+                    className="btn btn-marca"
+                    onClick={() =>
+                      repartirOtra(personas.map((p, i) => (i === 0 ? { ...p, fichas: entrada } : p)))
+                    }
+                  >
+                    <Play size={17} strokeWidth={2.6} />
+                    Vuelvo a entrar con {money(entrada)}
+                  </button>
+                </>
+              ) : (
+                <button type="button" className="btn btn-marca" onClick={() => repartirOtra()}>
+                  <Play size={17} strokeWidth={2.6} />
+                  Otra mano
+                </button>
+              )
             ) : meToca && o ? (
               <>
                 <div className="mb-2 flex gap-1.5">
@@ -320,7 +421,7 @@ export default function Entrenador() {
                     className="flex-1 cursor-pointer rounded-lg border-none bg-[#e6e1d8] py-2.5 text-[13px] font-bold text-ink active:scale-95"
                     onClick={() => mover(o.pasa ? 'pasa' : 'paga')}
                   >
-                    {o.pasa ? 'Paso' : `Pago ${money(o.paga)}`}
+                    {o.pasa ? 'Paso' : o.pagarEsTodo ? `Voy con todo ${money(o.paga)}` : `Pago ${money(o.paga)}`}
                   </button>
                 </div>
                 <div className="flex gap-1.5">
@@ -344,11 +445,12 @@ export default function Entrenador() {
                   {[
                     { k: 'Medio bote', v: Math.round(bote / 2) },
                     { k: 'El bote', v: bote },
+                    { k: 'Todo', v: o.maximo },
                   ].map((x) => (
                     <button
                       key={x.k}
                       type="button"
-                      onClick={() => setSubirA(Math.max(o.minimo, x.v))}
+                      onClick={() => setSubirA(Math.min(o.maximo, Math.max(o.minimo, x.v)))}
                       className="flex-1 cursor-pointer border-none bg-transparent py-1 text-[11.5px] font-semibold text-ink-soft underline active:scale-95"
                     >
                       {x.k}
@@ -411,13 +513,32 @@ export default function Entrenador() {
           ))}
         </div>
 
+        <p className="field-label mt-0 mb-1.5">Con cuánto se sientan</p>
+        <div className="mb-3 flex gap-1.5">
+          {ENTRADAS.map((v) => (
+            <button
+              key={v}
+              type="button"
+              onClick={() => setEntrada(v)}
+              className={`flex-1 cursor-pointer rounded-lg border-none py-1.5 text-[12.5px] font-bold transition-colors ${
+                entrada === v ? 'bg-marca text-white' : 'bg-[#e6e1d8] text-ink-soft'
+              }`}
+            >
+              {money(v)}
+            </button>
+          ))}
+        </div>
+
         <button
           type="button"
           className="btn btn-ghost mb-3"
           onClick={() => {
-            setRivales(rivalesAlAzar(jugadores, azar.current))
+            setPersonas([])
+            setEnAsiento([])
+            setGiro(0)
             setE(null)
             setConsejo(null)
+            setCaja({ manos: 0, saldo: 0 })
           }}
         >
           <RotateCcw size={16} strokeWidth={2.4} />
