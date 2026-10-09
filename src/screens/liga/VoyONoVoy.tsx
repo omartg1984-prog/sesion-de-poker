@@ -39,7 +39,7 @@ export default function VoyONoVoy({ miembros }: { miembros: Miembro[] }) {
         ))}
       </div>
 
-      {modo === 'mesa' ? <Simulador miembros={miembros} /> : <Entrenador />}
+      {modo === 'mesa' ? <Simulador miembros={miembros} /> : <Entrenador miembros={miembros} />}
     </>
   )
 }

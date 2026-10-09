@@ -41,6 +41,8 @@ export interface AsientoEnMesa {
   estilo?: string
   /** Va ganando la mano. */
   manda: boolean
+  /** Lo que se llevó del bote, al acabar. */
+  gano?: number
 }
 
 /** Dónde cae algo puesto en el asiento `i`, con el óvalo que se le pida. */
@@ -72,6 +74,34 @@ function Reverso() {
   )
 }
 
+/**
+ * Una torre de fichas, para que el bote se vea como un bote.
+ *
+ * Un número dentro de una cápsula dice cuánto hay pero no se siente; un montón de
+ * fichas sí, y es lo que se mira en la mesa antes de decidir si vale la pena pelearlo.
+ * Crece con lo que hay dentro, hasta donde cabe.
+ */
+function Torre({ cuanto }: { cuanto: number }) {
+  /* Cuántas fichas pintar: unas pocas con poco, un montón con mucho. */
+  const cuantas = Math.max(3, Math.min(9, Math.round(Math.log2(Math.max(2, cuanto)) + 1)))
+  const COLORES = ['#d8232a', '#1f8f4e', '#2b2b2b', '#2563c9', '#f2f2ea']
+  return (
+    <span className="relative block h-[18px] w-7">
+      {Array.from({ length: cuantas }, (_, i) => (
+        <span
+          key={i}
+          className="absolute left-1/2 h-[7px] w-7 -translate-x-1/2 rounded-full ring-1 ring-black/40"
+          style={{
+            bottom: i * 2.4,
+            background: COLORES[i % COLORES.length],
+            boxShadow: 'inset 0 1px 0 rgba(255,255,255,.45)',
+          }}
+        />
+      ))}
+    </span>
+  )
+}
+
 /** Una ficha con lo que alguien lleva apostado. */
 function Ficha({ cuanto, dinero }: { cuanto: number; dinero: (n: number) => string }) {
   return (
@@ -92,6 +122,8 @@ interface Props {
   eligiendo: number | null
   bote: number
   dinero: (n: number) => string
+  /** Al asiento que se va el bote cuando la mano acaba, para verlo irse. */
+  haciaGanador?: number | null
   onAsiento: (i: number) => void
   onCarta: (i: number) => void
 }
@@ -102,6 +134,7 @@ export default function Mesa({
   eligiendo,
   bote,
   dinero,
+  haciaGanador = null,
   onAsiento,
   onCarta,
 }: Props) {
@@ -130,7 +163,7 @@ export default function Mesa({
       {/* la línea de la pista, que es lo que le da el aire de mesa de verdad */}
       <div className="absolute inset-x-[49px] inset-y-[71px] rounded-[999px] border border-white/10" />
 
-      {/* las cartas de en medio y el bote */}
+      {/* las cartas de en medio */}
       <div className="absolute inset-x-0 top-1/2 flex -translate-y-1/2 flex-col items-center gap-2">
         <div className="flex gap-1">
           {mesa.map((c, i) => (
@@ -157,8 +190,25 @@ export default function Mesa({
             </button>
           ))}
         </div>
-        {bote > 0 && (
-          <span className="flex items-center gap-1.5 rounded-full bg-black/45 px-2.5 py-[3px] ring-1 ring-white/15">
+      </div>
+
+      {/*
+       * El bote, con sus fichas, y cómo se va con el que lo ganó.
+       *
+       * Verlo moverse es lo que contesta "¿quién ganó?" sin leer nada, que es como se
+       * entiende en una mesa: el montón se desliza para el lado de alguien.
+       */}
+      {bote > 0 && (
+        <div
+          className="absolute z-[15] flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-1 transition-all duration-700 ease-out"
+          style={{
+            ...(haciaGanador !== null && haciaGanador >= 0
+              ? { ...sitio(asientos.findIndex((a) => a.indice === haciaGanador), de, 30, 29), opacity: 0.15 }
+              : { left: '50%', top: 'calc(50% + 48px)', opacity: 1 }),
+          }}
+        >
+          <Torre cuanto={bote} />
+          <span className="flex items-center gap-1.5 rounded-full bg-black/55 px-2.5 py-[3px] ring-1 ring-white/20">
             <span className="text-[8.5px] font-bold tracking-[1px] text-white/55 uppercase">
               Bote
             </span>
@@ -166,8 +216,8 @@ export default function Mesa({
               {dinero(bote)}
             </span>
           </span>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* la gente */}
       {asientos.map((a, i) => (
@@ -249,6 +299,12 @@ export default function Mesa({
               </span>
             </span>
           </button>
+          {/* Lo que se llevó: el número que cierra la mano, encima de su lugar. */}
+          {a.gano !== undefined && a.gano > 0 && (
+            <span className="rounded-full bg-win px-1.5 py-[1px] font-display text-[10px] leading-none font-bold text-white ring-1 ring-white/40">
+              +{dinero(a.gano)}
+            </span>
+          )}
           {/* Cómo juega ése, para poder leerlo: en la mesa de verdad eso se aprende con
               los años, aquí se dice para que la práctica sirva de algo. */}
           {a.estilo && (

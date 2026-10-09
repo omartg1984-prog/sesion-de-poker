@@ -1,5 +1,6 @@
 import { Check, Play, RotateCcw, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import Cara from '../../components/Cara'
 import NumInput from '../../components/NumInput'
 import {
   cartasVisibles,
@@ -10,6 +11,7 @@ import {
   tocaAlHeroe,
   type Entrenamiento,
 } from '../../lib/entrenador'
+import type { Miembro } from '../../lib/api'
 import { NOMBRE_CALLE, bote as boteDe, comoSeDiceCorto, opciones } from '../../lib/mano'
 import { money } from '../../lib/money'
 import {
@@ -86,11 +88,16 @@ const ENTRADA_POR_DEFECTO = 200
  */
 interface Persona {
   nombre: string
+  foto: string | null
   rival: Rival
   fichas: number
+  /* Lo que se le ha visto hacer, que es de lo único que se le puede leer el juego. */
+  manos: number
+  jugadas: number
+  subio: number
 }
 
-export default function Entrenador() {
+export default function Entrenador({ miembros }: { miembros: Miembro[] }) {
   const [jugadores, setJugadores] = useState(6)
   const [e, setE] = useState<Entrenamiento | null>(null)
   const [personas, setPersonas] = useState<Persona[]>([])
@@ -121,13 +128,28 @@ export default function Entrenador() {
   const nombreDe = (s: number) =>
     enAsiento[s] === 0 ? 'Tú' : (personaEn(s)?.nombre ?? NOMBRES[s % NOMBRES.length])
 
+  /*
+   * La mesa se arma con la gente de la liga.
+   *
+   * Practicar contra "Chuy" y "Lalo" es practicar contra nadie; contra los nombres y las
+   * caras de los que juegan el viernes, la cabeza sí se lo cree. Si faltan, se rellena
+   * con los de siempre.
+   */
   const nuevaMesa = (cuantos: number): Persona[] => {
     const suyos = rivalesAlAzar(cuantos, azar.current)
-    return suyos.map((rival, i) => ({
-      nombre: i === 0 ? 'Tú' : NOMBRES[(i - 1) % NOMBRES.length],
-      rival,
-      fichas: entrada,
-    }))
+    const dePila = [...miembros].sort(() => azar.current() - 0.5)
+    return suyos.map((rival, i) => {
+      const suyo = i === 0 ? null : dePila[i - 1]
+      return {
+        nombre: i === 0 ? 'Tú' : (suyo?.nombre ?? NOMBRES[(i - 1) % NOMBRES.length]),
+        foto: suyo?.foto ?? null,
+        rival,
+        fichas: entrada,
+        manos: 0,
+        jugadas: 0,
+        subio: 0,
+      }
+    })
   }
 
   const repartirOtra = (gente?: Persona[]) => {
@@ -230,6 +252,28 @@ export default function Entrenador() {
       jugadas: x.jugadas + (deLaMano.current.jugada ? 1 : 0),
       subio: x.subio + (deLaMano.current.subio ? 1 : 0),
     }))
+
+    /* Lo que hizo cada quien antes del flop, que es de donde sale leer a alguien: las
+       ciegas no cuentan porque no se eligen. */
+    const entro = new Set<number>()
+    const subio = new Set<number>()
+    for (const m of r.mano.movimientos) {
+      if (m.calle !== 'preflop' || m.tipo === 'ciega') continue
+      if (m.tipo === 'paga' || m.tipo === 'sube' || m.tipo === 'apuesta') entro.add(m.jugador)
+      if (m.tipo === 'sube' || m.tipo === 'apuesta') subio.add(m.jugador)
+    }
+    setPersonas((ps) =>
+      ps.map((p, i) => {
+        const s = enAsiento.indexOf(i)
+        if (s < 0) return p
+        return {
+          ...p,
+          manos: p.manos + 1,
+          jugadas: p.jugadas + (entro.has(s) ? 1 : 0),
+          subio: p.subio + (subio.has(s) ? 1 : 0),
+        }
+      }),
+    )
   }, [e])
 
   const mano = e?.mano ?? null
@@ -397,8 +441,8 @@ export default function Entrenador() {
     return {
       indice: s,
       nombre: nombreDe(s),
-      foto: null,
-      ocupado: false,
+      foto: personaEn(s)?.foto ?? null,
+      ocupado: Boolean(personaEn(s)?.foto),
       marca: a.marca,
       yo: s === heroe,
       cartas: suyas,
@@ -409,6 +453,7 @@ export default function Entrenador() {
       fuera: Boolean(mano && !mano.vivo[s]),
       activo: mano?.turno === s,
       accion: mano && !mano.vivo[s] ? 'Se fue' : ultimo ? comoSeDiceCorto(ultimo, money) : '',
+      gano: e?.final?.gana[s],
       estilo:
         verEstilos && e && s !== heroe ? estiloPorId(e.estilos[s]).nombre.toLowerCase() : undefined,
       manda: Boolean(e?.final?.ganadores.includes(s)),
@@ -445,6 +490,7 @@ export default function Entrenador() {
           eligiendo={null}
           bote={bote}
           dinero={money}
+          haciaGanador={e?.final?.ganadores[0] ?? null}
           onAsiento={() => {}}
           onCarta={() => {}}
         />
@@ -496,8 +542,10 @@ export default function Entrenador() {
                 {e.final ? 'Se acabó' : NOMBRE_CALLE[e.mano.calle]}
                 {!e.final && (
                   /* De dónde juegas esta mano: el botón se mueve y con él cambia todo. */
+                  /* Sin "vas de": los lugares se llaman "antes del botón" o "a media
+                     mesa" y con preposición delante no hay frase que aguante. */
                   <span className="font-sans text-[12px] font-semibold text-ink-soft">
-                    {' · vas de '}
+                    {' · '}
                     {(asientos.find((a) => a.indice === heroe)?.nombre ?? '').toLowerCase()}
                   </span>
                 )}
@@ -696,23 +744,77 @@ export default function Entrenador() {
             </p>
           )}
 
-          <ul className="m-0 mb-3 grid grid-cols-3 gap-2 list-none p-0">
-            {[
-              { k: 'Entras a', v: `${Math.round((resumen.jugadas / Math.max(1, resumen.manos)) * 100)}%` },
-              {
-                k: 'Y subes',
-                v: `${Math.round((resumen.subio / Math.max(1, resumen.jugadas)) * 100)}%`,
-              },
-              { k: 'Le atinas', v: tino === null ? '—' : `${Math.round(tino)}%` },
-            ].map((x) => (
-              <li key={x.k} className="rounded-xl bg-ink/6 px-2 py-2 text-center">
-                <span className="block text-[10.5px] leading-tight text-ink-soft">{x.k}</span>
-                <b className="block font-display text-[19px] leading-tight text-ink tabular-nums">
-                  {x.v}
-                </b>
-              </li>
-            ))}
-          </ul>
+          {/*
+           * La tabla de la mesa: tú y cada quien, con lo que se les ha visto hacer.
+           *
+           * Es la misma información con la que un jugador lee a otro en una noche larga
+           * —a cuántas entra, cuántas sube— y verla al lado de la tuya es lo que enseña
+           * a leerse a uno mismo.
+           */}
+          <div className="no-scrollbar -mx-1 mb-3 overflow-x-auto px-1">
+            <table className="w-full border-collapse text-[13px] whitespace-nowrap">
+              <thead>
+                <tr className="text-left text-[10px] tracking-[.5px] text-ink-soft uppercase">
+                  <th className="px-1 pb-2 font-semibold">Jugador</th>
+                  <th className="px-1 pb-2 text-right font-semibold">Fichas</th>
+                  <th className="px-1 pb-2 text-right font-semibold">Entra</th>
+                  <th className="px-1 pb-2 text-right font-semibold">Sube</th>
+                  <th className="px-1 pb-2 text-right font-semibold">Manos</th>
+                </tr>
+              </thead>
+              <tbody>
+                {personas.map((p, i) => {
+                  const yo = i === 0
+                  const entra = p.manos > 0 ? Math.round((p.jugadas / p.manos) * 100) : null
+                  const sube = p.jugadas > 0 ? Math.round((p.subio / p.jugadas) * 100) : null
+                  return (
+                    <tr key={i} className="border-t border-dashed border-paper-line">
+                      <td className="max-w-[108px] truncate px-1 py-2">
+                        <span className="flex items-center gap-1.5">
+                          {p.foto && <Cara nombre={p.nombre} foto={p.foto} size={20} />}
+                          <span className={`truncate font-semibold ${yo ? 'text-marca-tinta' : 'text-ink'}`}>
+                            {p.nombre}
+                          </span>
+                        </span>
+                        {verEstilos && !yo && (
+                          <span className="block text-[10px] leading-tight text-ink-soft">
+                            {estiloPorId(p.rival.base).nombre}
+                          </span>
+                        )}
+                        {yo && perfil && (
+                          <span className="block text-[10px] leading-tight text-ink-soft">
+                            {perfil.nombre}
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-1 py-2 text-right font-display tabular-nums text-ink">
+                        {money(p.fichas)}
+                      </td>
+                      <td className="px-1 py-2 text-right tabular-nums text-ink-soft">
+                        {entra === null ? '—' : `${entra}%`}
+                      </td>
+                      <td className="px-1 py-2 text-right tabular-nums text-ink-soft">
+                        {sube === null ? '—' : `${sube}%`}
+                      </td>
+                      <td className="px-1 py-2 text-right tabular-nums text-ink-soft">{p.manos}</td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          <p className="mt-0 mb-3 text-[11.5px] leading-snug text-ink-soft">
+            <b className="text-ink">Entra</b> es a cuántas manos le pone dinero por gusto, sin
+            contar las ciegas; <b className="text-ink">sube</b>, de ésas, en cuántas toma la
+            iniciativa. El que entra a muchas y casi no sube es el que paga la cena.
+            {tino !== null && (
+              <>
+                {' '}De tus decisiones con algo que pagar, le has atinado al{' '}
+                <b className="text-ink">{Math.round(tino)}%</b>.
+              </>
+            )}
+          </p>
 
           {historial.length > 0 && (
             <>
