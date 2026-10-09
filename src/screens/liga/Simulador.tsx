@@ -31,7 +31,7 @@ import {
   type Simulacion,
 } from '../../lib/poker'
 import Mesa, { type AsientoEnMesa } from './Mesa'
-import { BarraConRaya, BarraPegada, CAJA, FONDOS, TINTA, type Tono } from './tonos'
+import { BarraConRaya, BarraPegada, CAJA, FONDOS, TINTA, TiraConRaya, type Tono } from './tonos'
 
 /*
  * El simulador: ¿voy o no voy?
@@ -521,6 +521,15 @@ export default function Simulador({ miembros }: { miembros: Miembro[] }) {
       className="-mx-3.5 -mt-3.5 px-3.5 pt-3.5 pb-24 transition-[background] duration-500"
       style={{ background: FONDOS[veredicto.tono] }}
     >
+      {/* La cuenta, pegada arriba, igual que entrenando. */}
+      {cuentas && (
+        <TiraConRaya
+          ganas={cuentas.tienes}
+          necesitas={cuentas.necesitas}
+          tono={veredicto.tono}
+        />
+      )}
+
       <Mesa
         asientos={enMesa}
         mesa={mesaCartas}

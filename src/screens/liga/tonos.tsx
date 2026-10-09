@@ -1,3 +1,5 @@
+import { useEffect, useState } from 'react'
+
 /*
  * Los tres colores con los que se contesta: verde se paga, amarillo está parejo, rojo se
  * tira. El gris es "todavía no hay nada que decidir", no un cuarto consejo.
@@ -67,6 +69,56 @@ export function BarraPegada({
         <span className="min-w-0 flex-1 text-right text-[11.5px] leading-tight text-white/85">
           {linea}
         </span>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * La misma barra, en una tira que se queda pegada arriba de la mesa.
+ *
+ * Es lo que se mira a cada rato mientras se juega, así que no puede estar a dos dedos de
+ * scroll. Va arriba, corrida, con lo justo: la raya del mínimo y los dos números.
+ */
+export function TiraConRaya({ ganas, necesitas, tono }: {
+  ganas: number
+  necesitas: number
+  tono: Tono
+}) {
+  const raya = Math.max(0, Math.min(100, necesitas))
+  const barra = Math.max(0, Math.min(100, ganas))
+
+  /*
+   * A qué altura se pega: justo debajo de la barra de la liga, que también va pegada.
+   * Se mide en vivo y no se escribe a mano porque crece con el borde de arriba de cada
+   * teléfono, y un número fijo le acaba escondiendo los rótulos a alguien.
+   */
+  const [arriba, setArriba] = useState(64)
+  useEffect(() => {
+    const medir = () => setArriba(document.querySelector('header')?.offsetHeight ?? 64)
+    medir()
+    window.addEventListener('resize', medir)
+    return () => window.removeEventListener('resize', medir)
+  }, [])
+
+  return (
+    <div
+      className="sticky z-20 -mx-3.5 mb-2 bg-noche-honda/95 px-3.5 py-2 backdrop-blur"
+      style={{ top: arriba }}
+    >
+      <div className="mb-1 flex items-baseline justify-between text-[10px] font-bold tracking-[.4px] text-white/75 uppercase">
+        <span>Ganas {Math.round(barra)} de cada 100</span>
+        <span>Mínimo {Math.round(raya)}</span>
+      </div>
+      <div className="relative h-4 overflow-hidden rounded-md bg-white/15">
+        <div
+          className={`h-full ${BARRAS[tono]} transition-[width] duration-300`}
+          style={{ width: `${barra}%` }}
+        />
+        <div
+          className="absolute inset-y-0 w-[3px] bg-white"
+          style={{ left: `calc(${raya}% - 1.5px)` }}
+        />
       </div>
     </div>
   )

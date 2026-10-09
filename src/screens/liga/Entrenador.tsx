@@ -22,7 +22,7 @@ import {
 } from '../../lib/poker'
 import { ESTILOS, estiloPorId, rivalesAlAzar, type Rival } from '../../lib/rival'
 import Mesa, { type AsientoEnMesa } from './Mesa'
-import { BarraConRaya, BarraPegada, CAJA, FONDOS, TINTA, type Tono } from './tonos'
+import { BarraConRaya, BarraPegada, CAJA, FONDOS, TINTA, TiraConRaya, type Tono } from './tonos'
 
 /*
  * Practicar manos contra la máquina.
@@ -354,6 +354,16 @@ export default function Entrenador() {
       className="-mx-3.5 -mt-3.5 px-3.5 pt-3.5 pb-24 transition-[background] duration-500"
       style={{ background: FONDOS[veredicto.tono] }}
     >
+      {/* La cuenta, pegada arriba: es lo que se mira a cada rato mientras se juega y no
+          puede estar a dos dedos de scroll. */}
+      {cuentas && (
+        <TiraConRaya
+          ganas={cuentas.tienes}
+          necesitas={cuentas.necesitas}
+          tono={veredicto.tono}
+        />
+      )}
+
       {/* El aviso de que viene una carta, encima de la mesa y sin empujar nada. */}
       <div className="relative">
         {anuncio && (
