@@ -615,6 +615,12 @@ export const api = {
     post<{ ok: true }>(`ligas/${ligaId}/admin`, { usuarioId, esAdmin }),
   borrarLiga: (id: string) => borrar<{ ok: true }>(`ligas/${id}`),
   /** Mete a la liga a alguien que no va a instalar la app. */
+  /** El invitado ya se inscribió: todo lo que jugó se le pasa a su cuenta de verdad. */
+  invitadoEsUsuario: (ligaId: string, invitadoId: string, usuarioId: string) =>
+    post<{ ok: true; nombre: string }>(`ligas/${ligaId}/invitados/${invitadoId}/es`, {
+      usuarioId,
+    }),
+
   agregarInvitado: (ligaId: string, datos: { nombre: string; foto?: string | null }) =>
     post<{ invitado: { id: string; nombre: string; foto: string | null } }>(
       `ligas/${ligaId}/invitados`,

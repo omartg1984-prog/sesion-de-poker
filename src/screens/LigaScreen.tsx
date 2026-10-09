@@ -14,6 +14,7 @@ import {
   Shield,
   Trash2,
   Trophy,
+  UserCheck,
   UserMinus,
   UserPlus,
   Users,
@@ -22,6 +23,7 @@ import { useEffect, useState } from 'react'
 import EditorFichas from '../components/EditorFichas'
 import Sheet from '../components/Sheet'
 import Avatar, { AvatarEditable } from '../components/Avatar'
+import Cara from '../components/Cara'
 import LaLiga from './liga/LaLiga'
 import CrearTorneo from './liga/CrearTorneo'
 import Simulador from './liga/Simulador'
@@ -179,6 +181,26 @@ export default function LigaScreen() {
       setFotoPartida(null)
       irAPartida(r.partida.id, ligaId)
     }
+  }
+
+  /* El invitado al que se le está buscando su cuenta de verdad. */
+  const [inscribiendo, setInscribiendo] = useState<Miembro | null>(null)
+
+  /*
+   * Pasarle a su cuenta todo lo que jugó de invitado.
+   *
+   * Se recarga la liga entera y no sólo la lista: el invitado desaparece de las partidas
+   * viejas y sus puntos se le suman a él, así que la tabla de posiciones también cambia.
+   */
+  const mudarInvitado = async (invitado: Miembro, usuarioId: string) => {
+    if (ocupado) return
+    setOcupado(true)
+    const r = await conAviso(() => api.invitadoEsUsuario(ligaId, invitado.id, usuarioId))
+    setOcupado(false)
+    if (!r) return
+    setInscribiendo(null)
+    avisar(`Lo de ${invitado.nombre} ahora es de ${r.nombre}`)
+    void cargar()
   }
 
   const agregarInvitado = async () => {
@@ -816,58 +838,116 @@ ${link}`
           {miembros.map((m) => (
             <li
               key={m.id}
-              className="flex items-center gap-2.5 border-b border-dashed border-paper-line py-2.5 last:border-b-0"
+              className="border-b border-dashed border-paper-line py-2.5 last:border-b-0"
             >
-              <span className="h-9 w-9 shrink-0 overflow-hidden rounded-full bg-ink/8">
-                {m.foto ? (
-                  <img src={m.foto} alt="" className="h-full w-full object-cover" />
-                ) : (
-                  <span className="flex h-full w-full items-center justify-center font-display font-bold text-ink-soft">
-                    {m.nombre.charAt(0).toUpperCase()}
-                  </span>
-                )}
-              </span>
-              <span className="min-w-0 flex-1">
-                <b className="block truncate text-[15px] text-ink">
-                  {m.nombre}
-                  {m.id === yo.id && <span className="font-normal text-ink-soft"> (tú)</span>}
-                </b>
-                {/* Del invitado no hay usuario que enseñar: lo que hace falta saber es
-                    que no tiene la app, para que nadie espere que se apunte solo. */}
-                <span className="block truncate text-xs text-ink-soft">
-                  {m.es_invitado === 1 ? 'Invitado · sin app' : m.usuario}
-                </span>
-              </span>
-              {m.es_invitado !== 1 && (
-                <button
-                  type="button"
-                  disabled={!soyAdmin}
-                  onClick={() => void alternarAdmin(m)}
-                  aria-label={
-                    m.es_admin === 1 ? `Quitar admin a ${m.nombre}` : `Hacer admin a ${m.nombre}`
-                  }
-                  className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border-none transition-colors ${
-                    m.es_admin === 1 ? 'bg-marca/22 text-marca-tinta' : 'bg-ink/8 text-ink-soft/45'
-                  } ${soyAdmin ? 'cursor-pointer active:scale-95' : 'cursor-default'}`}
-                >
-                  <Shield size={15} strokeWidth={2.6} />
-                </button>
-              )}
-              {(soyAdmin || m.id === yo.id) && (
-                <button
-                  type="button"
-                  onClick={() => void sacar(m)}
-                  aria-label={
-                    m.id === yo.id ? 'Salirme de la liga' : `Sacar a ${m.nombre} de la liga`
-                  }
-                  className="flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-lg border-none bg-ink/8 text-ink-soft/55 transition-colors hover:bg-loss/12 hover:text-loss active:scale-95"
-                >
-                  {m.id === yo.id ? (
-                    <LogOut size={15} strokeWidth={2.5} />
+              <div className="flex items-center gap-2.5">
+                <span className="h-9 w-9 shrink-0 overflow-hidden rounded-full bg-ink/8">
+                  {m.foto ? (
+                    <img src={m.foto} alt="" className="h-full w-full object-cover" />
                   ) : (
-                    <UserMinus size={15} strokeWidth={2.5} />
+                    <span className="flex h-full w-full items-center justify-center font-display font-bold text-ink-soft">
+                      {m.nombre.charAt(0).toUpperCase()}
+                    </span>
                   )}
-                </button>
+                </span>
+                <span className="min-w-0 flex-1">
+                  <b className="block truncate text-[15px] text-ink">
+                    {m.nombre}
+                    {m.id === yo.id && <span className="font-normal text-ink-soft"> (tú)</span>}
+                  </b>
+                  {/* Del invitado no hay usuario que enseñar: lo que hace falta saber es
+                      que no tiene la app, para que nadie espere que se apunte solo. */}
+                  <span className="block truncate text-xs text-ink-soft">
+                    {m.es_invitado === 1 ? 'Invitado · sin app' : m.usuario}
+                  </span>
+                </span>
+                {/* Cuando el invitado se inscribe, lo que ya jugó se le pasa a su cuenta:
+                    si no, queda un fantasma con su historial y él empezando de cero. */}
+                {m.es_invitado === 1 && soyAdmin && (
+                  <button
+                    type="button"
+                    onClick={() => setInscribiendo((x) => (x?.id === m.id ? null : m))}
+                    aria-label={`${m.nombre} ya se inscribió`}
+                    className="flex h-9 shrink-0 cursor-pointer items-center gap-1 rounded-lg border-none bg-marca/18 px-2 text-[11.5px] font-bold text-marca-tinta active:scale-95"
+                  >
+                    <UserCheck size={14} strokeWidth={2.6} />
+                    Ya se inscribió
+                  </button>
+                )}
+                {m.es_invitado !== 1 && (
+                  <button
+                    type="button"
+                    disabled={!soyAdmin}
+                    onClick={() => void alternarAdmin(m)}
+                    aria-label={
+                      m.es_admin === 1 ? `Quitar admin a ${m.nombre}` : `Hacer admin a ${m.nombre}`
+                    }
+                    className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border-none transition-colors ${
+                      m.es_admin === 1 ? 'bg-marca/22 text-marca-tinta' : 'bg-ink/8 text-ink-soft/45'
+                    } ${soyAdmin ? 'cursor-pointer active:scale-95' : 'cursor-default'}`}
+                  >
+                    <Shield size={15} strokeWidth={2.6} />
+                  </button>
+                )}
+                {(soyAdmin || m.id === yo.id) && (
+                  <button
+                    type="button"
+                    onClick={() => void sacar(m)}
+                    aria-label={
+                      m.id === yo.id ? 'Salirme de la liga' : `Sacar a ${m.nombre} de la liga`
+                    }
+                    className="flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-lg border-none bg-ink/8 text-ink-soft/55 transition-colors hover:bg-loss/12 hover:text-loss active:scale-95"
+                  >
+                    {m.id === yo.id ? (
+                      <LogOut size={15} strokeWidth={2.5} />
+                    ) : (
+                      <UserMinus size={15} strokeWidth={2.5} />
+                    )}
+                  </button>
+                )}
+
+              </div>
+
+              {/* A quién se le pasa lo del invitado. Dos toques y con el aviso de lo que
+                  va a pasar escrito arriba: la mudanza no se deshace. */}
+              {inscribiendo?.id === m.id && (
+                <div className="mt-2 rounded-xl bg-ink/6 px-3 py-2.5">
+                  <p className="mt-0 mb-2 text-[12.5px] leading-snug text-ink-soft">
+                    ¿Cuál es la cuenta de <b className="text-ink">{m.nombre}</b>? Lo que jugó de
+                    invitado —sus noches, su saldo y sus puntos— se le pasa a ella, y el
+                    invitado desaparece de la liga.
+                  </p>
+                  {miembros.filter((x) => x.es_invitado !== 1).length === 0 ? (
+                    <p className="mt-0 mb-2 text-[12.5px] leading-snug text-ink-soft">
+                      Todavía no hay nadie inscrito a quien pasárselo. Dile que entre a la liga
+                      con el código <b className="text-ink">{liga.codigo}</b> y aquí aparece.
+                    </p>
+                  ) : (
+                    <div className="mb-2 flex flex-wrap gap-1.5">
+                      {miembros
+                        .filter((x) => x.es_invitado !== 1)
+                        .map((x) => (
+                          <button
+                            key={x.id}
+                            type="button"
+                            disabled={ocupado}
+                            onClick={() => void mudarInvitado(m, x.id)}
+                            className="flex cursor-pointer items-center gap-1.5 rounded-full border-none bg-white py-1 pr-2.5 pl-1 text-[12.5px] font-semibold text-ink active:scale-95 disabled:opacity-45"
+                          >
+                            <Cara nombre={x.nombre} foto={x.foto} size={20} />
+                            {x.nombre}
+                          </button>
+                        ))}
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    className="btn btn-ghost"
+                    onClick={() => setInscribiendo(null)}
+                  >
+                    Mejor no
+                  </button>
+                </div>
               )}
             </li>
           ))}

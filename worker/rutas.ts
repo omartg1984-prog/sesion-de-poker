@@ -445,7 +445,7 @@ export async function rutas(
        * partidas y en la tabla de la liga, pero marcada como invitada y con un PIN que
        * no existe: nadie va a entrar con ella. Quien la crea queda a cargo de moverla.
        */
-      if (partes[2] === 'invitados' && metodo === 'POST') {
+      if (partes[2] === 'invitados' && partes.length === 3 && metodo === 'POST') {
         if (!esAdminLiga)
           return json({ error: 'Solo un admin de la liga puede meter invitados' }, 403)
         const { nombre, foto } = await cuerpo<Record<string, unknown>>()
@@ -473,6 +473,96 @@ export async function rutas(
           .run()
 
         return json({ invitado: { id, nombre: nom, foto: foto ? String(foto) : null } }, 201)
+      }
+
+      /*
+       * POST /api/ligas/:id/invitados/:id/es — el invitado ya se inscribió.
+       *
+       * Al que no tiene la app se le abre una cuenta de invitado para que juegue como
+       * cualquiera. Cuando después se inscribe de verdad, lo que ya jugó —sus noches,
+       * su saldo, sus puntos— se queda colgado del invitado y en la tabla de la liga
+       * aparece dos veces: el fantasma con el historial y él con las manos vacías.
+       *
+       * Esto le pasa todo lo del invitado a su cuenta de verdad y borra al invitado. No
+       * se copia nada: las participaciones cambian de dueño, que es lo que hace que la
+       * tabla cuadre sin recalcular nada.
+       */
+      if (partes[2] === 'invitados' && partes[4] === 'es' && metodo === 'POST') {
+        if (!esAdminLiga)
+          return json({ error: 'Solo un admin de la liga puede hacer esto' }, 403)
+
+        const invitadoId = partes[3]
+        const { usuarioId } = await cuerpo<Record<string, unknown>>()
+        const suyo = String(usuarioId ?? '')
+        if (invitadoId === suyo) return json({ error: 'Es la misma cuenta' }, 400)
+
+        const invitado = await env.DB.prepare(
+          'SELECT id, nombre, es_invitado FROM usuarios WHERE id = ?',
+        )
+          .bind(invitadoId)
+          .first<{ id: string; nombre: string; es_invitado: number }>()
+        if (!invitado || invitado.es_invitado !== 1)
+          return json({ error: 'Ese no es un invitado de esta liga' }, 404)
+        if (!(await membresia(env, ligaId, invitadoId)))
+          return json({ error: 'Ese invitado no está en esta liga' }, 404)
+
+        const cuenta = await env.DB.prepare(
+          'SELECT id, nombre, es_invitado FROM usuarios WHERE id = ?',
+        )
+          .bind(suyo)
+          .first<{ id: string; nombre: string; es_invitado: number }>()
+        if (!cuenta) return json({ error: 'No encuentro esa cuenta' }, 404)
+        if (cuenta.es_invitado === 1)
+          return json({ error: 'Esa también es una cuenta de invitado' }, 409)
+
+        /*
+         * Si los dos estuvieron en la misma noche no hay mudanza posible: serían dos
+         * participaciones de la misma persona en la misma partida, que es justo lo que
+         * la base no deja y tampoco tendría sentido. Se dice en cuál para que se arregle
+         * a mano antes de intentarlo otra vez.
+         */
+        const choque = await env.DB.prepare(
+          `SELECT p.fecha, p.nombre
+             FROM participaciones a
+             JOIN participaciones b ON b.partida_id = a.partida_id AND b.usuario_id = ?
+             JOIN partidas p ON p.id = a.partida_id
+            WHERE a.usuario_id = ?
+            LIMIT 1`,
+        )
+          .bind(suyo, invitadoId)
+          .first<{ fecha: string; nombre: string | null }>()
+        if (choque)
+          return json(
+            {
+              error: `Los dos están apuntados en ${choque.nombre ? `"${choque.nombre}"` : `la partida del ${choque.fecha}`}. Saca a uno de esa noche y vuelve a intentarlo.`,
+            },
+            409,
+          )
+
+        await env.DB.batch([
+          /* Lo que jugó cambia de dueño: ahí viven el saldo y los puntos. */
+          env.DB.prepare('UPDATE participaciones SET usuario_id = ? WHERE usuario_id = ?').bind(
+            suyo,
+            invitadoId,
+          ),
+          /* Por si alguna vez se le dejó el banco o un conteo apuntado a su nombre. */
+          env.DB.prepare('UPDATE partidas SET jefe_id = ? WHERE jefe_id = ?').bind(
+            suyo,
+            invitadoId,
+          ),
+          env.DB.prepare('UPDATE participaciones SET contadas_por = ? WHERE contadas_por = ?').bind(
+            suyo,
+            invitadoId,
+          ),
+          /* Y queda en la liga, por si todavía no había entrado con el código. */
+          env.DB.prepare(
+            'INSERT OR IGNORE INTO miembros (liga_id, usuario_id, es_admin, entro_en) VALUES (?, ?, 0, ?)',
+          ).bind(ligaId, suyo, ahora()),
+          /* El invitado ya no tiene nada colgando: se va con todo y sus membresías. */
+          env.DB.prepare('DELETE FROM usuarios WHERE id = ?').bind(invitadoId),
+        ])
+
+        return json({ ok: true, nombre: cuenta.nombre })
       }
 
       // POST /api/ligas/:id/admin — dar o quitar admin de liga
