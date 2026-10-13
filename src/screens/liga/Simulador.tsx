@@ -23,6 +23,7 @@ import {
   bandaDeJugabilidad,
   carta,
   cuentasDeLaApuesta,
+  salidas,
   equidadDe,
   nombreDeLaMano,
   paloDe,
@@ -361,6 +362,15 @@ export default function Simulador({ miembros }: { miembros: Miembro[] }) {
   const equidad = resultado ? equidadDe(resultado) : 0
   const banda = bandaDeJugabilidad(equidad, vivos.length, miAsiento.posicion)
   const cuentas = resultado ? cuentasDeLaApuesta(equidad, elBote, laApuesta) : null
+
+  /* Las cartas que todavía te salvan. Es lo primero que se cuenta en una mesa de
+     verdad, antes que ninguna otra cosa, y por eso va pegada a la mesa. */
+  const misSalidas = useMemo(
+    () => (miMano.length === 2 ? salidas(miMano, mesa) : null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [miMano.join(','), mesa.join(',')],
+  )
+  const hayCuenta = Boolean(misSalidas?.contadas && misSalidas.porVenir > 0)
   const justo = 100 / Math.max(2, vivos.length)
   const trae = miMano.length === 2 && mesa.length >= 3 ? nombreDeLaMano(miMano, mesa) : ''
   const sabidas = manosRivales.filter((m) => m.length === 2).length
@@ -546,7 +556,55 @@ export default function Simulador({ miembros }: { miembros: Miembro[] }) {
         }}
       />
 
-      <p className="mt-1 mb-2.5 text-center text-[11.5px] leading-snug text-tiza-suave">
+      {/* ---- las cartas que te salvan ----
+          La cuenta de toda la vida: cuántas cartas me salvan, qué tan seguido salen, y
+          qué tajada del bote me están pidiendo por verlas. Va pegada a la mesa porque
+          es lo que se mira estando a media mano, sin tiempo de bajarle a nada. */}
+      {misSalidas && (
+        <div className="mt-1.5 grid grid-cols-3 gap-1.5">
+          {[
+            {
+              k: 'Te salvan',
+              v: hayCuenta ? String(misSalidas.cuantas) : '—',
+              p: hayCuenta
+                ? misSalidas.cuantas === 1
+                  ? 'carta'
+                  : 'cartas'
+                : misSalidas.contadas
+                  ? 'ya no viene nada'
+                  : 'falta el flop',
+            },
+            {
+              k: 'Las pegas',
+              v: hayCuenta ? `${Math.round(misSalidas.probabilidad)}%` : '—',
+              p: hayCuenta
+                ? misSalidas.porVenir === 2
+                  ? 'de aquí al final'
+                  : 'en la que falta'
+                : misSalidas.contadas
+                  ? 'ya está todo'
+                  : 'falta el flop',
+            },
+            {
+              k: 'Te piden',
+              v: cuentas ? `${Math.round(cuentas.parteDelBote * 100)}%` : '—',
+              p: cuentas ? 'del bote' : 'nada todavía',
+            },
+          ].map((x) => (
+            <div key={x.k} className="rounded-xl bg-black/30 px-2 py-1.5 text-center">
+              <span className="block text-[8.5px] leading-tight font-bold tracking-[.6px] text-tiza-suave uppercase">
+                {x.k}
+              </span>
+              <b className="block font-display text-[19px] leading-tight text-white tabular-nums">
+                {x.v}
+              </b>
+              <span className="block text-[9.5px] leading-tight text-tiza-suave">{x.p}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <p className="mt-1.5 mb-2.5 text-center text-[11.5px] leading-snug text-tiza-suave">
         Toca una carta de en medio para ponerla, o a alguien para darle las suyas. Estás en{' '}
         <b className="text-white">{miAsiento.nombre.toLowerCase()}</b>, posición{' '}
         {NOMBRE_POSICION[miAsiento.posicion]}.
@@ -877,6 +935,17 @@ export default function Simulador({ miembros }: { miembros: Miembro[] }) {
             <p className="mt-3 mb-0 text-[12.5px] leading-relaxed text-ink-soft">
               La raya sale de ahí: pones <b className="text-ink">{money(laApuesta)}</b> para
               llevarte los <b className="text-ink">{money(elBote)}</b> que ya hay.
+            </p>
+
+            {/* Lo mismo, pero en por cientos: es la forma en que la cuenta se vuelve una
+                raya, y preguntártelo cada mano es lo que acaba enseñándola. */}
+            <p className="mt-2 mb-0 text-[12.5px] leading-relaxed text-ink-soft">
+              Te piden el <b className="text-ink">{Math.round(cuentas.parteDelBote * 100)}%</b>{' '}
+              del bote. Con lo tuyo dentro queda en{' '}
+              <b className="text-ink">{money(elBote + laApuesta)}</b>, así que estás poniendo el{' '}
+              <b className="text-ink">{Math.round(cuentas.necesitas)}%</b> de lo que te vas a
+              llevar: ganando más de {Math.round(cuentas.necesitas)} de cada 100, pagar sale a
+              cuentas. Eso es todo lo que hace que sea viable o no.
             </p>
             <p className="mt-2 mb-0 text-[12.5px] leading-relaxed text-ink-soft">
               Dicho en dinero: cada vez que se jugara esta mano, pagar te{' '}

@@ -482,3 +482,205 @@ export function cuentasDeLaApuesta(equidad: number, bote: number, apuesta: numbe
     conviene: esperado >= 0,
   }
 }
+
+/* ---- las cartas que todavía te pueden salvar ---- */
+
+export interface Salidas {
+  /** Cuántas de las que faltan te suben a algo que gana. */
+  cuantas: number
+  /** Cuáles son, para poder enseñarlas. */
+  cartas: number[]
+  /** Cuántas faltan por salir: dos en el flop, una en el turn, ninguna en el river. */
+  porVenir: number
+  /** Qué tan seguido sale al menos una de ellas, en por ciento. */
+  probabilidad: number
+  /**
+   * Si de verdad se pudieron contar.
+   *
+   * Antes del flop no hay mesa de donde contarlas y cero no querría decir "no traes
+   * nada" sino "todavía no se sabe", que no es lo mismo ni de lejos.
+   */
+  contadas: boolean
+}
+
+/**
+ * Las cartas que todavía te pueden salvar la mano.
+ *
+ * Es la cuenta de toda la vida: cuatro para el color son nueve cartas, una escalera
+ * abierta son ocho. Se cuentan las que te suben a algo que de verdad gana —de dos pares
+ * para arriba, o emparejar una de las tuyas cuando no hay nada mayor en la mesa— y no
+ * cualquiera que te mejore: emparejar un cinco en una mesa con rey no salva a nadie.
+ *
+ * Las que emparejan la mesa tampoco cuentan, porque ésas se las dan a todos por igual
+ * y no te adelantan nada.
+ *
+ * En el river no hay salidas: ya no viene nada y lo que traes es lo que vale.
+ */
+export function salidas(mano: number[], mesa: number[]): Salidas {
+  const faltanPorSalir = Math.max(0, 5 - mesa.length)
+
+  /* Antes del flop no hay nada que contar: ahí lo que se juega es la mano que traes. */
+  if (mano.length !== 2 || mesa.length < 3 || mesa.length > 5)
+    return { cuantas: 0, cartas: [], porVenir: faltanPorSalir, probabilidad: 0, contadas: false }
+
+  /* En el river ya salió todo: lo que traes es lo que vale. */
+  if (mesa.length === 5)
+    return { cuantas: 0, cartas: [], porVenir: 0, probabilidad: 0, contadas: true }
+
+  const vistas = new Set([...mano, ...mesa])
+  const ahora = categoriaDe(evaluar([...mano, ...mesa]))
+  const altoDeLaMesa = Math.max(...mesa.map(valorDe))
+
+  const cartas: number[] = []
+  for (let c = 0; c < 52; c++) {
+    if (vistas.has(c)) continue
+    const nueva = categoriaDe(evaluar([...mano, ...mesa, c]))
+    if (nueva <= ahora) continue
+
+    const esTuya = mano.some((h) => valorDe(h) === valorDe(c))
+    /* Escalera, color y escalera de color: ésas sí las armas tú con las tuyas. */
+    const cierraProyecto = nueva === 4 || nueva === 5 || nueva === 8
+
+    /* La que empareja la mesa no cuenta aunque te suba: se la dan a todos por igual, y
+       al que ya te iba ganando lo sube también. Lo único que vale de ahí es la carta
+       que te cierra el proyecto. */
+    if (!esTuya && mesa.some((b) => valorDe(b) === valorDe(c)) && !cierraProyecto) continue
+
+    /* De dos pares para arriba cuenta siempre. Quedarse en par sólo cuenta si empareja
+       una de las tuyas y no hay nada más grande en la mesa: ése es el par de arriba. */
+    if (nueva >= 2 || (esTuya && valorDe(c) > altoDeLaMesa)) cartas.push(c)
+  }
+
+  const porVenir = 5 - mesa.length
+  const faltan = 52 - mano.length - mesa.length
+  const k = cartas.length
+
+  /* Pegar al menos una es uno menos fallarlas todas, una carta tras otra. */
+  let fallar = 1
+  for (let i = 0; i < porVenir; i++) fallar *= Math.max(0, faltan - k - i) / (faltan - i)
+
+  return { cuantas: k, cartas, porVenir, probabilidad: (1 - fallar) * 100, contadas: true }
+}
+
+/* ---- lo que las cuentas frías no ven ---- */
+
+export interface Razon {
+  texto: string
+  /** A favor de pagar, en contra, o ni una cosa ni otra. */
+  aFavor: boolean | null
+}
+
+export interface Humano {
+  /** La raya de siempre: lo que haría falta si la mano se acabara aquí. */
+  fria: number
+  /** La raya ya contando lo que todavía le puedes sacar después. */
+  necesitas: number
+  /** Lo que se cuenta que le sacas después si la pegas, en pesos. */
+  extra: number
+  /** Si pagar sale a cuentas con todo dentro. */
+  conviene: boolean
+  /** Lo que se tomó en cuenta, en palabras, para poder discutirlo. */
+  razones: Razon[]
+}
+
+/** Todo lo que hay alrededor de la apuesta y que la cuenta fría no mira. */
+export interface Situacion {
+  /** Lo que hay en el bote antes de que pongas lo tuyo. */
+  bote: number
+  /** Lo que te piden. */
+  apuesta: number
+  /** Lo que les queda atrás a los que siguen: lo más que les puedes sacar. */
+  atras: number
+  salidas: Salidas
+  /** Hablas al último en esta calle. */
+  ultimo: boolean
+  /** De cada 100 manos, a cuántas entra el que apostó. null si no se le ha visto jugar. */
+  entraElQueApuesta: number | null
+  /** Lo que ganarías mano a mano, si los demás se fueran. null si no se sabe. */
+  manoAMano: number | null
+}
+
+/**
+ * La misma cuenta, pero como la hace alguien que lleva años jugando.
+ *
+ * La cuenta fría sólo mira el dinero que ya está en la mesa, y por eso sale miedosa:
+ * manda tirar proyectos que cualquiera paga. Lo que le falta es lo que pasa después
+ * —si la pegas, todavía te van a pagar más— y eso baja la raya de verdad, no de dicho.
+ *
+ * Lo demás que importa no se deja meter en una cuenta sin inventarse números: desde
+ * dónde hablas, y quién fue el que apostó. Eso va en palabras, que es como se piensa en
+ * la mesa, y es cosa tuya pesarlo.
+ */
+export function conFactorHumano(c: Cuentas, m: Situacion): Humano {
+  const razones: Razon[] = []
+
+  /*
+   * Lo que todavía le puedes sacar si la pegas.
+   *
+   * No es todo lo que traen atrás: hay que pegarla y además que te paguen. Se cuenta
+   * media apuesta del tamaño del bote, que es lo que de verdad se cobra, y sólo con
+   * proyecto de a de veras y con cartas por venir. Sin proyecto no hay qué esperar.
+   */
+  const hayProyecto = m.salidas.contadas && m.salidas.porVenir > 0 && m.salidas.cuantas >= 4
+  const extra = hayProyecto ? Math.max(0, Math.min(m.atras, m.bote + m.apuesta) * 0.5) : 0
+
+  const necesitas = (m.apuesta / (m.bote + m.apuesta + extra)) * 100
+  const conviene = c.tienes >= necesitas
+
+  if (extra > 0)
+    razones.push({
+      aFavor: true,
+      texto: `Traes ${m.salidas.cuantas} cartas que te salvan y atrás queda dinero: si la pegas todavía le sacas más. Contando eso, la raya baja de ${Math.round(c.necesitas)} a ${Math.round(necesitas)}.`,
+    })
+  else if (!m.salidas.contadas)
+    razones.push({
+      aFavor: null,
+      texto:
+        'Antes del flop no hay cartas que contar: aquí lo que se juega es la mano que traes y desde dónde hablas.',
+    })
+  else if (m.salidas.porVenir === 0)
+    razones.push({
+      aFavor: false,
+      texto:
+        'Ya no viene ninguna carta: lo que traes es lo que vale y no hay nada que esperar de después.',
+    })
+  else
+    razones.push({
+      aFavor: false,
+      texto:
+        'No traes proyecto: no hay carta que te salve, así que el dinero de después no cuenta.',
+    })
+
+  razones.push(
+    m.ultimo
+      ? {
+          aFavor: true,
+          texto: 'Hablas al último: ves lo que hacen todos antes de poner un peso más.',
+        }
+      : {
+          aFavor: false,
+          texto: 'Hablas temprano: los que faltan todavía te pueden subir y te sale más cara.',
+        },
+  )
+
+  if (m.entraElQueApuesta !== null) {
+    if (m.entraElQueApuesta >= 45)
+      razones.push({
+        aFavor: true,
+        texto: `El que apostó entra a ${Math.round(m.entraElQueApuesta)} de cada 100 manos: apuesta con cualquier cosa, así que su apuesta dice poco.`,
+      })
+    else if (m.entraElQueApuesta <= 22)
+      razones.push({
+        aFavor: false,
+        texto: `El que apostó entra a ${Math.round(m.entraElQueApuesta)} de cada 100 manos: cuando se mete suele traer algo. La cuenta te lo toma por una mano cualquiera, así que ahí ganas menos de lo que dice.`,
+      })
+  }
+
+  if (m.manoAMano !== null && m.manoAMano - c.tienes >= 8)
+    razones.push({
+      aFavor: true,
+      texto: `Contra todos los que siguen ganas ${Math.round(c.tienes)} de cada 100; mano a mano ganarías ${Math.round(m.manoAMano)}. Si se van los demás, la mano es de las buenas.`,
+    })
+
+  return { fria: c.necesitas, necesitas, extra, conviene, razones }
+}

@@ -16,9 +16,11 @@ import { money } from '../../lib/money'
 import {
   asientosDe,
   azarCon,
+  conFactorHumano,
   cuentasDeLaApuesta,
   equidadDe as parteDe,
   nombreDeLaMano,
+  salidas,
   simular,
 } from '../../lib/poker'
 import {
@@ -373,6 +375,82 @@ export default function Entrenador({ miembros, liga }: { miembros: Miembro[]; li
   const meFalta = mano && sigoVivo ? Math.max(...mano.puesto) - mano.puesto[heroe] : 0
   const cuentas = equidad !== null ? cuentasDeLaApuesta(equidad, bote, meFalta) : null
 
+  /* Las cartas que todavía te salvan. Se cuentan siempre que haya flop, se esté
+     pagando algo o no: es lo primero que se mira al ver la mesa. */
+  const misSalidas = useMemo(
+    () => (e && sigoVivo ? salidas(e.cartas[heroe], mesa) : null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [e?.cartas, mesa.length, sigoVivo],
+  )
+
+  /*
+   * Lo que ganarías si se fueran los demás y quedara uno solo.
+   *
+   * La cuenta de arriba da por hecho que todos los que siguen llegan hasta el final, y
+   * casi nunca pasa: la mitad se va antes. Ver los dos números juntos es lo que explica
+   * por qué una mano que "pierde" contra cuatro es buena contra uno.
+   */
+  const manoAMano = useMemo(() => {
+    if (!e || !sigoVivo || vivos <= 2) return null
+    return parteDe(
+      simular({
+        mano: e.cartas[heroe],
+        mesa,
+        rivales: 1,
+        iteraciones: 4000,
+        azar: azarCon(e.cartas[heroe][0] * 97 + e.cartas[heroe][1] + mesa.length * 131 + 7),
+      }),
+    )
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [e?.cartas, mesa.length, vivos, sigoVivo])
+
+  /* Quién fue el que apostó en esta calle: las ciegas no cuentan, que ésas no se eligen. */
+  const elQueApuesta = (() => {
+    if (!mano) return null
+    const m = [...mano.movimientos]
+      .reverse()
+      .find((x) => x.calle === mano.calle && (x.tipo === 'apuesta' || x.tipo === 'sube'))
+    return m && m.jugador !== heroe ? m.jugador : null
+  })()
+
+  /* A cuántas manos entra ése, de lo que se le ha visto. Con menos de cinco manos no se
+     le ha visto nada y no se inventa: una noche no alcanza para leer a nadie. */
+  const entraElQueApuesta = (() => {
+    if (elQueApuesta === null) return null
+    const quien = personaEn(elQueApuesta)
+    if (!quien || quien.manos < 5) return null
+    return (quien.jugadas / quien.manos) * 100
+  })()
+
+  /* Lo más que le puedes sacar después: ni más de lo que traes tú, ni más de lo que
+     trae atrás el que más trae de los que siguen. */
+  const atras =
+    mano && sigoVivo
+      ? Math.min(
+          mano.resto[heroe],
+          mano.resto.reduce((may, r, i) => (i !== heroe && mano.vivo[i] ? Math.max(may, r) : may), 0),
+        )
+      : 0
+
+  /* Antes del flop no se cuentan salidas y en el river ya no viene ninguna: en los dos
+     casos no hay número que enseñar, pero por motivos distintos. */
+  const hayCuenta = Boolean(misSalidas?.contadas && misSalidas.porVenir > 0)
+  const sinFlop = mesa.length < 3
+
+  /* La cuenta como la hace alguien que lleva años jugando, no la calculadora. */
+  const humano =
+    cuentas && misSalidas
+      ? conFactorHumano(cuentas, {
+          bote,
+          apuesta: meFalta,
+          atras,
+          salidas: misSalidas,
+          ultimo: (asientos.find((a) => a.indice === heroe)?.posicion ?? 'media') === 'tardia',
+          entraElQueApuesta,
+          manoAMano,
+        })
+      : null
+
   /* Lo que traigo enfrente: durante la mano, lo que queda; entre manos, lo de la cuenta. */
   const misFichas = mano ? mano.resto[heroe] + (e?.final?.gana[heroe] ?? 0) : (personas[0]?.fichas ?? entrada)
 
@@ -434,8 +512,8 @@ export default function Entrenador({ miembros, liga }: { miembros: Miembro[]; li
       /* Si entrar salía a cuentas se mide en la primera decisión de la mano y no
          después: después ya se sabe cómo acabó y no es la misma pregunta. Y sólo
          cuando hay algo que pagar: pasar de gratis desde la ciega no es entrar. */
-      if (deLaMano.current.debio === null && cuentas && meFalta > 0)
-        deLaMano.current.debio = cuentas.conviene
+      if (deLaMano.current.debio === null && humano && meFalta > 0)
+        deLaMano.current.debio = humano.conviene
     }
 
     /* Apostar y subir, en cualquier calle: de ahí sale si eres de los que arriesgan. */
@@ -444,8 +522,8 @@ export default function Entrenador({ miembros, liga }: { miembros: Miembro[]; li
 
     /* Sólo se califica lo que tiene con qué calificarse: con algo que pagar y con las
        cuentas hechas. Subir no se juzga aquí, que eso depende de a quién se le sube. */
-    if (cuentas && (tipo === 'seVa' || tipo === 'paga')) {
-      const bien = tipo === 'paga' ? cuentas.conviene : !cuentas.conviene
+    if (cuentas && humano && (tipo === 'seVa' || tipo === 'paga')) {
+      const bien = tipo === 'paga' ? humano.conviene : !humano.conviene
       if (enSesion)
         setTanteo((x) => ({
           ...x,
@@ -460,19 +538,19 @@ export default function Entrenador({ miembros, liga }: { miembros: Miembro[]; li
             mano: caja.manos + 1,
             texto: `${NOMBRE_CALLE[e.mano.calle].toLowerCase()}: ${
               tipo === 'paga' ? `pagaste ${money(meFalta)}` : 'te fuiste'
-            } con ${Math.round(cuentas.tienes)} de cada 100 y pedían ${Math.round(cuentas.necesitas)}`,
+            } con ${Math.round(cuentas.tienes)} de cada 100 y pedían ${Math.round(humano.necesitas)}`,
             bien,
           },
           ...h,
         ].slice(0, 12),
       )
     }
-    if (cuentas && (tipo === 'seVa' || tipo === 'paga')) {
+    if (cuentas && humano && (tipo === 'seVa' || tipo === 'paga')) {
       const gana = Math.round(cuentas.tienes)
-      const pide = Math.round(cuentas.necesitas)
+      const pide = Math.round(humano.necesitas)
       if (tipo === 'paga')
         setConsejo(
-          cuentas.conviene
+          humano.conviene
             ? { bien: true, texto: `Bien pagado: ganas ${gana} de cada 100 y te bastaban ${pide}.` }
             : {
                 bien: false,
@@ -481,7 +559,7 @@ export default function Entrenador({ miembros, liga }: { miembros: Miembro[]; li
         )
       else
         setConsejo(
-          cuentas.conviene
+          humano.conviene
             ? {
                 bien: false,
                 texto: `Te fuiste con ${gana} de cada 100 y te bastaban ${pide}: ahí se pagaba.`,
@@ -518,9 +596,9 @@ export default function Entrenador({ miembros, liga }: { miembros: Miembro[]; li
         titulo: 'Esperando',
         linea: mano?.turno !== null ? `Está pensando ${nombreDe(mano!.turno!)}.` : '',
       }
-    if (cuentas) {
-      const holgura = cuentas.tienes / Math.max(cuentas.necesitas, 0.0001)
-      const linea = `Ganas ${Math.round(cuentas.tienes)} de cada 100 y te piden ${Math.round(cuentas.necesitas)}.`
+    if (cuentas && humano) {
+      const holgura = cuentas.tienes / Math.max(humano.necesitas, 0.0001)
+      const linea = `Ganas ${Math.round(cuentas.tienes)} de cada 100 y te piden ${Math.round(humano.necesitas)}.`
       if (holgura >= 1.25) return { tono: 'verde', titulo: 'Paga', linea }
       if (holgura >= 1) return { tono: 'ambar', titulo: 'Apenas alcanza', linea }
       return { tono: 'rojo', titulo: 'Tírala', linea }
@@ -576,12 +654,8 @@ export default function Entrenador({ miembros, liga }: { miembros: Miembro[]; li
     >
       {/* La cuenta, pegada arriba: es lo que se mira a cada rato mientras se juega y no
           puede estar a dos dedos de scroll. */}
-      {cuentas && (
-        <TiraConRaya
-          ganas={cuentas.tienes}
-          necesitas={cuentas.necesitas}
-          tono={veredicto.tono}
-        />
+      {cuentas && humano && (
+        <TiraConRaya ganas={cuentas.tienes} necesitas={humano.necesitas} tono={veredicto.tono} />
       )}
 
       {/* El aviso de que viene una carta, encima de la mesa y sin empujar nada. */}
@@ -604,6 +678,56 @@ export default function Entrenador({ miembros, liga }: { miembros: Miembro[]; li
           onCarta={() => {}}
         />
       </div>
+
+      {/* ---- las cartas que te salvan ----
+          Es la cuenta que se hace en la mesa antes que ninguna otra, y por eso vive
+          pegada a la mesa y no en un panel allá abajo: cuántas cartas me salvan, qué
+          tan seguido salen, y qué tajada del bote me están pidiendo por verlas. */}
+      {e && sigoVivo && (
+        <div className="mt-1.5 grid grid-cols-3 gap-1.5">
+          {/* Antes del flop no hay cartas que contar, y en el river ya no viene ninguna:
+              en los dos casos va una raya, que un cero diría otra cosa. */}
+          {[
+            {
+              k: 'Te salvan',
+              v: hayCuenta ? String(misSalidas!.cuantas) : '—',
+              p: !hayCuenta
+                ? sinFlop
+                  ? 'falta el flop'
+                  : 'ya no viene nada'
+                : misSalidas!.cuantas === 1
+                  ? 'carta'
+                  : 'cartas',
+            },
+            {
+              k: 'Las pegas',
+              v: hayCuenta ? `${Math.round(misSalidas!.probabilidad)}%` : '—',
+              p: !hayCuenta
+                ? sinFlop
+                  ? 'falta el flop'
+                  : 'ya está todo'
+                : misSalidas!.porVenir === 2
+                  ? 'de aquí al final'
+                  : 'en la que falta',
+            },
+            {
+              k: 'Te piden',
+              v: cuentas ? `${Math.round(cuentas.parteDelBote * 100)}%` : '—',
+              p: cuentas ? 'del bote' : 'nada, vas gratis',
+            },
+          ].map((x) => (
+            <div key={x.k} className="rounded-xl bg-black/30 px-2 py-1.5 text-center">
+              <span className="block text-[8.5px] leading-tight font-bold tracking-[.6px] text-tiza-suave uppercase">
+                {x.k}
+              </span>
+              <b className="block font-display text-[19px] leading-tight text-white tabular-nums">
+                {x.v}
+              </b>
+              <span className="block text-[9.5px] leading-tight text-tiza-suave">{x.p}</span>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* La cuenta de la sesión: sin esto, practicar no se siente ir a ningún lado. */}
       <div className="mt-1 mb-3 flex items-center justify-center gap-2 text-[12px] text-tiza-suave">
@@ -856,7 +980,7 @@ export default function Entrenador({ miembros, liga }: { miembros: Miembro[]; li
       </section>
 
       {/* ---- la cuenta, cuando hay algo que pagar ---- */}
-      {cuentas && meToca && (
+      {cuentas && humano && meToca && (
         <section className="panel">
           <p className="panel-title">
             <span>¿Voy o no voy?</span>
@@ -871,11 +995,58 @@ export default function Entrenador({ miembros, liga }: { miembros: Miembro[]; li
               Pones {money(meFalta)} para llevarte los {money(bote)} que ya hay.
             </span>
           </div>
+
+          {/* De dónde sale la raya, dicho con los números de esta mano: es la pregunta
+              que está debajo de todo lo demás y merece contestarse cada vez. */}
+          <p className="mt-2.5 mb-0 text-[12px] leading-snug text-ink">
+            Te piden {money(meFalta)}, que es el{' '}
+            <b>{Math.round(cuentas.parteDelBote * 100)}%</b> del bote. Con lo tuyo dentro el
+            bote queda en {money(bote + meFalta)}, así que estás poniendo el{' '}
+            <b>{Math.round(cuentas.necesitas)}%</b> de lo que te vas a llevar: ganando más de{' '}
+            {Math.round(cuentas.necesitas)} de cada 100, pagar sale a cuentas. Eso si la mano
+            se acabara aquí; abajo está lo que mueve la raya.
+          </p>
           <BarraConRaya
-              ganas={cuentas.tienes}
-              necesitas={cuentas.necesitas}
-              tono={veredicto.tono}
-            />
+            ganas={cuentas.tienes}
+            necesitas={humano.necesitas}
+            tono={veredicto.tono}
+          />
+
+          {/*
+           * Lo que la calculadora no ve.
+           *
+           * La cuenta de arriba sólo mira el dinero que ya está en la mesa, y por eso
+           * sale miedosa. Aquí va lo demás —lo que todavía le puedes sacar, desde dónde
+           * hablas, quién fue el que apostó— escrito para poder discutirlo, que es como
+           * se decide en una mesa de verdad.
+           */}
+          <p className="field-label mt-3 mb-1.5">Y además de los números</p>
+          <ul className="m-0 list-none p-0">
+            {humano.razones.map((r, i) => (
+              <li
+                key={i}
+                className="flex items-start gap-2 border-b border-dashed border-paper-line py-1.5 last:border-b-0"
+              >
+                <span
+                  className={`mt-[3px] shrink-0 font-display text-[13px] leading-none font-bold ${
+                    r.aFavor === null ? 'text-ink-soft' : r.aFavor ? 'text-win' : 'text-loss'
+                  }`}
+                >
+                  {r.aFavor === null ? '·' : r.aFavor ? '+' : '−'}
+                </span>
+                <span className="min-w-0 flex-1 text-[12px] leading-snug text-ink">{r.texto}</span>
+              </li>
+            ))}
+          </ul>
+          {humano.extra > 0 && (
+            <p className="mt-2 mb-0 text-[11.5px] leading-snug text-ink-soft">
+              Con lo que hay nada más en el bote te pedían{' '}
+              <b className="text-ink">{Math.round(humano.fria)} de cada 100</b>; contando lo que
+              todavía le sacas si la pegas, te bastan{' '}
+              <b className="text-ink">{Math.round(humano.necesitas)}</b>. Eso es lo que la
+              calculadora sola no ve.
+            </p>
+          )}
         </section>
       )}
 

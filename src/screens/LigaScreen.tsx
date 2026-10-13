@@ -458,7 +458,7 @@ ${link}`
             ['posiciones', 'Posiciones'],
             /* La discusión de media noche —"¿eso se juega?"— es tan de la liga como la
                tabla: por eso vive aquí y no detrás de un botón. */
-            ['simulador', '¿Voy?'],
+            ['simulador', 'Simulador'],
             ['reglas', 'Reglas'],
           ] as const
         ).map(([id, texto]) => (

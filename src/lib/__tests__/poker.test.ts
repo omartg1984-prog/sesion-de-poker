@@ -6,11 +6,14 @@ import {
   bandaDeJugabilidad,
   carta,
   categoriaDe,
+  conFactorHumano,
   cuentasDeLaApuesta,
   equidadDe,
   evaluar,
   nombreDeLaMano,
+  salidas,
   simular,
+  type Salidas,
 } from '../poker'
 
 /*
@@ -422,5 +425,204 @@ describe('si conviene pagar', () => {
     expect(cuentasDeLaApuesta(50, 0, 100)).toBeNull()
     expect(cuentasDeLaApuesta(50, 500, 0)).toBeNull()
     expect(cuentasDeLaApuesta(50, 500, NaN)).toBeNull()
+  })
+})
+
+/*
+ * Las salidas.
+ *
+ * Aquí no se inventa nada: son los números que trae cualquier libro de póker, y si la
+ * cuenta no da nueve con cuatro para el color es que está mal.
+ */
+describe('las cartas que te salvan', () => {
+  it('cuatro para el color son nueve cartas', () => {
+    /* Sin cartas altas a propósito: emparejar un seis en una mesa con as no salva. */
+    const s = salidas(mano('6s 5s'), mano('As Ks 2h'))
+    expect(s.cuantas).toBe(9)
+    expect(s.porVenir).toBe(2)
+  })
+
+  it('una escalera abierta son ocho', () => {
+    const s = salidas(mano('9h 8d'), mano('Kc 7c 6s'))
+    expect(s.cuantas).toBe(8)
+  })
+
+  it('dos cartas más altas que la mesa son seis', () => {
+    const s = salidas(mano('Ah Kd'), mano('8c 5s 2d'))
+    expect(s.cuantas).toBe(6)
+  })
+
+  it('un par en la mano son dos, las de la tercia', () => {
+    const s = salidas(mano('5h 5d'), mano('Ac Ks 8d'))
+    expect(s.cuantas).toBe(2)
+  })
+
+  it('la que empareja la mesa no cuenta: se la dan a todos', () => {
+    const s = salidas(mano('5h 5d'), mano('Ac Ks 8d'))
+    const ases = mano('Ah Ad As').filter((x) => s.cartas.includes(x))
+    expect(ases).toEqual([])
+  })
+
+  it('pero la que empareja la mesa y te cierra el color sí cuenta', () => {
+    const s = salidas(mano('6s 5s'), mano('As Ks 2h'))
+    expect(s.cartas).toContain(carta(VAL.indexOf('2'), PAL.indexOf('s')))
+  })
+
+  it('emparejar una chica en una mesa con cartas grandes no salva a nadie', () => {
+    const s = salidas(mano('5h 4d'), mano('Ac Ks 9d'))
+    expect(s.cuantas).toBe(0)
+  })
+
+  it('en el river ya no hay nada que esperar', () => {
+    const s = salidas(mano('6s 5s'), mano('As Ks 2h 7d 9c'))
+    expect(s).toEqual({ cuantas: 0, cartas: [], porVenir: 0, probabilidad: 0, contadas: true })
+  })
+
+  it('antes del flop no se cuentan, y se nota que no es lo mismo que no tener', () => {
+    const s = salidas(mano('As Ks'), [])
+    expect(s.cuantas).toBe(0)
+    expect(s.contadas).toBe(false)
+    /* Faltan las cinco de la mesa: cero salidas ahi querria decir otra cosa. */
+    expect(s.porVenir).toBe(5)
+  })
+
+  it('nueve salidas con dos cartas por venir son 35 de cada 100', () => {
+    const s = salidas(mano('6s 5s'), mano('As Ks 2h'))
+    expect(s.probabilidad).toBeCloseTo(34.97, 1)
+  })
+
+  it('las mismas nueve, ya en el turn, son 20 de cada 100', () => {
+    const s = salidas(mano('6s 5s'), mano('As Ks 2h 7d'))
+    expect(s.cuantas).toBe(9)
+    expect(s.porVenir).toBe(1)
+    expect(s.probabilidad).toBeCloseTo(19.57, 1)
+  })
+
+  it('nunca salen más salidas que cartas por ver', () => {
+    for (const [m, mesa] of [
+      ['As Ks', '7h 4d 2c'],
+      ['Jh Th', '9h 8s 2d'],
+      ['2c 7d', 'As Kh Qd'],
+    ] as const) {
+      const s = salidas(mano(m), mano(mesa))
+      expect(s.cuantas).toBeGreaterThanOrEqual(0)
+      expect(s.cuantas).toBeLessThanOrEqual(47)
+      expect(s.probabilidad).toBeGreaterThanOrEqual(0)
+      expect(s.probabilidad).toBeLessThanOrEqual(100)
+    }
+  })
+})
+
+/*
+ * El factor humano.
+ *
+ * La cuenta fría sólo mira el dinero que ya está en la mesa y por eso manda tirar
+ * proyectos que cualquiera paga. Lo que se prueba aquí es que el dinero de después
+ * baje la raya cuando de verdad hay algo que esperar, y sólo entonces.
+ */
+describe('la cuenta con el factor humano', () => {
+  const conProyecto: Salidas = { cuantas: 9, cartas: [], porVenir: 1, probabilidad: 19.6, contadas: true }
+  const sinProyecto: Salidas = { cuantas: 0, cartas: [], porVenir: 1, probabilidad: 0, contadas: true }
+  const seAcabo: Salidas = { cuantas: 0, cartas: [], porVenir: 0, probabilidad: 0, contadas: true }
+
+  const situacion = (s: Salidas, extra: Partial<Parameters<typeof conFactorHumano>[1]> = {}) => ({
+    bote: 100,
+    apuesta: 50,
+    atras: 300,
+    salidas: s,
+    ultimo: false,
+    entraElQueApuesta: null,
+    manoAMano: null,
+    ...extra,
+  })
+
+  it('con proyecto y dinero atrás, la raya baja', () => {
+    const c = cuentasDeLaApuesta(25, 100, 50)!
+    const h = conFactorHumano(c, situacion(conProyecto))
+    expect(h.fria).toBeCloseTo(33.33, 1)
+    expect(h.extra).toBe(75)
+    expect(h.necesitas).toBeCloseTo(22.22, 1)
+  })
+
+  it('y una mano que la cuenta fría tiraba, se paga', () => {
+    const c = cuentasDeLaApuesta(25, 100, 50)!
+    expect(c.conviene).toBe(false)
+    expect(conFactorHumano(c, situacion(conProyecto)).conviene).toBe(true)
+  })
+
+  it('sin proyecto no hay nada que esperar: la raya es la de siempre', () => {
+    const c = cuentasDeLaApuesta(25, 100, 50)!
+    const h = conFactorHumano(c, situacion(sinProyecto))
+    expect(h.extra).toBe(0)
+    expect(h.necesitas).toBeCloseTo(h.fria, 6)
+    expect(h.conviene).toBe(false)
+  })
+
+  it('antes del flop no se promete nada de despues, y se dice por que', () => {
+    const c = cuentasDeLaApuesta(25, 100, 50)!
+    const antesDelFlop: Salidas = {
+      cuantas: 0, cartas: [], porVenir: 5, probabilidad: 0, contadas: false,
+    }
+    const h = conFactorHumano(c, situacion(antesDelFlop))
+    expect(h.extra).toBe(0)
+    expect(h.razones.some((r) => r.aFavor === null && r.texto.includes('Antes del flop'))).toBe(true)
+    expect(h.razones.some((r) => r.texto.includes('Ya no viene'))).toBe(false)
+  })
+
+  it('en el river tampoco, y lo dice', () => {
+    const c = cuentasDeLaApuesta(25, 100, 50)!
+    const h = conFactorHumano(c, situacion(seAcabo))
+    expect(h.extra).toBe(0)
+    expect(h.razones.some((r) => !r.aFavor && r.texto.includes('Ya no viene'))).toBe(true)
+  })
+
+  it('no se cuenta dinero que nadie trae atrás', () => {
+    const c = cuentasDeLaApuesta(25, 100, 50)!
+    const h = conFactorHumano(c, situacion(conProyecto, { atras: 0 }))
+    expect(h.extra).toBe(0)
+    expect(h.necesitas).toBeCloseTo(h.fria, 6)
+  })
+
+  it('la raya con el factor humano nunca sube: sólo puede bajar', () => {
+    for (const s of [conProyecto, sinProyecto, seAcabo])
+      for (const atras of [0, 10, 300, 100000]) {
+        const c = cuentasDeLaApuesta(25, 100, 50)!
+        const h = conFactorHumano(c, situacion(s, { atras }))
+        expect(h.necesitas).toBeLessThanOrEqual(h.fria + 1e-9)
+      }
+  })
+
+  it('hablar al último cuenta a favor, y hablar temprano en contra', () => {
+    const c = cuentasDeLaApuesta(25, 100, 50)!
+    const tarde = conFactorHumano(c, situacion(sinProyecto, { ultimo: true }))
+    const temprano = conFactorHumano(c, situacion(sinProyecto, { ultimo: false }))
+    expect(tarde.razones.some((r) => r.aFavor && r.texto.includes('al último'))).toBe(true)
+    expect(temprano.razones.some((r) => !r.aFavor && r.texto.includes('temprano'))).toBe(true)
+  })
+
+  it('el que entra a todas apuesta con cualquier cosa, y el que casi no entra trae algo', () => {
+    const c = cuentasDeLaApuesta(25, 100, 50)!
+    const suelto = conFactorHumano(c, situacion(sinProyecto, { entraElQueApuesta: 70 }))
+    const cerrado = conFactorHumano(c, situacion(sinProyecto, { entraElQueApuesta: 15 }))
+    expect(suelto.razones.some((r) => r.aFavor && r.texto.includes('70'))).toBe(true)
+    expect(cerrado.razones.some((r) => !r.aFavor && r.texto.includes('15'))).toBe(true)
+  })
+
+  it('a quien no se le ha visto jugar no se le inventa nada', () => {
+    const c = cuentasDeLaApuesta(25, 100, 50)!
+    const h = conFactorHumano(c, situacion(sinProyecto, { entraElQueApuesta: null }))
+    expect(h.razones.some((r) => r.texto.includes('de cada 100 manos'))).toBe(false)
+  })
+
+  it('si mano a mano ganas mucho más, lo dice', () => {
+    const c = cuentasDeLaApuesta(25, 100, 50)!
+    const h = conFactorHumano(c, situacion(sinProyecto, { manoAMano: 48 }))
+    expect(h.razones.some((r) => r.aFavor && r.texto.includes('mano a mano'))).toBe(true)
+  })
+
+  it('pero no lo dice cuando la diferencia es de nada', () => {
+    const c = cuentasDeLaApuesta(25, 100, 50)!
+    const h = conFactorHumano(c, situacion(sinProyecto, { manoAMano: 27 }))
+    expect(h.razones.some((r) => r.texto.includes('mano a mano'))).toBe(false)
   })
 })
