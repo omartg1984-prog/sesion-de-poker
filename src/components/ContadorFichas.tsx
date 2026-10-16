@@ -9,6 +9,15 @@ interface Props {
   fichas: Chips
   onChange: (colorKey: string, cantidad: number) => void
   deshabilitado?: boolean
+  /*
+   * Lo que vale cada color, cuando no vale lo que dice la liga.
+   *
+   * En tornecash la blanca de un peso puede valer veinticinco puntos esa noche, y la
+   * cuenta de la orilla tiene que decir puntos o el conteo se hace mal.
+   */
+  valores?: Record<string, number>
+  /** Cómo se escribe lo que vale el montón. Pesos si no se dice otra cosa. */
+  formato?: (n: number) => string
 }
 
 /**
@@ -21,12 +30,19 @@ interface Props {
  *  - cada fila muestra cuánto vale ese montón, así un error se ve al momento y no
  *    hasta el final, cuando ya no sabes de dónde salió.
  */
-export default function ContadorFichas({ colores, fichas, onChange, deshabilitado = false }: Props) {
+export default function ContadorFichas({
+  colores,
+  fichas,
+  onChange,
+  deshabilitado = false,
+  valores,
+  formato = money,
+}: Props) {
   return (
     <ul className="m-0 list-none p-0">
       {colores.map((c) => {
         const cantidad = num(fichas[c.key])
-        const vale = cantidad * num(c.value)
+        const vale = cantidad * num(valores?.[c.key] ?? c.value)
         return (
           <li
             key={c.key}
@@ -71,7 +87,7 @@ export default function ContadorFichas({ colores, fichas, onChange, deshabilitad
                 vale > 0 ? 'text-ink' : 'text-ink-soft/35'
               }`}
             >
-              {money(vale)}
+              {formato(vale)}
             </span>
           </li>
         )

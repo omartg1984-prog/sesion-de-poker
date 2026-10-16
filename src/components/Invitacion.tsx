@@ -1,7 +1,7 @@
 import { CalendarCheck, Check, LogIn, PartyPopper, Trophy } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import Sheet from './Sheet'
-import { api, type InvitacionPartida } from '../lib/api'
+import { api, nombreDelTipo, type InvitacionPartida } from '../lib/api'
 import { money } from '../lib/money'
 import { resumenDeTorneo } from '../lib/resumenTorneo'
 import { conAviso, useApp } from '../store/app'
@@ -246,7 +246,7 @@ export default function Invitacion() {
           <div className="min-w-0">
             <div className="text-[10px] font-semibold tracking-[1px] text-tiza-suave uppercase">
               {noche
-                ? `${esTorneo ? 'Torneo' : 'Cash'} · ${liga.nombre}`
+                ? `${nombreDelTipo(noche?.partida.tipo ?? 'cash')} · ${liga.nombre}`
                 : yaEnLaLiga
                   ? 'Ya juegas aquí'
                   : 'Liga'}

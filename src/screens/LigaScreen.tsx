@@ -21,6 +21,7 @@ import {
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import EditorFichas from '../components/EditorFichas'
+import NumInput from '../components/NumInput'
 import Sheet from '../components/Sheet'
 import Avatar, { AvatarEditable } from '../components/Avatar'
 import Cara from '../components/Cara'
@@ -28,6 +29,7 @@ import LaLiga from './liga/LaLiga'
 import CrearTorneo from './liga/CrearTorneo'
 import VoyONoVoy from './liga/VoyONoVoy'
 import Puntos from './liga/Puntos'
+import Premios, { type Premio } from './liga/Premios'
 import Reglas from './liga/Reglas'
 import type { SeccionReglas } from '../lib/reglas'
 import { copyText } from '../lib/portapapeles'
@@ -35,7 +37,7 @@ import Medalla from '../components/Medalla'
 import SelectorJugador from '../components/SelectorJugador'
 import { linkDeInvitacion } from '../components/Invitacion'
 import { compartirTextoNativo, esNativo } from '../lib/nativo'
-import { signed } from '../lib/money'
+import { money, signed } from '../lib/money'
 import {
   api,
   type Liga,
@@ -128,6 +130,16 @@ export default function LigaScreen() {
   const [jefe, setJefe] = useState<string>(yo.id)
   /* A qué hora se queda de empezar. Es cuando deja de apuntarse gente sola. */
   const [horaInicio, setHoraInicio] = useState('20:00')
+  /*
+   * Lo que se acordó para una noche de tornecash.
+   *
+   * Arranca con lo que se votó en la liga: $300 de cuota, 500 fichas por entrada y la
+   * bolsa partida 50-30-20. Se puede cambiar aquí y también después, ya abierta la
+   * partida, que a veces la mesa decide pagar un lugar más.
+   */
+  const [cuota, setCuota] = useState(300)
+  const [fichasEntrada, setFichasEntrada] = useState(500)
+  const [premios, setPremios] = useState<Premio[]>([{ pct: 50 }, { pct: 30 }, { pct: 20 }])
   const [colores, setColores] = useState<ChipColor[]>([])
 
   const cargar = async () => {
@@ -161,12 +173,26 @@ export default function LigaScreen() {
     if (ocupado) return
     setOcupado(true)
     const r = await conAviso(() =>
-      /* Sólo las de cash pasan por aquí: el torneo lo crea su asistente, que ya llega
-         con jugadores, fichas y escalera de ciegas. */
+      /* Por aquí pasan las de cash y las de tornecash: las dos se arman con la fecha y
+         poco más. El torneo de verdad lo crea su asistente, que ya llega con jugadores,
+         fichas y escalera de ciegas. */
       api.crearPartida(ligaId, {
         fecha,
         nombre: nombrePartida.trim() || undefined,
-        tipo: 'cash',
+        tipo,
+        /* Tornecash guarda lo suyo donde el torneo guarda lo suyo: la cuota, las fichas
+           que da cada entrada y cómo se parte la bolsa. La recompra cuesta lo mismo que
+           la entrada, así que no se pregunta dos veces. */
+        torneo:
+          tipo === 'tornecash'
+            ? {
+                buyIn: cuota,
+                rebuyPrice: cuota,
+                addOnPrice: 0,
+                payouts: premios,
+                stack: fichasEntrada,
+              }
+            : undefined,
         jefeId: jefe,
         foto: fotoPartida,
         /* Se manda el instante, no la hora suelta: aquí sí se sabe en qué zona horaria
@@ -644,26 +670,37 @@ ${link}`
       {/* ---- nueva partida ---- */}
       <Sheet abierta={creando} onCerrar={() => setCreando(false)} titulo="Nueva partida">
         <span className="field-label">Tipo</span>
-        <div className="mt-1 mb-4 flex gap-1 rounded-xl bg-ink/8 p-1">
+        <div className="mt-1 mb-2 flex gap-1 rounded-xl bg-ink/8 p-1">
           {(
             [
               ['cash', 'Cash', Banknote],
               ['torneo', 'Torneo', Trophy],
+              ['tornecash', 'Tornecash', Coins],
             ] as const
           ).map(([t, texto, Icono]) => (
             <button
               key={t}
               type="button"
               onClick={() => setTipo(t)}
-              className={`flex flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-[9px] border-none py-2.5 text-sm font-bold transition-colors ${
+              className={`flex flex-1 cursor-pointer items-center justify-center gap-1 rounded-[9px] border-none py-2.5 text-[12.5px] font-bold transition-colors ${
                 tipo === t ? 'bg-marca text-white shadow-sm' : 'bg-transparent text-ink-soft'
               }`}
             >
-              <Icono size={15} strokeWidth={2.4} />
+              <Icono size={14} strokeWidth={2.4} />
               {texto}
             </button>
           ))}
         </div>
+
+        {/* Qué es cada cosa, en un renglón: la de en medio y la de la derecha se
+            parecen de nombre y no de reglas. */}
+        <p className="mt-0 mb-4 text-[12px] leading-snug text-ink-soft">
+          {tipo === 'cash'
+            ? 'Cada quien entra con lo que quiere y las fichas valen dinero. Al final se cuentan y se paga.'
+            : tipo === 'torneo'
+              ? 'Cuota fija, las ciegas suben con el reloj y se va quedando gente fuera hasta que queda uno.'
+              : 'Cuota fija, las ciegas no suben y las fichas no valen lo que pagaste. Recompras las que quieras, sólo al quedarte en ceros, y el lugar lo da lo que le ganaste a la noche.'}
+        </p>
 
         {/* El torneo se arma por pasos: quiénes, cuánto cuesta, cuánto dura y el plan.
             La de cash no necesita nada de eso, con la fecha basta. */}
@@ -729,6 +766,45 @@ ${link}`
                 className="w-full rounded-xl border border-paper-line bg-white px-3 py-3 text-base font-semibold text-ink outline-none focus:border-marca"
               />
             </label>
+
+            {tipo === 'tornecash' && (
+              <>
+                <div className="mb-3 grid grid-cols-2 gap-2">
+                  <label className="block">
+                    <span className="field-label">Cuota de entrada</span>
+                    <span className="field-box mt-1 block">
+                      <NumInput
+                        value={cuota}
+                        mode="decimal"
+                        aria-label="Cuota de entrada"
+                        onChange={(v) => setCuota(Math.max(0, v))}
+                      />
+                    </span>
+                  </label>
+                  <label className="block">
+                    <span className="field-label">Fichas por entrada</span>
+                    <span className="field-box mt-1 block">
+                      <NumInput
+                        value={fichasEntrada}
+                        mode="decimal"
+                        aria-label="Fichas por entrada"
+                        onChange={(v) => setFichasEntrada(Math.max(0, v))}
+                      />
+                    </span>
+                  </label>
+                </div>
+                <p className="mt-0 mb-3 text-[12px] leading-snug text-ink-soft">
+                  Las fichas no valen lo que pagaste: {money(cuota)} dan{' '}
+                  {fichasEntrada.toLocaleString('es-MX')}. Cada recompra cuesta y da lo mismo.
+                  Cuánto vale cada color lo pones adentro, antes de contar.
+                </p>
+
+                <span className="field-label">Cómo se parte la bolsa</span>
+                <div className="mt-1 mb-4">
+                  <Premios payouts={premios} onCambiar={setPremios} />
+                </div>
+              </>
+            )}
 
             <div className="mb-4">
               <span className="field-label">Quién lleva el banco</span>

@@ -294,7 +294,17 @@ export interface Liga {
   creada_en: string
 }
 
-export type TipoPartida = 'cash' | 'torneo'
+export type TipoPartida = 'cash' | 'torneo' | 'tornecash'
+
+/** Cómo se llama cada modalidad donde se le enseña al jugador. */
+export const NOMBRE_TIPO: Record<TipoPartida, string> = {
+  cash: 'Cash',
+  torneo: 'Torneo',
+  tornecash: 'Tornecash',
+}
+
+/** Lo mismo, aguantando un tipo que no conozcamos todavía. */
+export const nombreDelTipo = (t: string) => NOMBRE_TIPO[t as TipoPartida] ?? 'Cash'
 
 export interface ConfigTorneo {
   /* Lo que cuesta en dinero. */

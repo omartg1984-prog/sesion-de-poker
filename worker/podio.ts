@@ -12,6 +12,10 @@ import type { ColorFicha } from './tipos'
  * pusiste. En torneo eso sale de los premios por lugar; en cash, de las fichas contadas
  * al final. Y en los dos, lo que cuenta son las fichas, nunca el billete que se entregó:
  * a quien le faltaron cinco pesos porque no había feria no baja de lugar por eso.
+ *
+ * Tornecash es el que no se parece: ahí el lugar no lo da el dinero sino la ganancia
+ * neta en fichas, porque se entra con una cuota y se reciben otras tantas fichas que no
+ * valen lo mismo. El dinero viene después, de la bolsa, y sólo lo tocan los de arriba.
  */
 
 export const num = (v: unknown): number => {
@@ -35,6 +39,17 @@ export interface ConfigTorneo {
   payouts: { pct: number }[]
   /** Lo que se le cobra a cada quien de cena y que no se reparte en premios. */
   cenaPorPersona?: number
+  /*
+   * Sólo en tornecash: las fichas que da cada entrada, y lo que vale cada color en esas
+   * fichas.
+   *
+   * Los valores van por noche y no por liga porque no son dinero: la liga dice que la
+   * blanca vale un peso, y en tornecash esa misma blanca puede valer veinticinco puntos.
+   * Si falta el valor de un color se usa el de la liga, que es mejor que contarlo en
+   * cero y dejar fichas fuera de la cuenta sin avisar.
+   */
+  stack?: number
+  valores?: Record<string, number>
 }
 
 /** Lo mínimo de una participación para poder ordenar la mesa. */
@@ -73,6 +88,7 @@ export function podioDe<T extends JugadorDeLaNoche>(
   colores: ColorFicha[],
 ): PuestoEnLaNoche<T>[] {
   const esTorneo = partida.tipo === 'torneo'
+  const esTornecash = partida.tipo === 'tornecash'
   const t = leerJson<ConfigTorneo>(partida.torneo, {
     buyIn: 0,
     rebuyPrice: 0,
@@ -86,7 +102,16 @@ export function podioDe<T extends JugadorDeLaNoche>(
   const pagadoTorneo = (j: JugadorDeLaNoche) =>
     num(t.buyIn) + num(j.rebuys) * num(t.rebuyPrice) + num(j.addons) * num(t.addOnPrice)
 
-  const recaudado = esTorneo ? jugadores.reduce((s, j) => s + pagadoTorneo(j), 0) : 0
+  /* En tornecash la recompra cuesta lo mismo que la entrada, y no hay add-ons. */
+  const precioRecompra = esTornecash ? num(t.rebuyPrice) || num(t.buyIn) : num(t.rebuyPrice)
+  const pagadoTornecash = (j: JugadorDeLaNoche) =>
+    num(t.buyIn) + num(j.rebuys) * precioRecompra
+
+  const recaudado = esTorneo
+    ? jugadores.reduce((s, j) => s + pagadoTorneo(j), 0)
+    : esTornecash
+      ? jugadores.reduce((s, j) => s + pagadoTornecash(j), 0)
+      : 0
   /*
    * La cena sale de la bolsa antes de repartir: "entrada $500, cena incluida" es lo
    * normal en la mesa. Se cobra por persona una sola vez —recomprar tres veces no es
@@ -97,6 +122,61 @@ export function podioDe<T extends JugadorDeLaNoche>(
    */
   const cena = Math.min(recaudado, Math.max(0, jugadores.length * num(t.cenaPorPersona)))
   const bolsa = recaudado - cena
+
+  if (esTornecash) {
+    /* Lo que valen las fichas contadas, en puntos de esta noche. */
+    const enPuntos = (fichas: Record<string, number>) =>
+      colores.reduce(
+        (total, c) => total + num(fichas[c.key]) * num(t.valores?.[c.key] ?? c.value),
+        0,
+      )
+    const dadas = (j: JugadorDeLaNoche) => num(t.stack) * (1 + num(j.rebuys))
+
+    const conNeto = jugadores
+      .map((j) => ({
+        jugador: j,
+        puso: pagadoTornecash(j),
+        recompras: num(j.rebuys),
+        montoRecompras: num(j.rebuys) * precioRecompra,
+        neto: enPuntos(leerJson<Record<string, number>>(j.fichas_final, {})) - dadas(j),
+      }))
+      .sort((a, b) => b.neto - a.neto)
+
+    /*
+     * Los que acaban exactamente igual comparten lugar y se reparten en partes iguales
+     * los premios de los puestos que ocupan.
+     *
+     * No es un caso raro aquí: el que se queda en ceros con una recompra acaba con la
+     * misma neta que cualquier otro en las mismas, y si dos de ésos empataran en zona
+     * de premio y cada uno cobrara su porcentaje completo, la bolsa pagaría más de lo
+     * que se juntó.
+     */
+    const puestos: PuestoEnLaNoche<T>[] = []
+    for (let i = 0; i < conNeto.length; ) {
+      let fin = i + 1
+      while (fin < conNeto.length && Math.abs(conNeto[fin].neto - conNeto[i].neto) <= 1e-9) fin++
+
+      const empatados = fin - i
+      let pct = 0
+      for (let k = i; k < fin; k++) pct += num(t.payouts[k]?.pct)
+      const saco = ((bolsa * pct) / 100) / empatados
+
+      for (let k = i; k < fin; k++) {
+        const n = conNeto[k]
+        puestos.push({
+          jugador: n.jugador,
+          puso: n.puso,
+          saco,
+          recompras: n.recompras,
+          montoRecompras: n.montoRecompras,
+          resultado: saco - n.puso,
+          lugar: i + 1,
+        })
+      }
+      i = fin
+    }
+    return puestos
+  }
 
   const sinOrdenar = jugadores.map((j) => {
     if (esTorneo) {

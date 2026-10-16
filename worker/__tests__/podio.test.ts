@@ -173,3 +173,196 @@ describe('un conteo de fichas nunca es negativo', () => {
     expect(limpio[0].saco).toBe(0)
   })
 })
+
+/*
+ * Tornecash.
+ *
+ * Lo que se prueba aquí es lo que lo hace distinto de todo lo demás: el lugar sale de
+ * la ganancia neta en fichas y no del dinero, y la bolsa que se reparte es la suma de
+ * todas las cuotas. Si alguna de las dos cosas se rompe, alguien cobra lo que no ganó.
+ */
+describe('el podio de una noche de tornecash', () => {
+  /* Cuota $300, 500 fichas por entrada, y la verde vale 25 puntos esa noche. */
+  const CONFIG = {
+    buyIn: 300,
+    rebuyPrice: 300,
+    addOnPrice: 0,
+    payouts: [{ pct: 50 }, { pct: 30 }, { pct: 20 }],
+    stack: 500,
+    valores: { green: 25, white: 1 },
+  }
+  const mesa = { tipo: 'tornecash', torneo: JSON.stringify(CONFIG) }
+
+  /** Fichas verdes, que valen 25 puntos cada una. */
+  const puntos = (p: number) => JSON.stringify({ green: p / 25 })
+
+  it('el lugar lo da la ganancia neta en fichas, no el dinero', () => {
+    const podio = podioDe(
+      mesa,
+      [
+        /* Entró una vez: le dieron 500. Acaba con 1,250 → neta +750. */
+        jugador('ana', { fichas_final: puntos(1250) }),
+        /* Entró y recompró: le dieron 1,000. Acaba con 1,750 → neta +750… */
+        jugador('beto', { rebuys: 1, fichas_final: puntos(1750) }),
+        /* Entró una vez y acaba con 900 → neta +400. */
+        jugador('cris', { fichas_final: puntos(900) }),
+        jugador('dani', { fichas_final: puntos(0) }),
+      ],
+      COLORES,
+    )
+    /* Ana y Beto empatan en neta aunque Beto tenga más fichas enfrente. */
+    expect(podio[0].lugar).toBe(1)
+    expect(podio[1].lugar).toBe(1)
+    expect(podio.map((x) => x.jugador.usuario_id).slice(2)).toEqual(['cris', 'dani'])
+  })
+
+  it('una recompra tardía no compra el primer lugar', () => {
+    const podio = podioDe(
+      mesa,
+      [
+        /* Acaba con más fichas que nadie, pero compró tres veces para llegar ahí. */
+        jugador('beto', { rebuys: 3, fichas_final: puntos(2100) }), // dadas 2000 → +100
+        jugador('ana', { fichas_final: puntos(1200) }), // dadas 500 → +700
+      ],
+      COLORES,
+    )
+    expect(podio[0].jugador.usuario_id).toBe('ana')
+  })
+
+  it('la bolsa es la suma de todas las cuotas, recompras incluidas', () => {
+    const podio = podioDe(
+      mesa,
+      [
+        jugador('ana', { fichas_final: puntos(1500) }),
+        jugador('beto', { rebuys: 1, fichas_final: puntos(900) }),
+        jugador('cris', { fichas_final: puntos(400) }),
+        jugador('dani', { fichas_final: puntos(0) }),
+      ],
+      COLORES,
+    )
+    /* Cuatro entradas y una recompra: 5 × $300 = $1,500. */
+    const bolsa = podio.reduce((a, x) => a + x.saco, 0)
+    expect(bolsa).toBeCloseTo(1500, 6)
+  })
+
+  it('cobran los tres primeros y nadie más', () => {
+    const podio = podioDe(
+      mesa,
+      [
+        jugador('ana', { fichas_final: puntos(1500) }),
+        jugador('beto', { fichas_final: puntos(1000) }),
+        jugador('cris', { fichas_final: puntos(700) }),
+        jugador('dani', { fichas_final: puntos(300) }),
+        jugador('eli', { fichas_final: puntos(0) }),
+      ],
+      COLORES,
+    )
+    const bolsa = 5 * 300
+    expect(podio[0].saco).toBeCloseTo(bolsa * 0.5, 6)
+    expect(podio[1].saco).toBeCloseTo(bolsa * 0.3, 6)
+    expect(podio[2].saco).toBeCloseTo(bolsa * 0.2, 6)
+    expect(podio[3].saco).toBe(0)
+    expect(podio[4].saco).toBe(0)
+  })
+
+  it('el resultado en dinero es el premio menos lo que pusiste', () => {
+    const podio = podioDe(
+      mesa,
+      [
+        jugador('ana', { fichas_final: puntos(1500) }),
+        jugador('beto', { rebuys: 2, fichas_final: puntos(0) }),
+        jugador('cris', { fichas_final: puntos(200) }),
+        jugador('dani', { fichas_final: puntos(100) }),
+        jugador('eli', { fichas_final: puntos(0) }),
+      ],
+      COLORES,
+    )
+    const bolsa = 5 * 300 + 2 * 300
+    /* Ana gana el 50% de la bolsa y puso una cuota. */
+    expect(podio[0].resultado).toBeCloseTo(bolsa * 0.5 - 300, 6)
+    /* Beto se quedó fuera de premio y puso tres cuotas: pierde las tres. */
+    expect(podio[4].jugador.usuario_id).toBe('beto')
+    expect(podio[4].puso).toBe(900)
+    expect(podio[4].resultado).toBe(-900)
+  })
+
+  /*
+   * Con menos gente que lugares pagados, cobra casi todo el mundo.
+   *
+   * No es un error: es lo que dice el reparto que se puso esa noche. Queda apuntado
+   * aquí para que se vea a propósito y no por descuido, y porque si alguna vez se
+   * decide que con pocos sólo pague el primero, esta prueba es la que hay que cambiar.
+   */
+  it('con menos jugadores que lugares, cobran todos los que alcanzan lugar', () => {
+    const podio = podioDe(
+      mesa,
+      [
+        jugador('ana', { fichas_final: puntos(1200) }),
+        jugador('beto', { fichas_final: puntos(300) }),
+      ],
+      COLORES,
+    )
+    expect(podio[0].saco).toBeCloseTo(600 * 0.5, 6)
+    expect(podio[1].saco).toBeCloseTo(600 * 0.3, 6)
+    /* Y el 20% del tercero, que no existe, se queda sin repartir. */
+    expect(podio.reduce((a, x) => a + x.saco, 0)).toBeCloseTo(600 * 0.8, 6)
+  })
+
+  it('los que empatan en zona de premio se reparten lo de sus lugares', () => {
+    const podio = podioDe(
+      mesa,
+      [
+        jugador('ana', { fichas_final: puntos(1200) }),
+        jugador('beto', { fichas_final: puntos(1200) }),
+        jugador('cris', { fichas_final: puntos(0) }),
+        jugador('dani', { fichas_final: puntos(0) }),
+      ],
+      COLORES,
+    )
+    const bolsa = 4 * 300
+    /* Empatados en primero: se parten el 50% y el 30%. */
+    expect(podio[0].lugar).toBe(1)
+    expect(podio[1].lugar).toBe(1)
+    expect(podio[0].saco).toBeCloseTo((bolsa * 0.8) / 2, 6)
+    expect(podio[1].saco).toBeCloseTo((bolsa * 0.8) / 2, 6)
+    /* Y los dos de abajo se parten el 20% del tercero, que también empataron. */
+    expect(podio[2].lugar).toBe(3)
+    expect(podio[2].saco).toBeCloseTo((bolsa * 0.2) / 2, 6)
+  })
+
+  it('pase lo que pase, la bolsa que se reparte nunca es más de lo que se juntó', () => {
+    const casos = [
+      [0, 0, 0, 0],
+      [1250, 1250, 1250, 1250],
+      [2000, 0, 0, 0],
+      [500, 500, 500, 0],
+      [1000, 900, 800, 700],
+    ]
+    for (const fichas of casos) {
+      const podio = podioDe(
+        mesa,
+        fichas.map((f, i) => jugador('j' + i, { fichas_final: puntos(f) })),
+        COLORES,
+      )
+      const repartido = podio.reduce((a, x) => a + x.saco, 0)
+      expect(repartido).toBeLessThanOrEqual(4 * 300 + 1e-9)
+      /* Y lo que gana uno lo pierde otro: la noche no crea ni destruye dinero. */
+      expect(podio.reduce((a, x) => a + x.resultado, 0)).toBeCloseTo(0, 6)
+    }
+  })
+
+  it('sin valores de la noche se usan los de la liga en vez de contar cero', () => {
+    const sinValores = {
+      tipo: 'tornecash',
+      torneo: JSON.stringify({ ...CONFIG, valores: undefined }),
+    }
+    const podio = podioDe(
+      sinValores,
+      [jugador('ana', { fichas_final: JSON.stringify({ green: 40 }) }), jugador('beto')],
+      COLORES,
+    )
+    /* 40 verdes a 25 de la liga son 1,000; menos las 500 que le dieron, +500. */
+    expect(podio[0].jugador.usuario_id).toBe('ana')
+    expect(podio[0].saco).toBeGreaterThan(0)
+  })
+})

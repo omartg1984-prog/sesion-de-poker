@@ -741,13 +741,21 @@ export async function rutas(
           const f = String(fecha ?? '').trim() || ahora().slice(0, 10)
           if (!/^\d{4}-\d{2}-\d{2}$/.test(f)) return json({ error: 'La fecha no es válida' }, 400)
 
-          const t = tipo === 'torneo' ? 'torneo' : 'cash'
+          const t = tipo === 'torneo' ? 'torneo' : tipo === 'tornecash' ? 'tornecash' : 'cash'
           // El torneo nace con una estructura por defecto para que se pueda abrir
           // la partida y ajustarla adentro, sin trabar la creación.
+          // Tornecash nace con lo suyo: cuota, fichas por entrada y el reparto de
+          // siempre, que es lo que se acordó en la liga.
           const configTorneo =
-            t === 'torneo'
+            t === 'torneo' || t === 'tornecash'
               ? JSON.stringify(
-                  torneo ?? { buyIn: 0, rebuyPrice: 0, addOnPrice: 0, payouts: [{ pct: 50 }, { pct: 30 }, { pct: 20 }] },
+                  torneo ?? {
+                    buyIn: 0,
+                    rebuyPrice: 0,
+                    addOnPrice: 0,
+                    payouts: [{ pct: 50 }, { pct: 30 }, { pct: 20 }],
+                    ...(t === 'tornecash' ? { stack: 0 } : {}),
+                  },
                 )
               : null
 
@@ -1015,10 +1023,13 @@ export async function rutas(
           foto: completa!.foto ?? liga?.foto ?? null,
         },
         liga: { id: partida.liga_id, nombre: liga?.nombre ?? '' },
-        cuesta: completa!.tipo === 'torneo' ? num(t.buyIn) : ENTRADA_POR_DEFECTO,
+        cuesta:
+          completa!.tipo === 'torneo' || completa!.tipo === 'tornecash'
+            ? num(t.buyIn)
+            : ENTRADA_POR_DEFECTO,
         /* De qué consta el torneo, entero: quien todavía no se apunta tiene que poder
            leer las reglas antes de decir que sí, no después. */
-        torneo: completa!.tipo === 'torneo' ? t : null,
+        torneo: completa!.tipo === 'torneo' || completa!.tipo === 'tornecash' ? t : null,
         jugadores: n,
         yaApuntado: !!mia2,
       })
@@ -1043,7 +1054,10 @@ export async function rutas(
         .bind(partidaId)
         .first<{ tipo: string; torneo: string | null }>()
       const t = leerJson<{ buyIn?: number }>(completa!.torneo, {})
-      const entrada = completa!.tipo === 'torneo' ? num(t.buyIn) : ENTRADA_POR_DEFECTO
+      const entrada =
+        completa!.tipo === 'torneo' || completa!.tipo === 'tornecash'
+          ? num(t.buyIn)
+          : ENTRADA_POR_DEFECTO
 
       await env.DB.prepare(
         'INSERT INTO participaciones (id, partida_id, usuario_id, entrada) VALUES (?, ?, ?, ?)',

@@ -2,7 +2,7 @@ import { Check, Pencil, Share2, Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import Avatar, { AvatarEditable } from '../../components/Avatar'
 import Sheet from '../../components/Sheet'
-import type { ConfigTorneo, DetallePartida } from '../../lib/api'
+import { nombreDelTipo, type ConfigTorneo, type DetallePartida } from '../../lib/api'
 import { money } from '../../lib/money'
 import { resumenDeTorneo } from '../../lib/resumenTorneo'
 import { duracionLarga, horaCorta } from '../../lib/tiempo'
@@ -158,7 +158,7 @@ export default function LaPartida({
             {titulo}
           </h3>
           <p className="mt-1 mb-4 text-center text-[13px] text-ink-soft">
-            {esTorneo ? 'Torneo' : 'Cash'} · {datos.liga.nombre}
+            {nombreDelTipo(datos.partida.tipo)} · {datos.liga.nombre}
             {p.nombre ? ` · ${fechaLarga(p.fecha)}` : ''}
             {cerrada ? ' · ya cerró' : ''}
           </p>

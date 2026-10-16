@@ -24,6 +24,7 @@ import {
   type DetallePartida,
   type Miembro,
   type Participacion,
+  nombreDelTipo,
 } from '../lib/api'
 import { useRecargarAlVolver } from '../lib/recargar'
 import { conAviso, useApp } from '../store/app'
@@ -45,6 +46,10 @@ import { RELOJ_PARADO, pausarReloj, type Estructura, type RelojTorneo } from '..
 import TiempoDeJuego from './partida/TiempoDeJuego'
 import LaPartida from './partida/LaPartida'
 import PartidaCash, { PESTANAS_CASH, type PestanaCash } from './partida/PartidaCash'
+import PartidaTornecash, {
+  PESTANAS_TORNECASH,
+  type PestanaTornecash,
+} from './partida/PartidaTornecash'
 import PartidaTorneo, {
   PESTANAS_TORNEO,
   TORNEO_POR_DEFECTO,
@@ -159,6 +164,7 @@ export default function PartidaScreen() {
 
   const colores = useMemo(() => datos?.liga.colores ?? [], [datos])
   const esTorneo = datos?.partida.tipo === 'torneo'
+  const esTornecash = datos?.partida.tipo === 'tornecash'
   const cerrada = datos?.partida.estado === 'cerrada'
   const puedeEditar = !!datos?.soyAdmin && !cerrada
   /* Contar fichas es de todos los de la mesa; cerrar la noche es sólo del que llevó
@@ -166,7 +172,7 @@ export default function PartidaScreen() {
   const puedeContar = !cerrada
   const soyJefe = !!datos?.soyJefe
   const pestanas = [
-    ...(esTorneo ? PESTANAS_TORNEO : PESTANAS_CASH),
+    ...(esTorneo ? PESTANAS_TORNEO : esTornecash ? PESTANAS_TORNECASH : PESTANAS_CASH),
     { id: 'numeros' as const, label: 'Estadísticas' },
   ]
 
@@ -318,7 +324,7 @@ export default function PartidaScreen() {
   const compartirPartida = async () => {
     const link = linkDePartida(partidaId, datos.liga.codigo)
     const cuando = datos.partida.nombre || datos.partida.fecha
-    const texto = `🃏 ${esTorneo ? 'Torneo' : 'Cash'} en ${datos.liga.nombre} — ${cuando}\nApúntate aquí:\n${link}`
+    const texto = `🃏 ${nombreDelTipo(datos.partida.tipo)} en ${datos.liga.nombre} — ${cuando}\nApúntate aquí:\n${link}`
     try {
       if (esNativo()) {
         await compartirTextoNativo(texto, 'Invitación a la partida')
@@ -407,9 +413,12 @@ export default function PartidaScreen() {
     void cargar()
   }
 
-  /* El cuadre de la noche. En torneo no aplica: ahí no se cuentan fichas al final, el
-     resultado sale de los premios por lugar. */
-  const repartoCash = esTorneo ? null : calcularRepartoCash(datos.participaciones, colores)
+  /* El cuadre de la noche. En torneo no aplica —ahí no se cuentan fichas al final, el
+     resultado sale de los premios por lugar— y en tornecash tampoco: ahí sí se cuentan,
+     pero son puntos y no pesos, así que cuadrar el inventario contra el dinero daría un
+     número que no quiere decir nada. */
+  const repartoCash =
+    esTorneo || esTornecash ? null : calcularRepartoCash(datos.participaciones, colores)
   const cuadre = repartoCash
     ? calcularCuadre(datos.participaciones, colores, repartoCash, invertidoDe)
     : null
@@ -423,6 +432,9 @@ export default function PartidaScreen() {
    * juntó es el mismo y hay que acabar la noche sin billetes huérfanos.
    */
   const feria = (() => {
+    /* En tornecash lo que se puso no son las recompras en JSON sino la cuota por cada
+       entrada, y de ese lado la cuenta la lleva su propia pantalla. */
+    if (esTornecash) return null
     const puestos = datos.participaciones.filter((p) => p.pagado !== null)
     if (puestos.length === 0) return null
     const entro = datos.participaciones.reduce((a, p) => a + invertidoDe(p), 0)
@@ -475,7 +487,7 @@ export default function PartidaScreen() {
                 {datos.partida.nombre || datos.partida.fecha}
               </span>
               <span className="block text-[11px] text-white">
-                {esTorneo ? 'Torneo' : 'Cash'} · {datos.liga.nombre}
+                {nombreDelTipo(datos.partida.tipo)} · {datos.liga.nombre}
               </span>
             </span>
           </button>
@@ -577,6 +589,14 @@ export default function PartidaScreen() {
           cambiarTorneo={cambiarTorneo}
           onEstructura={cambiarEstructura}
           onReloj={cambiarReloj}
+        />
+      ) : esTornecash ? (
+        <PartidaTornecash
+          {...comunes}
+          pestana={pestana as PestanaTornecash}
+          torneo={torneo}
+          cambiarTorneo={cambiarTorneo}
+          onRedondeo={cambiarRedondeo}
         />
       ) : (
         <PartidaCash {...comunes} pestana={pestana as PestanaCash} onRedondeo={cambiarRedondeo} />
@@ -769,8 +789,10 @@ export default function PartidaScreen() {
       {/* ---- elegir quiénes jugaron ---- */}
       <Sheet abierta={eligiendo} onCerrar={() => setEligiendo(false)} titulo="¿Quiénes jugaron?">
         <p className="mt-0 mb-3 text-[13px] leading-snug text-ink-soft">
-          {esTorneo
-            ? `Marca a los que llegaron. Todos entran con ${money0(torneo.buyIn)}, el costo de entrada del torneo.`
+          {/* En torneo y en tornecash la cuota es la misma para todos y no se negocia;
+              en cash cada quien entra con lo que quiere. */}
+          {esTorneo || esTornecash
+            ? `Marca a los que llegaron. Todos entran con ${money0(torneo.buyIn)}, que es la cuota de la noche.`
             : `Marca a los que llegaron. Entran con ${money0(ENTRADA_POR_DEFECTO)} salvo que le cambies el monto a alguien.`}
         </p>
         <ul className="m-0 mb-4 list-none p-0">
@@ -791,14 +813,15 @@ export default function PartidaScreen() {
                       setSeleccion((s) => {
                         const n = { ...s }
                         if (e.target.checked)
-                          n[m.id] = esTorneo ? torneo.buyIn : ENTRADA_POR_DEFECTO
+                          n[m.id] =
+                            esTorneo || esTornecash ? torneo.buyIn : ENTRADA_POR_DEFECTO
                         else delete n[m.id]
                         return n
                       })
                     }
                   />
                   <b className="min-w-0 flex-1 truncate text-[15px] text-ink">{m.nombre}</b>
-                  {puesto && !esTorneo && (
+                  {puesto && !esTorneo && !esTornecash && (
                     <div className="flex w-[120px] shrink-0 items-center rounded-lg border border-paper-line bg-white px-2">
                       <span className="font-bold text-ink-soft">$</span>
                       <NumInput
