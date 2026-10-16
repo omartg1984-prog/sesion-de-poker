@@ -1,8 +1,9 @@
-import { AlertTriangle, Check, Minus, Plus, RotateCcw } from 'lucide-react'
+import { AlertTriangle, Check, RotateCcw } from 'lucide-react'
 import ContadorFichas from '../../components/ContadorFichas'
 import Medalla from '../../components/Medalla'
 import NumInput from '../../components/NumInput'
 import ShareBlock from '../../components/ShareBlock'
+import Stepper from '../../components/Stepper'
 import Premios from '../liga/Premios'
 import RepartoDinero from './RepartoDinero'
 import { leerJson, type ConfigTorneo, type Participacion } from '../../lib/api'
@@ -10,12 +11,25 @@ import { money, num } from '../../lib/money'
 import type { DatosTornecash } from '../../lib/shareImage'
 import { avisosDe, bolsaDe, cuotaDeRecompra, tablaTornecash } from '../../lib/tornecash'
 import type { Chips } from '../../store/types'
-import { GuardarConteo, type PropsPestana } from './comun'
+import {
+  FichasDelJugador,
+  GuardarConteo,
+  InventarioUsado,
+  ListaDeLaMesa,
+  aplicarRepartoATodos,
+  calcularRepartoPorConcepto,
+  conceptosDeTorneo,
+  idFila,
+  manualesDe,
+  mismoValorQue,
+  type PropsPestana,
+} from './comun'
 
-export type PestanaTornecash = 'jugadores' | 'resultado'
+export type PestanaTornecash = 'jugadores' | 'final' | 'resultado'
 
 export const PESTANAS_TORNECASH: { id: PestanaTornecash; label: string }[] = [
-  { id: 'jugadores', label: 'La noche' },
+  { id: 'jugadores', label: 'Registro' },
+  { id: 'final', label: 'Cash out' },
   { id: 'resultado', label: 'Resultado' },
 ]
 
@@ -59,8 +73,120 @@ export default function PartidaTornecash({
   const recompras = datos.participaciones.reduce((a, p) => a + num(p.rebuys), 0)
   const entradas = datos.participaciones.length
 
-  /* ------------------------------------------------ la noche, mientras se juega */
+  /* ------------------------------------------------ registro: qué fichas darle a quién */
   if (pestana === 'jugadores') {
+    const stack = num(torneo.stack)
+    /*
+     * Cada entrega lleva su renglón, igual que en cash y en torneo: lo que se le pone
+     * en la mano al que recompra son las fichas de esa recompra, no el montón de toda
+     * su noche. Sin eso, al apuntar una recompra las fichas saltaban de golpe y había
+     * que restar de cabeza sobre la mesa.
+     */
+    const conceptos = (q: Participacion) => conceptosDeTorneo(q, stack, stack, 0)
+    const reparto = calcularRepartoPorConcepto(datos.participaciones, colores, conceptos)
+
+    return (
+      <>
+        <Resumen
+          bolsa={bolsa}
+          entradas={entradas}
+          recompras={recompras}
+          cerrados={datos.participaciones.filter((q) => q.cerrado_en).length}
+        />
+
+        <ListaDeLaMesa
+          filas={datos.participaciones.map((q) => ({
+            id: q.id,
+            nombre: q.nombre,
+            monto: laDe(q).puso,
+          }))}
+        />
+
+        {datos.participaciones.map((p) => {
+          /* Acomodar a mano un reparto toca sólo su concepto: corregir las fichas de
+             una recompra no debe mover el stack que ya se entregó al empezar. */
+          const guardarFichas = (clave: string) => (fichas: Chips | null) => {
+            const manuales = { ...manualesDe(p) }
+            if (fichas) manuales[clave] = fichas
+            else delete manuales[clave]
+            const vacio = Object.keys(manuales).length === 0
+            tocar(
+              p.id,
+              { fichas_manual: vacio ? null : JSON.stringify(manuales) },
+              { fichasManual: vacio ? null : manuales },
+            )
+          }
+          const pinta = (clave: string, rotulo: string) => {
+            const fila = reparto.rows.find((r) => r.id === idFila(p.id, clave))
+            return fila ? (
+              <FichasDelJugador
+                fila={fila}
+                colores={colores}
+                puedeEditar={puedeEditar}
+                guardar={guardarFichas(clave)}
+                /* En tornecash todas las entregas valen lo mismo, así que lo que se
+                   acomoda a mano se le copia a la mesa entera de una vez. */
+                aplicar={{
+                  cuantos: mismoValorQue(fila, reparto.rows).length,
+                  hazlo: () =>
+                    aplicarRepartoATodos(fila, reparto.rows, datos.participaciones, tocar),
+                }}
+                rotulo={rotulo}
+                formato={puntos}
+              />
+            ) : null
+          }
+
+          return (
+            <section key={p.id} className="panel">
+              <b className="mb-3 block truncate font-display text-lg font-semibold text-ink">
+                {p.nombre}
+              </b>
+
+              <div className="mb-3">{pinta('entrada', 'Fichas de entrada')}</div>
+
+              <div className="mb-1 flex items-center justify-between gap-2.5">
+                <span className="text-sm font-semibold text-ink-soft">Recompras</span>
+                <Stepper
+                  label="recompra"
+                  value={num(p.rebuys)}
+                  onChange={(v) => puedeEditar && tocar(p.id, { rebuys: v }, { rebuys: v })}
+                />
+              </div>
+              <p className="mt-0 mb-3 text-[11.5px] leading-snug text-ink-soft">
+                Las que quiera, a {money(cuotaDeRecompra(torneo))} y {puntos(stack)} puntos cada
+                una. <b className="text-ink">Sólo al quedarse en ceros.</b>
+              </p>
+
+              {/* Un renglón por recompra: es lo que se le entrega en el momento. */}
+              {conceptos(p)
+                .filter((c) => c.clave.startsWith('r'))
+                .map((c) => (
+                  <div
+                    key={c.clave}
+                    className="mb-3 rounded-xl border border-paper-line bg-paper-soft px-3 py-1"
+                  >
+                    {pinta(c.clave, c.rotulo)}
+                  </div>
+                ))}
+
+              <p className="m-0 text-right text-xs text-ink-soft">
+                Puso: <b className="text-ink">{money(laDe(p).puso)}</b> ·{' '}
+                {puntos(laDe(p).dadas)} puntos
+              </p>
+            </section>
+          )
+        })}
+
+        <InventarioUsado reparto={reparto} colores={colores} />
+
+        {puedeEditar && <Ajustes torneo={torneo} cambiar={cambiarTorneo} />}
+      </>
+    )
+  }
+
+  /* ------------------------------------------------ cash out: contar y cerrar */
+  if (pestana === 'final') {
     /*
      * Al que ya acabó se le cierra y su tarjeta se va abajo, a la lista corta y en
      * orden. Así arriba queda siempre lo que falta por hacer, y la mesa se va
@@ -71,39 +197,24 @@ export default function PartidaTornecash({
       (a, b) => laDe(b).neta - laDe(a).neta,
     )
 
-    const cambiarRecompras = (id: string, cuantas: number) =>
-      tocar(id, { rebuys: Math.max(0, cuantas) }, { rebuys: Math.max(0, cuantas) })
-
     return (
       <>
+        <Resumen
+          bolsa={bolsa}
+          entradas={entradas}
+          recompras={recompras}
+          cerrados={cerrados.length}
+        />
+
         <section className="panel">
           <p className="panel-title">
-            <span>Cómo va</span>
+            <span>Contar las fichas</span>
           </p>
-          <div className="grid grid-cols-3 gap-2">
-            <div className="rounded-xl bg-noche-linea px-3 py-2.5 text-paper">
-              <span className="block text-[10px] tracking-[.6px] uppercase opacity-70">Bolsa</span>
-              <b className="font-display text-2xl">{money(bolsa)}</b>
-            </div>
-            <div className="rounded-xl border border-paper-line bg-white px-3 py-2.5">
-              <span className="block text-[10px] tracking-[.6px] text-ink-soft uppercase">
-                Entradas
-              </span>
-              <b className="font-display text-2xl text-ink">{entradas}</b>
-            </div>
-            <div className="rounded-xl border border-paper-line bg-white px-3 py-2.5">
-              <span className="block text-[10px] tracking-[.6px] text-ink-soft uppercase">
-                Recompras
-              </span>
-              <b className="font-display text-2xl text-ink">{recompras}</b>
-            </div>
-          </div>
-          {cerrados.length > 0 && (
-            <p className="mt-2.5 mb-0 text-[12px] leading-snug text-ink-soft">
-              Ya cerraron <b className="text-ink">{cerrados.length}</b> de {entradas}; quedan
-              abajo, en orden.
-            </p>
-          )}
+          <p className="mt-0 mb-0 text-[12.5px] leading-snug text-ink-soft">
+            De aquí sale el lugar. Lo que cuenta no son las fichas que tiene enfrente, sino{' '}
+            <b className="text-ink">lo que le ganó a la noche</b>: esos puntos menos todos los
+            que compró. Al que ya acabó se le cierra y se va a la lista de abajo.
+          </p>
         </section>
 
         {/* Uno por jugador: sus puntos, sus recompras y el botón de cerrarlo. Todo en la
@@ -151,41 +262,12 @@ export default function PartidaTornecash({
                 <Celda rotulo="Le ganó" valor={conSigno(x.neta)} tono={tonoPuntos(x.neta)} />
               </div>
 
-              {/* Las recompras, debajo de lo suyo: se agregan cuando hacen falta y no
-                  hay que ir a buscarlas a otra lista. */}
-              <div className="mt-3 flex items-center gap-2 border-t border-dashed border-paper-line pt-2.5">
-                <span className="min-w-0 flex-1">
-                  <b className="block text-[13px] font-semibold text-ink">Recompras</b>
-                  <span className="block text-[11.5px] leading-tight text-ink-soft">
-                    {num(p.rebuys) === 0
-                      ? `Ninguna. Cada una son ${money(cuotaDeRecompra(torneo))} y ${puntos(num(torneo.stack))} puntos.`
-                      : `${num(p.rebuys)} · lleva puestos ${money(x.puso)}`}
-                  </span>
-                </span>
-                <div className="flex shrink-0 items-center overflow-hidden rounded-xl border border-paper-line bg-white">
-                  <button
-                    type="button"
-                    disabled={!puedeEditar || num(p.rebuys) === 0}
-                    aria-label={`Una recompra menos de ${p.nombre}`}
-                    onClick={() => cambiarRecompras(p.id, num(p.rebuys) - 1)}
-                    className="flex h-11 w-11 cursor-pointer items-center justify-center border-none bg-ink/6 text-ink active:scale-90 disabled:opacity-30"
-                  >
-                    <Minus size={16} strokeWidth={3} />
-                  </button>
-                  <span className="w-10 text-center font-display text-lg font-bold text-ink tabular-nums">
-                    {num(p.rebuys)}
-                  </span>
-                  <button
-                    type="button"
-                    disabled={!puedeEditar}
-                    aria-label={`Una recompra más de ${p.nombre}`}
-                    onClick={() => cambiarRecompras(p.id, num(p.rebuys) + 1)}
-                    className="flex h-11 w-11 cursor-pointer items-center justify-center border-none bg-ink/6 text-ink active:scale-90 disabled:opacity-30"
-                  >
-                    <Plus size={16} strokeWidth={3} />
-                  </button>
-                </div>
-              </div>
+              {num(p.rebuys) > 0 && (
+                <p className="mt-2 mb-0 text-[11.5px] leading-snug text-ink-soft">
+                  Lleva {num(p.rebuys)} {num(p.rebuys) === 1 ? 'recompra' : 'recompras'} y{' '}
+                  {money(x.puso)} puestos. Se agregan en el registro.
+                </p>
+              )}
 
               {puedeEditar && (
                 <button
@@ -422,6 +504,56 @@ export default function PartidaTornecash({
 
       {puedeEditar && <Ajustes torneo={torneo} cambiar={cambiarTorneo} />}
     </>
+  )
+}
+
+/*
+ * Cómo va la noche, en tres cifras.
+ *
+ * Va en las dos pestañas de trabajo porque es lo que se consulta a cada rato: cuánto
+ * se ha juntado, cuánta gente entró y cuántas recompras llevan.
+ */
+function Resumen({
+  bolsa,
+  entradas,
+  recompras,
+  cerrados,
+}: {
+  bolsa: number
+  entradas: number
+  recompras: number
+  cerrados: number
+}) {
+  return (
+    <section className="panel">
+      <p className="panel-title">
+        <span>Cómo va</span>
+      </p>
+      <div className="grid grid-cols-3 gap-2">
+        <div className="rounded-xl bg-noche-linea px-3 py-2.5 text-paper">
+          <span className="block text-[10px] tracking-[.6px] uppercase opacity-70">Bolsa</span>
+          <b className="font-display text-2xl">{money(bolsa)}</b>
+        </div>
+        <div className="rounded-xl border border-paper-line bg-white px-3 py-2.5">
+          <span className="block text-[10px] tracking-[.6px] text-ink-soft uppercase">
+            Entradas
+          </span>
+          <b className="font-display text-2xl text-ink">{entradas}</b>
+        </div>
+        <div className="rounded-xl border border-paper-line bg-white px-3 py-2.5">
+          <span className="block text-[10px] tracking-[.6px] text-ink-soft uppercase">
+            Recompras
+          </span>
+          <b className="font-display text-2xl text-ink">{recompras}</b>
+        </div>
+      </div>
+      {cerrados > 0 && (
+        <p className="mt-2.5 mb-0 text-[12px] leading-snug text-ink-soft">
+          Ya cerraron <b className="text-ink">{cerrados}</b> de {entradas}; quedan abajo, en
+          orden.
+        </p>
+      )}
+    </section>
   )
 }
 
