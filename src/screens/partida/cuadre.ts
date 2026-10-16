@@ -38,6 +38,15 @@ export interface Cuadre {
   contados: number
   /** A cuántos ya se les apuntó lo que se les entregó, aunque hayan sido $0. */
   pagados: number
+  /**
+   * A cuántos hay que entregarles algo.
+   *
+   * En cash y en torneo son todos: hasta el que se fue sin nada lleva su cero apuntado,
+   * porque "cero" y "todavía no le pago" no son lo mismo. En tornecash sólo los que
+   * alcanzaron lugar, porque a los demás no hay nada que entregarles y pedir ocho ceros
+   * a la una de la mañana es trabajo que la app puede ahorrarse.
+   */
+  porCobrar: number
   jugadores: number
 }
 
@@ -46,6 +55,8 @@ export function calcularCuadre(
   colores: ChipColor[],
   reparto: Distribution,
   invertidoDe: (p: Participacion) => number,
+  /** Quién tiene que acabar con un pago apuntado. Por omisión, todos. */
+  debeCobrar: (p: Participacion) => boolean = () => true,
 ): Cuadre {
   const entregadasPorColor: Record<string, number> = {}
   for (const fila of reparto.rows) {
@@ -77,7 +88,8 @@ export function calcularCuadre(
     contados: participaciones.filter((p) => Object.keys(leerJson<Chips>(p.fichas_final, {})).length > 0).length,
     /* `pagado` en null es "todavía no se le entrega"; en 0 es "se fue sin nada", que es
        un dato válido y muy común. Por eso se cuenta el null, no el cero. */
-    pagados: participaciones.filter((p) => p.pagado !== null).length,
+    pagados: participaciones.filter((p) => debeCobrar(p) && p.pagado !== null).length,
+    porCobrar: participaciones.filter(debeCobrar).length,
     jugadores: participaciones.length,
   }
 }
@@ -110,9 +122,9 @@ export function porQueNoSePuedeCerrar(c: Cuadre): string | null {
     return `Las fichas no cuadran: ${detalle}.`
   }
   if (c.pagadoDeMas) return 'Se repartió más dinero del que entró a la mesa.'
-  if (c.pagados < c.jugadores) {
-    const faltan = c.jugadores - c.pagados
-    return `Falta apuntar cuánto se le dio a ${faltan} de ${c.jugadores}. Si se fue sin nada, ponle 0.`
+  if (c.pagados < c.porCobrar) {
+    const faltan = c.porCobrar - c.pagados
+    return `Falta apuntar cuánto se le dio a ${faltan} de ${c.porCobrar}. Si se fue sin nada, ponle 0.`
   }
   return null
 }

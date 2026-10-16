@@ -39,6 +39,7 @@ import Numeros from './partida/Numeros'
 import Presume from './partida/Presume'
 import { useAvisoDeNivel } from './partida/usarReloj'
 import { calcularCuadre, porQueNoSePuedeCerrar } from './partida/cuadre'
+import { puestoPor, tablaTornecash } from '../lib/tornecash'
 import { calcularRepartoCash, invertidoDe } from './partida/comun'
 import { dineroDeLaCaja } from '../lib/distribution'
 import { num } from '../lib/money'
@@ -48,6 +49,7 @@ import LaPartida from './partida/LaPartida'
 import PartidaCash, { PESTANAS_CASH, type PestanaCash } from './partida/PartidaCash'
 import PartidaTornecash, {
   PESTANAS_TORNECASH,
+  repartoDeTornecash,
   type PestanaTornecash,
 } from './partida/PartidaTornecash'
 import PartidaTorneo, {
@@ -419,9 +421,29 @@ export default function PartidaScreen() {
      número que no quiere decir nada. */
   const repartoCash =
     esTorneo || esTornecash ? null : calcularRepartoCash(datos.participaciones, colores)
-  const cuadre = repartoCash
-    ? calcularCuadre(datos.participaciones, colores, repartoCash, invertidoDe)
-    : null
+
+  /*
+   * El cuadre: que las fichas que salieron vuelvan todas.
+   *
+   * Vale igual en tornecash que en cash, porque en las dos se cuenta ficha por ficha al
+   * final. Lo que cambia es de dónde sale lo que salió —ahí son los puntos de cada
+   * entrada y no el dinero— y quién tiene que acabar con un pago apuntado: en tornecash
+   * sólo los que alcanzaron lugar, que a los demás no hay nada que entregarles.
+   */
+  const cuadre = esTornecash
+    ? (() => {
+        const t = tablaTornecash(datos.participaciones, torneo, colores)
+        return calcularCuadre(
+          datos.participaciones,
+          colores,
+          repartoDeTornecash(datos.participaciones, colores, torneo),
+          (p) => puestoPor(p, torneo),
+          (p) => (t.find((x) => x.jugador.id === p.id)?.saco ?? 0) > 0,
+        )
+      })()
+    : repartoCash
+      ? calcularCuadre(datos.participaciones, colores, repartoCash, invertidoDe)
+      : null
   const trabaParaCerrar = cuadre ? porQueNoSePuedeCerrar(cuadre) : null
 
   /*

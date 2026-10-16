@@ -6,11 +6,13 @@ import ShareBlock from '../../components/ShareBlock'
 import Stepper from '../../components/Stepper'
 import Premios from '../liga/Premios'
 import RepartoDinero from './RepartoDinero'
+import Inventario from './Inventario'
+import { calcularCuadre } from './cuadre'
 import { leerJson, type ConfigTorneo, type Participacion } from '../../lib/api'
 import { money, num } from '../../lib/money'
 import type { DatosTornecash } from '../../lib/shareImage'
-import { avisosDe, bolsaDe, cuotaDeRecompra, tablaTornecash } from '../../lib/tornecash'
-import type { Chips } from '../../store/types'
+import { avisosDe, bolsaDe, cuotaDeRecompra, puestoPor, tablaTornecash } from '../../lib/tornecash'
+import type { ChipColor, Chips } from '../../store/types'
 import {
   FichasDelJugador,
   GuardarConteo,
@@ -32,6 +34,27 @@ export const PESTANAS_TORNECASH: { id: PestanaTornecash; label: string }[] = [
   { id: 'final', label: 'Cash out' },
   { id: 'resultado', label: 'Resultado' },
 ]
+
+/**
+ * Las fichas que salen de la caja en una noche de tornecash.
+ *
+ * Una por la entrada y una por cada recompra, cada entrega con su renglón: es lo que se
+ * le pone en la mano al jugador en ese momento, no el montón de toda su noche.
+ *
+ * Vive aquí y se exporta porque la pantalla de arriba necesita el mismo reparto para
+ * cuadrar las fichas que volvieron. Si cada una armara el suyo, un día dirían cosas
+ * distintas.
+ */
+export function repartoDeTornecash(
+  participaciones: Participacion[],
+  colores: ChipColor[],
+  torneo: ConfigTorneo,
+) {
+  const stack = num(torneo.stack)
+  return calcularRepartoPorConcepto(participaciones, colores, (p) =>
+    conceptosDeTorneo(p, stack, stack, 0),
+  )
+}
 
 /** Los puntos se escriben pelones. No son pesos, y ponerles signo es la confusión. */
 const puntos = (n: number) => Math.round(n).toLocaleString('es-MX')
@@ -76,14 +99,8 @@ export default function PartidaTornecash({
   /* ------------------------------------------------ registro: qué fichas darle a quién */
   if (pestana === 'jugadores') {
     const stack = num(torneo.stack)
-    /*
-     * Cada entrega lleva su renglón, igual que en cash y en torneo: lo que se le pone
-     * en la mano al que recompra son las fichas de esa recompra, no el montón de toda
-     * su noche. Sin eso, al apuntar una recompra las fichas saltaban de golpe y había
-     * que restar de cabeza sobre la mesa.
-     */
     const conceptos = (q: Participacion) => conceptosDeTorneo(q, stack, stack, 0)
-    const reparto = calcularRepartoPorConcepto(datos.participaciones, colores, conceptos)
+    const reparto = repartoDeTornecash(datos.participaciones, colores, torneo)
 
     return (
       <>
@@ -500,6 +517,18 @@ export default function PartidaTornecash({
         subtitulo={datos.partida.nombre || datos.partida.fecha}
         onRedondeo={onRedondeo}
         onPago={(id, pagado) => tocar(id, { pagado }, { pagado })}
+      />
+
+      {/* Las fichas que salieron contra las que volvieron. Es el mismo candado que en
+          cash: si no cuadran, el conteo está mal y todo lo de arriba sale mal. */}
+      <Inventario
+        cuadre={calcularCuadre(
+          datos.participaciones,
+          colores,
+          repartoDeTornecash(datos.participaciones, colores, torneo),
+          (q) => puestoPor(q, torneo),
+          (q) => (tabla.find((x) => x.jugador.id === q.id)?.saco ?? 0) > 0,
+        )}
       />
 
       {puedeEditar && <Ajustes torneo={torneo} cambiar={cambiarTorneo} />}
