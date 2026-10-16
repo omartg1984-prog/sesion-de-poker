@@ -189,7 +189,6 @@ describe('el podio de una noche de tornecash', () => {
     addOnPrice: 0,
     payouts: [{ pct: 50 }, { pct: 30 }, { pct: 20 }],
     stack: 500,
-    valores: { green: 25, white: 1 },
   }
   const mesa = { tipo: 'tornecash', torneo: JSON.stringify(CONFIG) }
 
@@ -351,17 +350,13 @@ describe('el podio de una noche de tornecash', () => {
     }
   })
 
-  it('sin valores de la noche se usan los de la liga en vez de contar cero', () => {
-    const sinValores = {
-      tipo: 'tornecash',
-      torneo: JSON.stringify({ ...CONFIG, valores: undefined }),
-    }
+  it('las fichas valen lo que dice el inventario de la liga', () => {
     const podio = podioDe(
-      sinValores,
+      mesa,
       [jugador('ana', { fichas_final: JSON.stringify({ green: 40 }) }), jugador('beto')],
       COLORES,
     )
-    /* 40 verdes a 25 de la liga son 1,000; menos las 500 que le dieron, +500. */
+    /* 40 verdes a 25 son 1,000; menos las 500 que le dieron, +500. */
     expect(podio[0].jugador.usuario_id).toBe('ana')
     expect(podio[0].saco).toBeGreaterThan(0)
   })

@@ -67,15 +67,15 @@ export const fichasDadas = (j: JugadorTornecash, cfg: ConfigTorneo) =>
   num(cfg.stack) * (1 + num(j.rebuys))
 
 /**
- * Lo que valen unas fichas contadas, en puntos de esta noche.
+ * Lo que valen unas fichas contadas, en puntos.
  *
- * Los valores van por noche y no por liga porque no son dinero: la liga dice que la
- * blanca vale un peso, y aquí esa misma blanca puede valer veinticinco. Al color que
- * no traiga valor de la noche se le usa el de la liga, que es mejor que contarlo en
- * cero y dejar fichas fuera de la cuenta sin que nadie se entere.
+ * Vale lo mismo que dice el inventario de la liga: la verde de 25 son 25 puntos. Aquí
+ * ese número no es dinero y por eso no lleva signo de pesos en ningún lado —el dinero
+ * entra y sale una sola vez, por la cuota— pero la ficha es la misma y no tiene por
+ * qué valer una cosa el viernes y otra el sábado.
  */
-export const enPuntos = (fichas: Chips, cfg: ConfigTorneo, colores: ChipColor[]) =>
-  colores.reduce((total, c) => total + num(fichas[c.key]) * num(cfg.valores?.[c.key] ?? c.value), 0)
+export const enPuntos = (fichas: Chips, _cfg: ConfigTorneo, colores: ChipColor[]) =>
+  colores.reduce((total, c) => total + num(fichas[c.key]) * num(c.value), 0)
 
 /** La bolsa de la noche: todas las cuotas juntas, menos la cena si se aparta. */
 export function bolsaDe(jugadores: JugadorTornecash[], cfg: ConfigTorneo) {

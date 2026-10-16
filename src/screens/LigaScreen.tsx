@@ -699,7 +699,7 @@ ${link}`
             ? 'Cada quien entra con lo que quiere y las fichas valen dinero. Al final se cuentan y se paga.'
             : tipo === 'torneo'
               ? 'Cuota fija, las ciegas suben con el reloj y se va quedando gente fuera hasta que queda uno.'
-              : 'Cuota fija, las ciegas no suben y las fichas no valen lo que pagaste. Recompras las que quieras, sólo al quedarte en ceros, y el lugar lo da lo que le ganaste a la noche.'}
+              : 'Cuota fija, las ciegas no suben y se juega por puntos. Recompras las que quieras, sólo al quedarte en ceros, y el lugar lo da lo que le ganaste a la noche: los puntos que hiciste menos los que compraste.'}
         </p>
 
         {/* El torneo se arma por pasos: quiénes, cuánto cuesta, cuánto dura y el plan.
@@ -782,21 +782,24 @@ ${link}`
                     </span>
                   </label>
                   <label className="block">
-                    <span className="field-label">Fichas por entrada</span>
+                    <span className="field-label">Puntos por entrada</span>
                     <span className="field-box mt-1 block">
                       <NumInput
                         value={fichasEntrada}
                         mode="decimal"
-                        aria-label="Fichas por entrada"
+                        aria-label="Puntos por entrada"
                         onChange={(v) => setFichasEntrada(Math.max(0, v))}
                       />
                     </span>
                   </label>
                 </div>
                 <p className="mt-0 mb-3 text-[12px] leading-snug text-ink-soft">
-                  Las fichas no valen lo que pagaste: {money(cuota)} dan{' '}
-                  {fichasEntrada.toLocaleString('es-MX')}. Cada recompra cuesta y da lo mismo.
-                  Cuánto vale cada color lo pones adentro, antes de contar.
+                  Se juega con puntos, no con pesos: {money(cuota)} te sientan con{' '}
+                  {fichasEntrada.toLocaleString('es-MX')} puntos, y cada recompra cuesta y da lo
+                  mismo. Las fichas valen lo que dice el inventario de la liga.
+                  <br />
+                  El lugar lo da lo que le ganaste a la noche: los puntos que hiciste menos los
+                  que compraste.
                 </p>
 
                 <span className="field-label">Cómo se parte la bolsa</span>

@@ -28,7 +28,6 @@ const CFG: ConfigTorneo = {
   addOnPrice: 0,
   payouts: [{ pct: 50 }, { pct: 30 }, { pct: 20 }],
   stack: 500,
-  valores: { green: 25, white: 1 },
 }
 
 /** Un jugador que acabó con tantos puntos, contados en fichas verdes de 25. */
@@ -56,15 +55,15 @@ describe('lo que puso y lo que le dieron', () => {
 })
 
 describe('lo que valen las fichas contadas', () => {
-  it('usa el valor de la noche, no el de la liga', () => {
-    /* La blanca vale 1 en la liga y 10 esta noche. */
-    const cfg = { ...CFG, valores: { green: 25, white: 10 } }
-    expect(enPuntos({ white: 4 }, cfg, COLORES)).toBe(40)
+  it('vale lo que dice el inventario de la liga', () => {
+    expect(enPuntos({ green: 2, white: 3 }, CFG, COLORES)).toBe(53)
   })
 
-  it('al color sin valor de la noche se le usa el de la liga', () => {
-    const cfg = { ...CFG, valores: { green: 25 } }
-    expect(enPuntos({ green: 2, white: 3 }, cfg, COLORES)).toBe(53)
+  it('y no cambia aunque la noche traiga otros valores apuntados', () => {
+    /* De una versión anterior pudo quedar un valor por noche guardado: se ignora, que
+       si no la misma ficha valdría una cosa en la mesa y otra en la tabla. */
+    const cfg = { ...CFG, valores: { white: 999 } }
+    expect(enPuntos({ white: 4 }, cfg, COLORES)).toBe(4)
   })
 
   it('un conteo roto no tumba la cuenta', () => {

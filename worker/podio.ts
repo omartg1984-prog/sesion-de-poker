@@ -40,16 +40,13 @@ export interface ConfigTorneo {
   /** Lo que se le cobra a cada quien de cena y que no se reparte en premios. */
   cenaPorPersona?: number
   /*
-   * Sólo en tornecash: las fichas que da cada entrada, y lo que vale cada color en esas
-   * fichas.
+   * Sólo en tornecash: los puntos que da cada entrada.
    *
-   * Los valores van por noche y no por liga porque no son dinero: la liga dice que la
-   * blanca vale un peso, y en tornecash esa misma blanca puede valer veinticinco puntos.
-   * Si falta el valor de un color se usa el de la liga, que es mejor que contarlo en
-   * cero y dejar fichas fuera de la cuenta sin avisar.
+   * Lo que vale cada ficha sale del inventario de la liga, igual que siempre. Lo que
+   * cambia aquí es que ese número no es dinero: el dinero entra una sola vez, por la
+   * cuota, y sale una sola vez, por los premios.
    */
   stack?: number
-  valores?: Record<string, number>
 }
 
 /** Lo mínimo de una participación para poder ordenar la mesa. */
@@ -124,12 +121,10 @@ export function podioDe<T extends JugadorDeLaNoche>(
   const bolsa = recaudado - cena
 
   if (esTornecash) {
-    /* Lo que valen las fichas contadas, en puntos de esta noche. */
+    /* Lo que valen las fichas contadas, en puntos. Vale lo que dice el inventario de
+       la liga: la ficha es la misma y no cambia de valor de una noche a otra. */
     const enPuntos = (fichas: Record<string, number>) =>
-      colores.reduce(
-        (total, c) => total + num(fichas[c.key]) * num(t.valores?.[c.key] ?? c.value),
-        0,
-      )
+      colores.reduce((total, c) => total + num(fichas[c.key]) * num(c.value), 0)
     const dadas = (j: JugadorDeLaNoche) => num(t.stack) * (1 + num(j.rebuys))
 
     const conNeto = jugadores

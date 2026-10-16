@@ -77,9 +77,39 @@ export interface DatosTorneo {
   lugares: LugarTorneo[]
 }
 
+/** Un renglón de la tabla de tornecash: todo en puntos, que es como se juega. */
+export interface FilaTornecash {
+  lugar: number
+  nombre: string
+  /** Puntos con los que acabó. */
+  hizo: number
+  /** Puntos que compró: la entrada y cada recompra. */
+  compro: number
+  /** La resta, que es lo que da el lugar. */
+  neto: number
+  /** Lo que cobra, en dinero. 0 = no alcanzó lugar. */
+  premio: number
+  /** Qué parte de la bolsa le tocó. 0 = ninguna. */
+  pct: number
+}
+
+export interface DatosTornecash {
+  tipo: 'tornecash'
+  titulo: string
+  subtitulo: string
+  bolsa: number
+  cuota: number
+  entradas: number
+  recompras: number
+  dineroEntradas: number
+  dineroRecompras: number
+  filas: FilaTornecash[]
+}
+
 export type DatosImagen =
   | DatosCash
   | DatosTorneo
+  | DatosTornecash
   | DatosLiga
   | DatosNumeros
   | DatosTabla
@@ -127,6 +157,112 @@ function dibujarBolsa(
     ctx.font = "500 17px 'Inter',Arial,sans-serif"
     ctx.fillText(desglose, W / 2, arriba + 114)
   }
+}
+
+/* ---------- tornecash ---------- */
+
+/*
+ * La tabla de una noche de tornecash.
+ *
+ * Lo que va en la tabla son puntos y nada más: los que hizo, los que compró y la
+ * resta. Mezclar pesos ahí dentro es justo lo que confunde, porque el dinero de esta
+ * modalidad no se mueve con las fichas —entra una vez por la cuota y sale una vez por
+ * los premios— y va aparte, arriba en la bolsa y a la derecha en la columna del premio.
+ */
+function dibujarTornecash(d: DatosTornecash): HTMLCanvasElement {
+  const W = 1000
+  const pad = 44
+  const headerH = 170
+  const theadH = 54
+  const rowH = 76
+  const footerH = 110
+  const H = headerH + ALTO_BOLSA + theadH + rowH * Math.max(d.filas.length, 1) + footerH + pad
+
+  const { cv, ctx } = makeCanvas(W, H)
+  pintarMesa(ctx, W, H, d.titulo, d.subtitulo, '\ud83e\ude99 TORNECASH')
+
+  const partes = [`${d.entradas} ${d.entradas === 1 ? 'entrada' : 'entradas'}`]
+  if (d.recompras > 0)
+    partes.push(`${d.recompras} ${d.recompras === 1 ? 'recompra' : 'recompras'}`)
+  partes.push(`de ${moneyShort(d.cuota)}`)
+  dibujarBolsa(ctx, W, pad, headerH - 6, 'BOLSA A REPARTIR', d.bolsa, partes.join(' \u00b7 '))
+
+  const colName = pad + 22
+  const cHizo = 540
+  const cCompro = 680
+  const cNeto = 810
+  const cPremio = W - pad
+  const y = headerH + ALTO_BOLSA
+
+  ctx.font = "600 16px 'Inter',Arial,sans-serif"
+  ctx.fillStyle = 'rgba(255,255,255,.65)'
+  ctx.textAlign = 'left'
+  ctx.fillText('JUGADOR', colName, y + theadH / 2 + 5)
+  ctx.textAlign = 'right'
+  ctx.fillText('HIZO', cHizo, y + theadH / 2 + 5)
+  ctx.fillText('COMPR\u00d3', cCompro, y + theadH / 2 + 5)
+  ctx.fillText('NETO', cNeto, y + theadH / 2 + 5)
+  ctx.fillText('COBRA', cPremio, y + theadH / 2 + 5)
+  lineaTenue(ctx, pad, W - pad, y + theadH)
+
+  const miles = (n: number) => Math.round(n).toLocaleString('es-MX')
+
+  let ry = y + theadH
+  d.filas.forEach((f, i) => {
+    if (i % 2 === 1) {
+      ctx.fillStyle = 'rgba(255,255,255,.05)'
+      roundRect(ctx, pad - 6, ry + 4, W - 2 * pad + 12, rowH - 8, 10)
+      ctx.fill()
+    }
+    const midY = ry + rowH / 2 + 7
+
+    ctx.textAlign = 'left'
+    ctx.font = "26px 'Inter',Arial,sans-serif"
+    ctx.fillStyle = '#ffffff'
+    ctx.fillText(MEDALS[f.lugar - 1] || '  ', colName, midY)
+    ctx.font = "600 28px 'Khand',Arial,sans-serif"
+    ctx.fillText(ellipsis(f.nombre, 16), colName + 44, midY)
+
+    ctx.textAlign = 'right'
+    ctx.font = "500 24px 'Khand',Arial,sans-serif"
+    ctx.fillStyle = CREAM
+    ctx.fillText(miles(f.hizo), cHizo, midY)
+    ctx.fillText(miles(f.compro), cCompro, midY)
+
+    ctx.font = "700 28px 'Khand',Arial,sans-serif"
+    ctx.fillStyle = f.neto > 0 ? WIN : f.neto < 0 ? LOSS : NEUTRO
+    ctx.fillText((f.neto >= 0 ? '+' : '\u2212') + miles(Math.abs(f.neto)), cNeto, midY)
+
+    if (f.premio > 0) {
+      ctx.fillStyle = '#ffffff'
+      ctx.font = "700 26px 'Khand',Arial,sans-serif"
+      ctx.fillText(moneyShort(f.premio), cPremio, midY)
+      ctx.fillStyle = 'rgba(255,255,255,.55)'
+      ctx.font = "500 15px 'Inter',Arial,sans-serif"
+      ctx.fillText(f.pct + '%', cPremio, midY + 22)
+    } else {
+      ctx.fillStyle = 'rgba(255,255,255,.3)'
+      ctx.font = "500 24px 'Khand',Arial,sans-serif"
+      ctx.fillText('\u2014', cPremio, midY)
+    }
+    ry += rowH
+  })
+
+  lineaTenue(ctx, pad, W - pad, ry + 8)
+
+  ctx.textAlign = 'center'
+  ctx.fillStyle = 'rgba(255,255,255,.6)'
+  ctx.font = "500 19px 'Inter',Arial,sans-serif"
+  ctx.fillText(
+    `${moneyShort(d.dineroEntradas)} de entradas \u00b7 ${moneyShort(d.dineroRecompras)} en recompras`,
+    W / 2,
+    ry + 50,
+  )
+  ctx.fillStyle = 'rgba(255,255,255,.42)'
+  ctx.font = "400 17px 'Inter',Arial,sans-serif"
+  ctx.fillText('El lugar lo da lo que le ganaste a la noche, en puntos.', W / 2, ry + 78)
+
+  return cv
 }
 
 /* ---------- cash ---------- */
@@ -327,6 +463,7 @@ export async function construirLienzo(d: DatosImagen): Promise<HTMLCanvasElement
   if (d.tipo === 'tabla') return await dibujarTabla(d)
   if (d.tipo === 'liga') return await dibujarLiga(d)
   if (d.tipo === 'numeros') return await dibujarNumeros(d)
+  if (d.tipo === 'tornecash') return dibujarTornecash(d)
   return d.tipo === 'torneo' ? dibujarTorneo(d) : dibujarCash(d)
 }
 
