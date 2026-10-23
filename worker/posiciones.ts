@@ -269,6 +269,27 @@ export interface Posicion {
   rachaActual: number
   mejorRacha: number
 
+  /**
+   * Qué tanto se mueve de una noche a otra, en pesos.
+   *
+   * Dos personas pueden acabar la temporada con el mismo saldo jugando de maneras
+   * opuestas: una ganando y perdiendo trescientos pesos cada viernes, la otra haciendo
+   * tres mil una noche y perdiendo dos mil ochocientos la siguiente. El saldo no
+   * distingue entre las dos; esto sí.
+   *
+   * Es la desviación de sus resultados. Con menos de tres noches no se calcula: dos
+   * datos no dicen nada de qué tan parejo juega alguien.
+   */
+  volatilidad: number
+
+  /**
+   * El saldo acumulado después de cada noche de `fechas`, para la gráfica.
+   *
+   * Cuando alguien no vino, su número se arrastra igual: la raya se queda plana, que es
+   * exactamente lo que pasó con su dinero esa noche.
+   */
+  serie: number[]
+
   recompras: number
   montoRecompras: number
 
@@ -299,12 +320,30 @@ export interface Titulo {
   porque: string
 }
 
+/**
+ * Cuántas noches dibuja la gráfica de la temporada.
+ *
+ * No es un límite técnico sino de lectura: en la pantalla de un teléfono, treinta
+ * puntos ya salen apretados y doscientos son una mancha. Las de antes siguen contando
+ * para el saldo, que arranca acumulado desde la primera.
+ */
+const NOCHES_EN_LA_GRAFICA = 30
+
 export interface RecordLiga {
   etiqueta: string
   nombre: string
   valor: number
   /** Contexto: la fecha o el nombre de la partida. */
   detalle?: string
+}
+
+/** Cómo le ha ido a dos personas una contra la otra. */
+export interface Duelo {
+  a: string
+  b: string
+  /** Noches en las que `a` quedó arriba de `b`. */
+  ganoA: number
+  ganoB: number
 }
 
 export interface TablaLiga {
@@ -317,6 +356,19 @@ export interface TablaLiga {
   /** La noche con más dinero en la mesa. */
   mayorMesa: { monto: number; detalle: string } | null
   records: RecordLiga[]
+  /**
+   * Las fechas que dibuja la gráfica, en orden. Son las últimas noches nada más: una
+   * temporada de doscientos viernes no cabe en la pantalla de un teléfono ni dice más
+   * que las últimas treinta.
+   */
+  fechas: string[]
+  /**
+   * Quién le ha ganado a quién, contando sólo las noches en que jugaron los dos.
+   *
+   * Es lo que de verdad se discute en la mesa —"a ti siempre te gano"— y hasta ahora
+   * nadie tenía con qué contestar. Los empates no cuentan para ninguno.
+   */
+  caraACara: Duelo[]
 }
 
 /** Lo que hizo una persona en una noche concreta. */
@@ -328,6 +380,74 @@ interface Noche {
   montoRecompras: number
   lugarEnLaMesa: number
   deCuantos: number
+  /** Cuál de las noches de la temporada fue, para poder dibujar la gráfica. */
+  indice: number
+}
+
+/**
+ * Qué tan parejo juega alguien: la desviación de lo que deja cada noche.
+ *
+ * Con menos de tres noches devuelve cero. Dos resultados siempre "se desvían" uno del
+ * otro y saldría un número grande que no quiere decir nada de cómo juega.
+ */
+export function volatilidadDe(resultados: number[]): number {
+  if (resultados.length < 3) return 0
+  const media = resultados.reduce((a, r) => a + r, 0) / resultados.length
+  const v = resultados.reduce((a, r) => a + (r - media) ** 2, 0) / resultados.length
+  return Math.sqrt(v)
+}
+
+/**
+ * El saldo acumulado tras cada noche dibujada.
+ *
+ * Se acumula desde el principio de la temporada aunque la gráfica empiece después: la
+ * raya tiene que decir con cuánto va de verdad, no con cuánto va desde que cabe en la
+ * pantalla. Las noches en que alguien no vino arrastran el número de antes, porque eso
+ * es justo lo que le pasó a su dinero.
+ */
+export function serieAcumulada(
+  noches: { indice: number; resultado: number }[],
+  cuantasNoches: number,
+  desde: number,
+): number[] {
+  const puntos: number[] = []
+  let acumulado = 0
+  let j = 0
+  for (let i = 0; i < cuantasNoches; i++) {
+    while (j < noches.length && noches[j].indice === i) {
+      acumulado += noches[j].resultado
+      j++
+    }
+    if (i >= desde) puntos.push(acumulado)
+  }
+  return puntos
+}
+
+/**
+ * Apunta quién quedó arriba de quién en una mesa, para el cara a cara.
+ *
+ * La clave de cada pareja lleva los dos ids ordenados, así "Omar contra Chuy" y "Chuy
+ * contra Omar" caen en el mismo renglón. Los que empataron en lugar no se anotan nada:
+ * no se ganaron.
+ */
+export function anotarDuelos(duelos: Map<string, Duelo>, mesa: { id: string; lugar: number }[]) {
+  for (let i = 0; i < mesa.length; i++) {
+    for (let k = i + 1; k < mesa.length; k++) {
+      const uno = mesa[i]
+      const otro = mesa[k]
+      if (uno.id === otro.id) continue
+
+      const alDerecho = uno.id < otro.id
+      const a = alDerecho ? uno : otro
+      const b = alDerecho ? otro : uno
+
+      const clave = `${a.id}|${b.id}`
+      const d = duelos.get(clave) ?? { a: a.id, b: b.id, ganoA: 0, ganoB: 0 }
+      if (a.lugar < b.lugar) d.ganoA++
+      else if (b.lugar < a.lugar) d.ganoB++
+      duelos.set(clave, d)
+    }
+  }
 }
 
 export async function calcularPosiciones(env: Env, ligaId: string): Promise<TablaLiga> {
@@ -367,6 +487,8 @@ export async function calcularPosiciones(env: Env, ligaId: string): Promise<Tabl
     promedioMesa: 0,
     mayorMesa: null,
     records: [],
+    fechas: [],
+    caraACara: [],
   }
   if (partidas.length === 0) return vacia
 
@@ -401,9 +523,13 @@ export async function calcularPosiciones(env: Env, ligaId: string): Promise<Tabl
   let dineroMovido = 0
   let mayorMesa: TablaLiga['mayorMesa'] = null
 
-  for (const partida of partidas) {
+  /* Los duelos, por pareja. La clave va con los dos ids ordenados para que "Omar contra
+     Chuy" y "Chuy contra Omar" caigan en el mismo renglón. */
+  const duelos = new Map<string, Duelo>()
+
+  partidas.forEach((partida, indice) => {
     const jugadores = porPartida.get(partida.id) ?? []
-    if (jugadores.length === 0) continue
+    if (jugadores.length === 0) return
 
     const etiqueta = partida.nombre || partida.fecha
     /* La misma regla que usa el lobby para el podio y el permiso de presumir: si
@@ -424,9 +550,16 @@ export async function calcularPosiciones(env: Env, ligaId: string): Promise<Tabl
         montoRecompras: n.montoRecompras,
         lugarEnLaMesa: n.lugar,
         deCuantos: ordenadas.length,
+        indice,
       })
     }
-  }
+
+    /* Cada quien contra cada quien, en esta mesa. */
+    anotarDuelos(
+      duelos,
+      ordenadas.map((n) => ({ id: n.jugador.usuario_id, lugar: n.lugar })),
+    )
+  })
 
   /** Noches ganando seguidas al final del historial; negativo si va perdiendo. */
   const rachaAlCierre = (noches: Noche[]) => {
@@ -440,6 +573,10 @@ export async function calcularPosiciones(env: Env, ligaId: string): Promise<Tabl
     }
     return gana ? n : -n
   }
+
+  /* De dónde arranca la gráfica: las últimas noches nada más. */
+  const DESDE = Math.max(0, partidas.length - NOCHES_EN_LA_GRAFICA)
+  const fechas = partidas.slice(DESDE).map((p) => p.fecha)
 
   const mejorRachaDe = (noches: Noche[]) => {
     let mejor = 0
@@ -486,6 +623,8 @@ export async function calcularPosiciones(env: Env, ligaId: string): Promise<Tabl
         : 0,
       rachaActual: rachaAlCierre(noches),
       mejorRacha: mejorRachaDe(noches),
+      volatilidad: volatilidadDe(noches.map((n) => n.resultado)),
+      serie: serieAcumulada(noches, partidas.length, DESDE),
       recompras: noches.reduce((a, n) => a + n.recompras, 0),
       montoRecompras: noches.reduce((a, n) => a + n.montoRecompras, 0),
       esMiembro: dentro.has(datos.usuario_id),
@@ -572,5 +711,7 @@ export async function calcularPosiciones(env: Env, ligaId: string): Promise<Tabl
     promedioMesa: dineroMovido / partidas.length,
     mayorMesa,
     records,
+    fechas,
+    caraACara: [...duelos.values()],
   }
 }

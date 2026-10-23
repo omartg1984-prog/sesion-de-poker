@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import Cara from '../../components/Cara'
 import Esqueleto from '../../components/Esqueleto'
 import ShareBlock from '../../components/ShareBlock'
+import LigaEnNumeros from './LigaEnNumeros'
 import Titulos from '../../components/Titulos'
 import { EPS, money, signed } from '../../lib/money'
 import type { DatosLiga, DatosTabla } from '../../lib/imagenTablas'
@@ -652,26 +653,9 @@ export default function TablaPosiciones({ tabla, nombreLiga, partidas }: Props) 
         ))
       )}
 
-      <section className="panel">
-        <p className="panel-title">
-          <span>La liga en números</span>
-        </p>
-        <div className="grid grid-cols-2 gap-2.5">
-          <div className="stat">
-            <div className="stat-k">Partidas</div>
-            <div className="stat-v">{tabla.partidasContadas}</div>
-          </div>
-          <div className="stat">
-            <div className="stat-k">Dinero movido</div>
-            <div className="stat-v">{money(tabla.dineroMovido)}</div>
-          </div>
-        </div>
-        {tabla.partidasAbiertas > 0 && (
-          <p className="mt-3 mb-0 text-[12px] leading-snug text-ink-soft">
-            Hay {tabla.partidasAbiertas} sin cerrar. No cuentan hasta que se cierren.
-          </p>
-        )}
-      </section>
+      {/* Lo que cuenta la temporada cuando ya pasaron varias noches: récords, cara a
+          cara, cómo se ha movido el saldo y quién juega parejo. */}
+      <LigaEnNumeros tabla={tabla} />
 
       <section className="panel">
         <p className="panel-title">

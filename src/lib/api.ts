@@ -511,6 +511,18 @@ export interface Posicion {
   rachaActual: number
   mejorRacha: number
 
+  /**
+   * Qué tanto se mueve de una noche a otra, en pesos.
+   *
+   * Dos personas pueden acabar con el mismo saldo jugando de maneras opuestas: una
+   * ganando y perdiendo trescientos cada viernes, la otra haciendo tres mil una noche y
+   * perdiendo dos mil ochocientos la siguiente. El saldo no las distingue; esto sí.
+   * Cero = todavía no hay con qué medirlo.
+   */
+  volatilidad: number
+  /** El saldo acumulado después de cada noche de `fechas`, para la gráfica. */
+  serie: number[]
+
   recompras: number
   montoRecompras: number
 
@@ -546,6 +558,15 @@ export interface RecordLiga {
   detalle?: string
 }
 
+/** Cómo le ha ido a dos personas una contra la otra. */
+export interface Duelo {
+  a: string
+  b: string
+  /** Noches en las que `a` quedó arriba de `b`. */
+  ganoA: number
+  ganoB: number
+}
+
 export interface TablaPosiciones {
   posiciones: Posicion[]
   partidasContadas: number
@@ -554,6 +575,10 @@ export interface TablaPosiciones {
   promedioMesa: number
   mayorMesa: { monto: number; detalle: string } | null
   records: RecordLiga[]
+  /** Las fechas que dibuja la gráfica, en orden. Son las últimas noches nada más. */
+  fechas: string[]
+  /** Quién le ha ganado a quién, contando sólo las noches en que jugaron los dos. */
+  caraACara: Duelo[]
 }
 
 export interface DetallePartida {
