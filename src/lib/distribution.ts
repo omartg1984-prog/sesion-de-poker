@@ -37,6 +37,14 @@ export interface DealPlayer {
   /** Reparto editado a mano, o `null` si va en automático. */
   deal: Chips | null
   /*
+   * El puñado que la casa reparte siempre, cuando alcanza justo para esta entrega.
+   *
+   * Se respeta igual que uno hecho a mano, pero no es lo mismo: a mano quiere decir
+   * "alguien corrigió esto" y la pantalla lo marca para poder devolverlo al automático.
+   * Esto es nada más el reparto de la casa, así que no lleva esa marca.
+   */
+  preferido?: Chips | null
+  /*
    * Qué tanta pila de fichas chicas lleva esta entrega, de 0 a 1. Una entrada va
    * completa: hay que poder pagar las ciegas desde la primera mano. Una recompra va a
    * media —`CAMBIO_RECOMPRA`— porque el jugador ya tiene cambio sobre la mesa, pero
@@ -193,12 +201,17 @@ export function computeDistribution(
   const remaining: Record<string, number> = {}
   for (const c of colors) remaining[c.key] = ignoreInventory ? Infinity : count(c.inventory)
 
-  // pase 1: apartar lo de los jugadores manuales
+  /* Lo que ya está decidido para esta entrega: lo que se corrigió a mano, y si no, lo
+     que la casa reparte siempre. */
+  const fijo = (p: DealPlayer) => p.deal ?? p.preferido ?? null
+
+  // pase 1: apartar lo que ya está decidido
   const autos: DealPlayer[] = []
   for (const p of players) {
-    if (p.deal) {
+    const suyo = fijo(p)
+    if (suyo) {
       for (const c of colors) {
-        if (remaining[c.key] !== Infinity) remaining[c.key] -= count(p.deal[c.key])
+        if (remaining[c.key] !== Infinity) remaining[c.key] -= count(suyo[c.key])
       }
     } else {
       autos.push(p)
@@ -223,7 +236,7 @@ export function computeDistribution(
 
   const rows: DistributionRow[] = players.map((p, idx) => {
     const counts = zeroCounts(colors)
-    const src = p.deal ?? dealMap[p.id] ?? {}
+    const src = fijo(p) ?? dealMap[p.id] ?? {}
     for (const c of colors) counts[c.key] = count(src[c.key])
     const buyIn = Math.round(num(p.buyIn))
     const total = stackTotal(counts, colors)

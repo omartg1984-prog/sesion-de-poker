@@ -2,12 +2,20 @@ import type { ChipColor, Player, SessionState, Tournament } from './types'
 
 export const STORAGE_KEY = 'poker_session_v5'
 
+/*
+ * Las fichas de siempre, con lo que lleva la entrada de siempre.
+ *
+ * Los `entrada` suman $500, que es con lo que entra casi todo el mundo: 14 verdes, 8
+ * negras, 8 rojas, 10 azules y 10 blancas. No es un reparto cualquiera que valga $500
+ * —hay muchos—: es el puñado que se pone en la mano en esta casa, con suficiente
+ * morralla para las ciegas chicas y sin tanta ficha grande que no se pueda partir.
+ */
 export const DEFAULT_COLORS: ChipColor[] = [
-  { key: 'green', label: 'Verdes', color: '#1f8f4e', value: 25, inventory: 100 },
-  { key: 'black', label: 'Negras', color: '#2b2b2b', value: 10, inventory: 100 },
-  { key: 'red', label: 'Rojas', color: '#d0342c', value: 5, inventory: 150 },
-  { key: 'blue', label: 'Azules', color: '#2563c9', value: 2, inventory: 150 },
-  { key: 'white', label: 'Blancas', color: '#f2f2ea', value: 1, inventory: 200 },
+  { key: 'green', label: 'Verdes', color: '#1f8f4e', value: 25, inventory: 100, entrada: 14 },
+  { key: 'black', label: 'Negras', color: '#2b2b2b', value: 10, inventory: 100, entrada: 8 },
+  { key: 'red', label: 'Rojas', color: '#d0342c', value: 5, inventory: 150, entrada: 8 },
+  { key: 'blue', label: 'Azules', color: '#2563c9', value: 2, inventory: 150, entrada: 10 },
+  { key: 'white', label: 'Blancas', color: '#f2f2ea', value: 1, inventory: 200, entrada: 10 },
 ]
 
 /** Paleta para los colores que se agregan después de los que vienen por defecto. */

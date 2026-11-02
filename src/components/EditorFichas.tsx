@@ -3,6 +3,7 @@ import Chip from './Chip'
 import NumInput from './NumInput'
 import { dineroDeLaCaja } from '../lib/distribution'
 import { money } from '../lib/money'
+import { repartoDeLaCasa } from '../lib/reparto-de-la-casa'
 import { EXTRA_PALETTE, uid } from '../store/defaults'
 import type { ChipColor } from '../store/types'
 
@@ -19,6 +20,7 @@ interface Props {
  */
 export default function EditorFichas({ colores, onChange, soloLectura = false }: Props) {
   const caja = dineroDeLaCaja(colores)
+  const casa = repartoDeLaCasa(colores)
 
   const cambiar = (key: string, cambios: Partial<ChipColor>) =>
     onChange(colores.map((c) => (c.key === key ? { ...c, ...cambios } : c)))
@@ -31,7 +33,10 @@ export default function EditorFichas({ colores, onChange, soloLectura = false }:
   const agregar = () => {
     const usados = colores.map((c) => c.color)
     const color = EXTRA_PALETTE.find((c) => !usados.includes(c)) ?? '#7c4dff'
-    onChange([...colores, { key: uid(), label: 'Nuevo', color, value: 1, inventory: 50 }])
+    onChange([
+      ...colores,
+      { key: uid(), label: 'Nuevo', color, value: 1, inventory: 50, entrada: 0 },
+    ])
   }
 
   if (soloLectura) {
@@ -110,6 +115,17 @@ export default function EditorFichas({ colores, onChange, soloLectura = false }:
                 />
               </div>
             </div>
+            <div className="flex flex-1 flex-col gap-1">
+              <span className="field-label">En la entrada</span>
+              <div className="field-box">
+                <NumInput
+                  value={casa?.fichas[c.key] ?? 0}
+                  showZero
+                  aria-label={`Cuántas ${c.label || 'fichas'} lleva la entrada`}
+                  onChange={(v) => cambiar(c.key, { entrada: Math.max(0, Math.floor(v)) })}
+                />
+              </div>
+            </div>
           </div>
         </div>
       ))}
@@ -124,6 +140,36 @@ export default function EditorFichas({ colores, onChange, soloLectura = false }:
       <p className="mt-1.5 mb-3 text-[12px] leading-snug text-ink-soft">
         Es la suma de cada color por su valor. Más de eso no se puede poner sobre la mesa,
         aunque entre más gente.
+      </p>
+
+      {/*
+       * El puñado de siempre.
+       *
+       * "En la entrada" es cuántas de cada color se le ponen en la mano al que entra.
+       * Al que entre con justo eso se le dan ésas; al que entre con más o con menos, la
+       * app se las reparte sola. Con todo en cero, se las reparte a todos.
+       */}
+      <div className="mt-1 flex items-baseline justify-between rounded-xl border border-paper-line bg-paper-soft px-3.5 py-2.5">
+        <span className="text-[11px] font-semibold tracking-[.5px] text-ink-soft uppercase">
+          La entrada de siempre
+        </span>
+        <b className="font-display text-xl font-bold text-ink tabular-nums">
+          {casa ? money(casa.total) : 'se reparte sola'}
+        </b>
+      </div>
+      <p className="mt-1.5 mb-3 text-[12px] leading-snug text-ink-soft">
+        {casa ? (
+          <>
+            Al que entre con <b className="text-ink">{money(casa.total)}</b> se le dan esas
+            fichas tal cual, las mismas cada noche. Al que entre con más o con menos, la app se
+            las reparte sola. Déjalas todas en cero si prefieres que siempre las reparta ella.
+          </>
+        ) : (
+          <>
+            Nadie tiene fichas puestas en la entrada, así que la app reparte sola según el
+            dinero con el que entra cada quien.
+          </>
+        )}
       </p>
 
       {!soloLectura && (

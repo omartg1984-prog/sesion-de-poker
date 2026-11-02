@@ -8,6 +8,17 @@ export interface ChipColor {
   value: number
   /** Cuántas fichas de este color hay físicamente. */
   inventory: number
+  /**
+   * Cuántas de éstas van en la entrada de siempre.
+   *
+   * Casi todas las noches entra todo el mundo con lo mismo, y la casa reparte siempre
+   * el mismo puñado: tantas verdes, tantas rojas, tantas blancas. La cuenta automática
+   * da un reparto que vale lo mismo pero no es ése, y acaba con alguien contando
+   * fichas distintas a las de siempre.
+   *
+   * Sin poner, la entrada se reparte sola como hasta ahora.
+   */
+  entrada?: number
 }
 
 /** Cantidad de fichas por color, indexada por `ChipColor.key`. */

@@ -15,6 +15,7 @@ import {
 import type { DatosTabla } from '../../lib/imagenTablas'
 import { EPS, money, num } from '../../lib/money'
 import { api, leerJson, type DetallePartida, type Participacion } from '../../lib/api'
+import { repartoPara } from '../../lib/reparto-de-la-casa'
 import { conAviso } from '../../store/app'
 import type { ChipColor, Chips } from '../../store/types'
 
@@ -77,12 +78,16 @@ export function calcularReparto(
   objetivo: (p: Participacion) => number,
 ): Distribution {
   return computeDistribution(
-    participaciones.map((p) => ({
-      id: p.id,
-      name: p.nombre,
-      buyIn: Math.round(objetivo(p)),
-      deal: p.fichas_manual ? leerJson<Chips>(p.fichas_manual, {}) : null,
-    })),
+    participaciones.map((p) => {
+      const monto = Math.round(objetivo(p))
+      return {
+        id: p.id,
+        name: p.nombre,
+        buyIn: monto,
+        deal: p.fichas_manual ? leerJson<Chips>(p.fichas_manual, {}) : null,
+        preferido: repartoPara(colores, monto),
+      }
+    }),
     colores,
   )
 }
@@ -228,6 +233,9 @@ export function calcularRepartoPorConcepto(
         name: c.clave === 'entrada' ? p.nombre : `${p.nombre} · ${c.rotulo}`,
         buyIn: Math.round(c.monto),
         deal: manuales[c.clave] ?? null,
+        /* El puñado de la casa vale para cualquier entrega que cubra, no sólo para la
+           entrada: el que recompra con lo mismo recibe lo mismo. */
+        preferido: repartoPara(colores, Math.round(c.monto)),
         cambio: c.clave === 'entrada' ? 1 : CAMBIO_RECOMPRA,
       }))
     }),
