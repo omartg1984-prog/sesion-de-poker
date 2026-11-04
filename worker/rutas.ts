@@ -863,6 +863,7 @@ export async function rutas(
         redondeo,
         estructura,
         reloj,
+        mesas,
         registroCerrado,
         registroHasta,
         arrancarAhora,
@@ -904,6 +905,7 @@ export async function rutas(
         redondeo,
         estructura,
         reloj,
+        mesas,
         registroCerrado,
         registroHasta,
         foto,
@@ -919,6 +921,7 @@ export async function rutas(
            redondeo = COALESCE(?, redondeo),
            estructura = COALESCE(?, estructura),
            reloj = COALESCE(?, reloj),
+           mesas = COALESCE(?, mesas),
            registro_cerrado = COALESCE(?, registro_cerrado),
            registro_hasta = ?,
            arrancado_en = ?,
@@ -934,6 +937,9 @@ export async function rutas(
           redondeo === undefined ? null : Math.max(1, Math.floor(Number(redondeo) || 1)),
           estructura === undefined ? null : JSON.stringify(estructura),
           reloj === undefined ? null : JSON.stringify(reloj),
+          /* Quitar las mesas no manda null sino un sorteo vacío: con COALESCE, null es
+             "no lo toques", y hace falta poder dejar la noche en una sola mesa. */
+          mesas === undefined ? null : JSON.stringify(mesas),
           registroCerrado === undefined ? null : registroCerrado ? 1 : 0,
           /* Sin COALESCE a propósito: mandar null borra la hora, que es lo que hace
              falta al reabrir el registro de una partida cuya hora ya pasó. */

@@ -5,6 +5,7 @@
  */
 import type { ChipColor, Chips } from '../store/types'
 import type { Estructura, RelojTorneo } from './torneo'
+import type { Mesas } from './mesas'
 import type { SeccionReglas } from './reglas'
 
 export class ErrorApi extends Error {
@@ -589,6 +590,8 @@ export interface DetallePartida {
     estructura: string | null
     /** JSON con desde cuándo corre el reloj y cuánto llevaba antes de la pausa. */
     reloj: string | null
+    /** JSON con el sorteo de mesas de la noche. null = nunca se repartió. */
+    mesas: string | null
   }
   liga: { id: string; nombre: string; codigo: string; colores: ChipColor[] }
   participaciones: Participacion[]
@@ -710,6 +713,8 @@ export const api = {
       redondeo?: number
       estructura?: Estructura
       reloj?: RelojTorneo
+      /** Cómo quedaron repartidas las mesas, con su reloj de cambio. */
+      mesas?: Mesas
       /** Cerrar el registro deja la lista como está para todos menos el admin. */
       registroCerrado?: boolean
       /** null borra la hora de cierre; no mandarla la deja como estaba. */

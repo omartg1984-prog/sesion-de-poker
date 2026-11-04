@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { sonar, sonidoGuardado } from '../../lib/sonidos'
+import { faltaParaElCambio, type Mesas } from '../../lib/mesas'
 import {
   enCurso,
   segundosCorridos,
@@ -128,4 +129,36 @@ export function useAvisoDeNivel(estructura: Estructura | null, reloj: RelojTorne
     const t = setInterval(revisar, 1000)
     return () => clearInterval(t)
   }, [estructura, reloj])
+}
+
+/**
+ * El aviso de que ya toca cambiar de mesa.
+ *
+ * Lo mismo que el de las ciegas y por lo mismo: el rato se cumple mientras alguien
+ * apunta una recompra en otra pestaña, y si no suena nadie se entera hasta media hora
+ * después.
+ *
+ * Abrir la app con el rato ya cumplido no suena: eso no es el momento del cambio, es
+ * que llegaste tarde a mirarlo.
+ */
+export function useAvisoDeCambio(mesas: Mesas | null) {
+  const faltaba = useRef<number | null>(null)
+
+  useEffect(() => {
+    if (!mesas || !mesas.reloj.corriendo || mesas.mesas.length === 0) {
+      faltaba.current = null
+      return
+    }
+
+    const revisar = () => {
+      const falta = faltaParaElCambio(mesas)
+      const antes = faltaba.current
+      faltaba.current = falta
+      if (antes !== null && antes > 0 && falta <= 0) sonar(sonidoGuardado())
+    }
+
+    revisar()
+    const t = setInterval(revisar, 1000)
+    return () => clearInterval(t)
+  }, [mesas])
 }
