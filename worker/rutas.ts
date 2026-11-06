@@ -912,6 +912,9 @@ export async function rutas(
       ].some((v) => v !== undefined)
       if (tocaAlgoMas && !esAdminLiga)
         return json({ error: 'Solo un admin de la liga puede cambiar la partida' }, 403)
+      /* Ver `asegurarColumnaMesas`: si la migración 0016 no se aplicó en D1, se aplica
+         aquí antes de guardar, para que la partida no se quede sin poder guardarse. */
+      await asegurarColumnaMesas(env)
       await env.DB.prepare(
         `UPDATE partidas SET
            estado = COALESCE(?, estado),
@@ -1398,4 +1401,27 @@ export async function rutas(
   }
 
   return null
+}
+
+/*
+ * El deploy automático sube el código pero no corre las migraciones de D1. La 0016
+ * (columna `mesas`) se quedó sin aplicar y todo PATCH de una partida tronaba con
+ * "no such column: mesas". Esto la agrega una sola vez si falta, y la apunta en
+ * d1_migrations para que un `wrangler d1 migrations apply` después no la repita.
+ */
+let columnaMesasLista = false
+async function asegurarColumnaMesas(env: Env) {
+  if (columnaMesasLista) return
+  const { results } = await env.DB.prepare('PRAGMA table_info(partidas)').all<{ name: string }>()
+  if (!results.some((c) => c.name === 'mesas')) {
+    await env.DB.prepare('ALTER TABLE partidas ADD COLUMN mesas TEXT').run()
+    try {
+      await env.DB.prepare(
+        "INSERT INTO d1_migrations (name) SELECT '0016_mesas.sql' WHERE NOT EXISTS (SELECT 1 FROM d1_migrations WHERE name = '0016_mesas.sql')",
+      ).run()
+    } catch {
+      /* Sin tabla d1_migrations no hay nada que apuntar. */
+    }
+  }
+  columnaMesasLista = true
 }
