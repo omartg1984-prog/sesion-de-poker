@@ -1,6 +1,6 @@
 import { json } from './index'
 import { ganadorDe, leerJson, num, podioDe } from './podio'
-import { calcularPosiciones, esquemaDePuntos } from './posiciones'
+import { calcularPalmares, calcularPosiciones, esquemaDePuntos } from './posiciones'
 import { seEnciman } from './temporadas'
 import {
   DIAS_SESION,
@@ -658,6 +658,17 @@ export async function rutas(
        */
       if (partes[2] === 'posiciones' && metodo === 'GET') {
         return json(await calcularPosiciones(env, ligaId, url.searchParams.get('temporada')))
+      }
+
+      /*
+       * GET /api/ligas/:id/palmares — quién ganó cada temporada.
+       *
+       * Aparte de la tabla y no dentro: cuesta una pasada por temporada y sólo se mira
+       * en la vista de "Siempre", así que no tiene por qué pagarlo cada vez que alguien
+       * abre las posiciones.
+       */
+      if (partes[2] === 'palmares' && metodo === 'GET') {
+        return json({ palmares: await calcularPalmares(env, ligaId) })
       }
 
       /* ===== temporadas de la liga ===== */

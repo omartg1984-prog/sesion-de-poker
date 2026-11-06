@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { quienSeLaLlevo } from '../posiciones'
 import {
   cualVer,
   dentroDe,
@@ -108,5 +109,41 @@ describe('dos temporadas no se pueden pisar', () => {
 
   it('y dos sin cierre siempre se pisan', () => {
     expect(seEnciman({ desde: '2030-01-01', hasta: null }, ABIERTA)).toBe(true)
+  })
+})
+
+describe('quién se llevó la temporada', () => {
+  const j = (usuarioId: string, puntos: number, balance: number) => ({ usuarioId, puntos, balance })
+
+  it('el campeón es el de más puntos, no el de más dinero', () => {
+    /* Es la gracia del campeonato: premia la constancia, no la caja de una noche. */
+    const { campeon, dinero } = quienSeLaLlevo([
+      j('beto', 30, 200),
+      j('chuy', 22, 5000),
+    ])
+    expect(campeon?.usuarioId).toBe('beto')
+    expect(dinero?.usuarioId).toBe('chuy')
+  })
+
+  it('y si es el mismo, no se repite', () => {
+    const { campeon, dinero } = quienSeLaLlevo([j('beto', 30, 5000), j('chuy', 22, 200)])
+    expect(campeon?.usuarioId).toBe('beto')
+    expect(dinero).toBe(null)
+  })
+
+  it('empatados a puntos, manda el saldo', () => {
+    const { campeon } = quienSeLaLlevo([j('beto', 30, 100), j('chuy', 30, 900)])
+    expect(campeon?.usuarioId).toBe('chuy')
+  })
+
+  it('una temporada sin nadie no tiene campeón', () => {
+    expect(quienSeLaLlevo([])).toEqual({ campeon: null, dinero: null })
+  })
+
+  it('aguanta que el que más dinero hizo esté en números rojos', () => {
+    /* Un semestre en que todos perdieron: el "que más se llevó" es el que menos dejó. */
+    const { campeon, dinero } = quienSeLaLlevo([j('beto', 30, -900), j('chuy', 10, -100)])
+    expect(campeon?.usuarioId).toBe('beto')
+    expect(dinero?.usuarioId).toBe('chuy')
   })
 })

@@ -24,6 +24,7 @@ import { useEffect, useState } from 'react'
 import EditorFichas from '../components/EditorFichas'
 import NumInput from '../components/NumInput'
 import Sheet from '../components/Sheet'
+import Palmares from './liga/Palmares'
 import { EditorDeTemporadas, EncabezadoDeTemporada } from './liga/Temporadas'
 import Avatar, { AvatarEditable } from '../components/Avatar'
 import Cara from '../components/Cara'
@@ -42,6 +43,7 @@ import { compartirTextoNativo, esNativo } from '../lib/nativo'
 import { money, signed } from '../lib/money'
 import {
   api,
+  type LaureaDeTemporada,
   type Liga,
   type Miembro,
   type PartidaResumen,
@@ -121,6 +123,11 @@ export default function LigaScreen() {
    * verdad si otro admin movió las fechas mientras esta pantalla estaba abierta.
    */
   const [pedida, setPedida] = useState<string | null>(null)
+  /*
+   * El palmarés. Se pide una sola vez y sólo cuando hace falta: cuesta una pasada por
+   * temporada del lado del servidor y únicamente se mira en la vista de "Siempre".
+   */
+  const [palmares, setPalmares] = useState<LaureaDeTemporada[] | null>(null)
 
   const [fecha, setFecha] = useState(hoy())
   const [nombrePartida, setNombrePartida] = useState('')
@@ -186,6 +193,17 @@ export default function LigaScreen() {
     if (t) setTabla(t)
   }
 
+  /* Al mirar la historia completa, quién ganó cada temporada. */
+  useEffect(() => {
+    if (tabla === null || palmares !== null) return
+    if (tabla.temporada !== null || tabla.temporadas.length === 0) return
+    void (async () => {
+      const r = await conAviso(() => api.palmares(ligaId))
+      if (r) setPalmares(r.palmares)
+    })()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tabla])
+
   /** El selector manda null para "todo el tiempo"; el servidor lo entiende como 'todo'. */
   const verTemporada = (id: string | null) => {
     const cual = id ?? 'todo'
@@ -202,6 +220,7 @@ export default function LigaScreen() {
     setOcupado(true)
     const r = await conAviso(() => api.crearTemporada(ligaId, datos))
     setOcupado(false)
+    setPalmares(null)
     /* Recién creada es la que se quiere ver: es la que se acaba de abrir. */
     if (r) verTemporada(r.id)
   }
@@ -214,6 +233,7 @@ export default function LigaScreen() {
     setOcupado(true)
     const r = await conAviso(() => api.cambiarTemporada(ligaId, id, cambios))
     setOcupado(false)
+    setPalmares(null)
     /* Mover las fechas cambia qué noches cuentan, así que la tabla se vuelve a pedir. */
     if (r) void cargarTabla(pedida)
   }
@@ -223,6 +243,7 @@ export default function LigaScreen() {
     setOcupado(true)
     const r = await conAviso(() => api.borrarTemporada(ligaId, id))
     setOcupado(false)
+    setPalmares(null)
     /* Si se quitó la que se estaba viendo, que el servidor vuelva a decidir. */
     if (r) {
       setPedida(null)
@@ -599,6 +620,10 @@ ${link}`
             <Calculator size={16} strokeWidth={2.4} />
             Cómo se reparten los puntos
           </button>
+
+          {/* Quién ganó cada temporada, sólo en la vista de la historia completa: en la
+              tabla del semestre en curso estorbaría al campeonato que se está jugando. */}
+          {tabla?.temporada === null && palmares && <Palmares palmares={palmares} />}
           <TablaPosiciones tabla={tabla} nombreLiga={liga.nombre} partidas={partidas} />
         </>
       )}

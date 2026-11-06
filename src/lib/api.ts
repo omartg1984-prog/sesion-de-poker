@@ -598,6 +598,26 @@ export interface Temporada {
   hasta: string | null
 }
 
+/** Quién se llevó una temporada. */
+export interface Laureado {
+  usuarioId: string
+  nombre: string
+  foto: string | null
+  puntos: number
+  balance: number
+}
+
+/** Un renglón del palmarés: una temporada y quién se la llevó. */
+export interface LaureaDeTemporada {
+  temporada: Temporada
+  /** Ya cerró. Si no, el campeón es el que va ganando. */
+  terminada: boolean
+  noches: number
+  campeon: Laureado | null
+  /** El que más dinero se llevó, sólo cuando no es el mismo campeón. */
+  dinero: Laureado | null
+}
+
 export interface DetallePartida {
   partida: PartidaResumen & {
     torneo: string | null
@@ -695,6 +715,10 @@ export const api = {
     pedir<TablaPosiciones>(
       `ligas/${ligaId}/posiciones${temporada ? `?temporada=${encodeURIComponent(temporada)}` : ''}`,
     ),
+
+  /** Quién ganó cada temporada. Se pide aparte: sólo se mira en "Siempre". */
+  palmares: (ligaId: string) =>
+    pedir<{ palmares: LaureaDeTemporada[] }>(`ligas/${ligaId}/palmares`),
 
   /* temporadas */
   crearTemporada: (

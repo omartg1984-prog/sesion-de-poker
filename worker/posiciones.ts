@@ -752,3 +752,82 @@ export async function calcularPosiciones(
     temporada: viendo?.id ?? null,
   }
 }
+
+/* ------------------------------------------------------------------ el palmarés */
+
+/** Quién se llevó una temporada. */
+export interface Laureado {
+  usuarioId: string
+  nombre: string
+  foto: string | null
+  puntos: number
+  balance: number
+}
+
+export interface LaureaDeTemporada {
+  temporada: Temporada
+  /** Ya cerró: su última fecha quedó atrás. Si no, el campeón es provisional. */
+  terminada: boolean
+  noches: number
+  /** El del campeonato: puntos, y el saldo desempata, igual que ordena la tabla. */
+  campeon: Laureado | null
+  /** El que más dinero se llevó, sólo si no es el mismo campeón. */
+  dinero: Laureado | null
+}
+
+/**
+ * El palmarés de la liga: quién ganó cada temporada.
+ *
+ * Se calcula al vuelo, temporada por temporada, en vez de guardar al campeón el día que
+ * cierra. Es más trabajo —una pasada por temporada— pero es lo que se pidió: si se
+ * corrige una noche vieja o cambia cómo puntea la casa, el palmarés se corrige solo.
+ * Con dos o tres temporadas al año y una liga de casa, el trabajo no se nota.
+ */
+export async function calcularPalmares(env: Env, ligaId: string): Promise<LaureaDeTemporada[]> {
+  const temporadas = await temporadasDe(env, ligaId)
+  const hoy = new Date().toISOString().slice(0, 10)
+  const como = (p: Posicion): Laureado => ({
+    usuarioId: p.usuarioId,
+    nombre: p.nombre,
+    foto: p.foto,
+    puntos: p.puntos,
+    balance: p.balance,
+  })
+
+  const palmares: LaureaDeTemporada[] = []
+  for (const temporada of temporadas) {
+    const tabla = await calcularPosiciones(env, ligaId, temporada.id)
+    const { campeon, dinero } = quienSeLaLlevo(tabla.posiciones)
+    palmares.push({
+      temporada,
+      terminada: temporada.hasta !== null && temporada.hasta < hoy,
+      noches: tabla.partidasContadas,
+      campeon: campeon ? como(campeon) : null,
+      dinero: dinero ? como(dinero) : null,
+    })
+  }
+  return palmares
+}
+
+/**
+ * Quién se llevó una temporada: el del campeonato y, si es otro, el que más dinero hizo.
+ *
+ * El campeón sale por puntos con el saldo de desempate, que es el mismo orden con el
+ * que la tabla muestra el campeonato: el campeón tiene que ser el que se ve arriba.
+ *
+ * Y el del dinero sólo cuando no es el mismo: decir dos veces el mismo nombre hace
+ * ruido y le quita mérito a la línea de arriba. Que sean distintos es justo lo que hace
+ * interesante el palmarés —la constancia gana el campeonato, no la caja— así que
+ * conviene que salga bien.
+ */
+export function quienSeLaLlevo<T extends { usuarioId: string; puntos: number; balance: number }>(
+  posiciones: T[],
+): { campeon: T | null; dinero: T | null } {
+  const campeon =
+    [...posiciones].sort((a, b) => b.puntos - a.puntos || b.balance - a.balance)[0] ?? null
+  const rico = [...posiciones].sort((a, b) => b.balance - a.balance)[0] ?? null
+  return {
+    campeon,
+    dinero: rico && campeon && rico.usuarioId !== campeon.usuarioId ? rico : null,
+  }
+}
