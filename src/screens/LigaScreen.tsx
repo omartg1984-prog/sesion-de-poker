@@ -4,6 +4,7 @@ import {
   ArrowLeft,
   Banknote,
   CalendarPlus,
+  CalendarRange,
   ChevronRight,
   Calculator,
   Coins,
@@ -23,6 +24,7 @@ import { useEffect, useState } from 'react'
 import EditorFichas from '../components/EditorFichas'
 import NumInput from '../components/NumInput'
 import Sheet from '../components/Sheet'
+import { EditorDeTemporadas, EncabezadoDeTemporada } from './liga/Temporadas'
 import Avatar, { AvatarEditable } from '../components/Avatar'
 import Cara from '../components/Cara'
 import LaLiga from './liga/LaLiga'
@@ -110,7 +112,15 @@ export default function LigaScreen() {
   const [fichas, setFichas] = useState(false)
   const [puntosAbierto, setPuntosAbierto] = useState(false)
   const [gente, setGente] = useState(false)
+  const [temporadasAbierto, setTemporadasAbierto] = useState(false)
   const [ocupado, setOcupado] = useState(false)
+  /*
+   * Qué temporada se pide al servidor: el id de una, 'todo' para la liga entera, o null
+   * para que decida él (la que corre hoy). Cuál se está viendo de verdad lo dice la
+   * tabla que contesta, que es la que manda el selector: así no hay dos versiones de la
+   * verdad si otro admin movió las fechas mientras esta pantalla estaba abierta.
+   */
+  const [pedida, setPedida] = useState<string | null>(null)
 
   const [fecha, setFecha] = useState(hoy())
   const [nombrePartida, setNombrePartida] = useState('')
@@ -146,7 +156,7 @@ export default function LigaScreen() {
     const [l, p, t] = await Promise.all([
       conAviso(() => api.liga(ligaId)),
       conAviso(() => api.partidas(ligaId)),
-      conAviso(() => api.posiciones(ligaId)),
+      conAviso(() => api.posiciones(ligaId, pedida)),
     ])
     if (l) {
       setLiga(l.liga)
@@ -168,6 +178,57 @@ export default function LigaScreen() {
 
   // Otro admin pudo haber creado partidas desde su teléfono mientras no mirabas.
   useRecargarAlVolver(() => void cargar())
+
+  /* Cambiar de temporada sólo vuelve a pedir la tabla: las partidas y la gente son las
+     mismas, y recargarlo todo haría parpadear la pantalla entera por un toque. */
+  const cargarTabla = async (cual: string | null) => {
+    const t = await conAviso(() => api.posiciones(ligaId, cual))
+    if (t) setTabla(t)
+  }
+
+  /** El selector manda null para "todo el tiempo"; el servidor lo entiende como 'todo'. */
+  const verTemporada = (id: string | null) => {
+    const cual = id ?? 'todo'
+    setPedida(cual)
+    void cargarTabla(cual)
+  }
+
+  const crearTemporada = async (datos: {
+    nombre: string
+    desde: string
+    hasta: string | null
+  }) => {
+    if (ocupado) return
+    setOcupado(true)
+    const r = await conAviso(() => api.crearTemporada(ligaId, datos))
+    setOcupado(false)
+    /* Recién creada es la que se quiere ver: es la que se acaba de abrir. */
+    if (r) verTemporada(r.id)
+  }
+
+  const cambiarTemporada = async (
+    id: string,
+    cambios: { nombre: string; desde: string; hasta: string | null },
+  ) => {
+    if (ocupado) return
+    setOcupado(true)
+    const r = await conAviso(() => api.cambiarTemporada(ligaId, id, cambios))
+    setOcupado(false)
+    /* Mover las fechas cambia qué noches cuentan, así que la tabla se vuelve a pedir. */
+    if (r) void cargarTabla(pedida)
+  }
+
+  const quitarTemporada = async (id: string) => {
+    if (ocupado) return
+    setOcupado(true)
+    const r = await conAviso(() => api.borrarTemporada(ligaId, id))
+    setOcupado(false)
+    /* Si se quitó la que se estaba viendo, que el servidor vuelva a decidir. */
+    if (r) {
+      setPedida(null)
+      void cargarTabla(null)
+    }
+  }
 
   const crearPartida = async () => {
     if (ocupado) return
@@ -447,14 +508,30 @@ ${link}`
 
           {/* Los dos cuartos de atrás de la liga: quién juega aquí y qué fichas hay.
               Arriba, porque son lo que se consulta al armar la noche, no al final. */}
-          <div className="mb-3.5 flex gap-2.5">
-            <button type="button" className="btn btn-ghost" onClick={() => setGente(true)}>
+          <div className="mb-3.5 flex gap-2">
+            <button
+              type="button"
+              className="btn btn-ghost px-2"
+              onClick={() => setGente(true)}
+            >
               <Users size={17} strokeWidth={2.4} />
-              Jugadores en la liga
+              Jugadores
             </button>
-            <button type="button" className="btn btn-ghost" onClick={() => setFichas(true)}>
+            <button
+              type="button"
+              className="btn btn-ghost px-2"
+              onClick={() => setFichas(true)}
+            >
               <Coins size={17} strokeWidth={2.4} />
-              Inventario de fichas
+              Fichas
+            </button>
+            <button
+              type="button"
+              className="btn btn-ghost px-2"
+              onClick={() => setTemporadasAbierto(true)}
+            >
+              <CalendarRange size={17} strokeWidth={2.4} />
+              Temporadas
             </button>
           </div>
 
@@ -504,6 +581,14 @@ ${link}`
 
       {pestana === 'posiciones' && (
         <>
+          {/* Qué campeonato se está viendo, antes que cualquier número: una tabla sin
+              saber de qué temporada es no dice nada. */}
+          <EncabezadoDeTemporada
+            temporadas={tabla?.temporadas ?? []}
+            viendo={tabla?.temporada ?? null}
+            onAbrir={() => setTemporadasAbierto(true)}
+          />
+
           {/* Arriba de la tabla y no al final: la pregunta —"¿y esto de dónde sale?"—
               se hace al ver los números, no después de recorrerlos todos. */}
           <button
@@ -1045,6 +1130,26 @@ ${link}`
       />
 
       {/* ---- fichas de la casa ---- */}
+      <Sheet
+        abierta={temporadasAbierto}
+        onCerrar={() => setTemporadasAbierto(false)}
+        titulo="Temporadas"
+      >
+        <EditorDeTemporadas
+          temporadas={tabla?.temporadas ?? []}
+          soyAdmin={soyAdmin}
+          ocupado={ocupado}
+          viendo={tabla?.temporada ?? null}
+          onVer={(id) => {
+            verTemporada(id)
+            setTemporadasAbierto(false)
+          }}
+          onCrear={(datos) => void crearTemporada(datos)}
+          onCambiar={(id, cambios) => void cambiarTemporada(id, cambios)}
+          onQuitar={(id) => void quitarTemporada(id)}
+        />
+      </Sheet>
+
       <Sheet abierta={fichas} onCerrar={() => setFichas(false)} titulo="Inventario de fichas">
         <p className="mt-0 mb-3 text-[13px] leading-snug text-ink-soft">
           Con esto la app calcula cuántas fichas darle a cada quien según el dinero con el que

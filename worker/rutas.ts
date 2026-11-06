@@ -1,6 +1,7 @@
 import { json } from './index'
 import { ganadorDe, leerJson, num, podioDe } from './podio'
 import { calcularPosiciones, esquemaDePuntos } from './posiciones'
+import { seEnciman } from './temporadas'
 import {
   DIAS_SESION,
   FALLOS_PERMITIDOS,
@@ -97,6 +98,9 @@ function revisarFoto(valor: unknown): { foto: string | null } | { error: string;
 }
 
 const ahora = () => new Date().toISOString()
+
+/** Una fecha de calendario, como la escribe la app: 2026-07-01. */
+const esFecha = (v: unknown) => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v)
 const enDias = (d: number) => new Date(Date.now() + d * 864e5).toISOString()
 
 /* ---------- sesión ---------- */
@@ -646,9 +650,111 @@ export async function rutas(
         return json({ ok: true })
       }
 
-      // GET /api/ligas/:id/posiciones — tabla acumulada de la liga
+      /*
+       * GET /api/ligas/:id/posiciones — la tabla.
+       *
+       * Sin `temporada` sale la que corre hoy; con `temporada=todo`, la liga entera.
+       * Una liga sin temporadas sale entera siempre, como antes de que existieran.
+       */
       if (partes[2] === 'posiciones' && metodo === 'GET') {
-        return json(await calcularPosiciones(env, ligaId))
+        return json(await calcularPosiciones(env, ligaId, url.searchParams.get('temporada')))
+      }
+
+      /* ===== temporadas de la liga ===== */
+
+      if (partes[2] === 'temporadas') {
+        /* Partir el campeonato le cambia la tabla a todos, no solo a quien toca el
+           botón: es cosa de admin, como las fichas o cómo se puntea. */
+        if (!esAdminLiga)
+          return json({ error: 'Solo un admin de la liga puede cambiar las temporadas' }, 403)
+
+        const temporadaId = partes[3]
+
+        const otras = async (exceptoId?: string) => {
+          const { results } = await env.DB.prepare(
+            'SELECT id, nombre, desde, hasta FROM temporadas WHERE liga_id = ?',
+          )
+            .bind(ligaId)
+            .all<{ id: string; nombre: string; desde: string; hasta: string | null }>()
+          return (results ?? []).filter((t) => t.id !== exceptoId)
+        }
+
+        // POST /api/ligas/:id/temporadas — dar de alta una
+        if (!temporadaId && metodo === 'POST') {
+          const { nombre, desde, hasta } = await cuerpo<Record<string, unknown>>()
+          const nom = String(nombre ?? '').trim()
+          const d = String(desde ?? '')
+          const h = hasta === null || hasta === undefined || hasta === '' ? null : String(hasta)
+          if (!nom) return json({ error: 'La temporada necesita un nombre' }, 400)
+          if (!esFecha(d)) return json({ error: 'Falta cuándo empieza la temporada' }, 400)
+          if (h !== null && !esFecha(h)) return json({ error: 'La fecha de cierre no se entiende' }, 400)
+          if (h !== null && h < d)
+            return json({ error: 'La temporada no puede cerrar antes de empezar' }, 400)
+
+          const encimada = (await otras()).find((t) => seEnciman({ desde: d, hasta: h }, t))
+          if (encimada)
+            return json(
+              { error: `Esas fechas se enciman con "${encimada.nombre}". Ciérrala antes de que empiece la nueva.` },
+              409,
+            )
+
+          const id = nuevoId()
+          await env.DB.prepare(
+            'INSERT INTO temporadas (id, liga_id, nombre, desde, hasta, creada_en) VALUES (?, ?, ?, ?, ?, ?)',
+          )
+            .bind(id, ligaId, nom, d, h, ahora())
+            .run()
+          return json({ ok: true, id })
+        }
+
+        // PATCH /api/ligas/:id/temporadas/:tid — corregir nombre o fechas
+        if (temporadaId && metodo === 'PATCH') {
+          const actual = await env.DB.prepare(
+            'SELECT nombre, desde, hasta FROM temporadas WHERE id = ? AND liga_id = ?',
+          )
+            .bind(temporadaId, ligaId)
+            .first<{ nombre: string; desde: string; hasta: string | null }>()
+          if (!actual) return json({ error: 'Esa temporada no existe' }, 404)
+
+          const { nombre, desde, hasta } = await cuerpo<Record<string, unknown>>()
+          const nom = nombre === undefined ? actual.nombre : String(nombre).trim()
+          const d = desde === undefined ? actual.desde : String(desde)
+          const h =
+            hasta === undefined
+              ? actual.hasta
+              : hasta === null || hasta === ''
+                ? null
+                : String(hasta)
+          if (!nom) return json({ error: 'La temporada necesita un nombre' }, 400)
+          if (!esFecha(d)) return json({ error: 'La fecha de inicio no se entiende' }, 400)
+          if (h !== null && !esFecha(h)) return json({ error: 'La fecha de cierre no se entiende' }, 400)
+          if (h !== null && h < d)
+            return json({ error: 'La temporada no puede cerrar antes de empezar' }, 400)
+
+          const encimada = (await otras(temporadaId)).find((t) => seEnciman({ desde: d, hasta: h }, t))
+          if (encimada)
+            return json({ error: `Esas fechas se enciman con "${encimada.nombre}".` }, 409)
+
+          await env.DB.prepare(
+            'UPDATE temporadas SET nombre = ?, desde = ?, hasta = ? WHERE id = ? AND liga_id = ?',
+          )
+            .bind(nom, d, h, temporadaId, ligaId)
+            .run()
+          return json({ ok: true })
+        }
+
+        /*
+         * DELETE /api/ligas/:id/temporadas/:tid — quitarla.
+         *
+         * No borra ninguna noche: las partidas siguen enteras y vuelven a contar en la
+         * temporada que las contenga, o en toda la liga si ya no queda ninguna.
+         */
+        if (temporadaId && metodo === 'DELETE') {
+          await env.DB.prepare('DELETE FROM temporadas WHERE id = ? AND liga_id = ?')
+            .bind(temporadaId, ligaId)
+            .run()
+          return json({ ok: true })
+        }
       }
 
       /* ===== partidas de la liga ===== */
@@ -868,6 +974,7 @@ export async function rutas(
         arrancarAhora,
         terminarAhora,
         foto,
+        cuentaParaTabla,
       } = await cuerpo<Record<string, unknown>>()
       if (estado !== undefined && estado !== 'abierta' && estado !== 'cerrada')
         return json({ error: 'Estado inválido' }, 400)
@@ -907,6 +1014,7 @@ export async function rutas(
         registroCerrado,
         registroHasta,
         foto,
+        cuentaParaTabla,
       ].some((v) => v !== undefined)
       if (tocaAlgoMas && !esAdminLiga)
         return json({ error: 'Solo un admin de la liga puede cambiar la partida' }, 403)
@@ -968,6 +1076,24 @@ export async function rutas(
           partidaId,
         )
         .run()
+
+      /*
+       * Si esta noche cuenta para el campeonato, en su propio UPDATE.
+       *
+       * Aparte y no en el de arriba a propósito: ese guardado es el que usa toda la
+       * app —arrancar la noche es guardarla—, y si menciona una columna que la base
+       * todavía no tiene, deja de poder guardarse cualquier cosa. Ya pasó una vez. Así,
+       * lo único que falla si falta la columna es este botón.
+       */
+      if (cuentaParaTabla !== undefined) {
+        try {
+          await env.DB.prepare('UPDATE partidas SET cuenta_para_tabla = ? WHERE id = ?')
+            .bind(cuentaParaTabla ? 1 : 0, partidaId)
+            .run()
+        } catch {
+          return json({ error: 'Esta liga todavía no puede dejar noches fuera de la tabla' }, 409)
+        }
+      }
       return json({ ok: true })
     }
 

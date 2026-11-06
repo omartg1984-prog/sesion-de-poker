@@ -1,4 +1,5 @@
 import { leerJson, podioDe } from './podio'
+import { cualVer, dentroDe, nochesSueltas, temporadasDe, type Temporada } from './temporadas'
 import type { ColorFicha, Env } from './tipos'
 
 /**
@@ -369,6 +370,10 @@ export interface TablaLiga {
    * nadie tenía con qué contestar. Los empates no cuentan para ninguno.
    */
   caraACara: Duelo[]
+  /** Las temporadas de la liga, de la más nueva a la más vieja. Vacío si no usa. */
+  temporadas: Temporada[]
+  /** Cuál se está viendo. En null, la liga entera. */
+  temporada: string | null
 }
 
 /** Lo que hizo una persona en una noche concreta. */
@@ -450,7 +455,16 @@ export function anotarDuelos(duelos: Map<string, Duelo>, mesa: { id: string; lug
   }
 }
 
-export async function calcularPosiciones(env: Env, ligaId: string): Promise<TablaLiga> {
+/**
+ * `temporadaPedida` es lo que eligió la pantalla: el id de una temporada, 'todo' para
+ * la liga entera, o nada para que decida la app (la temporada que corre hoy, y la liga
+ * entera si la liga no tiene temporadas).
+ */
+export async function calcularPosiciones(
+  env: Env,
+  ligaId: string,
+  temporadaPedida: string | null = null,
+): Promise<TablaLiga> {
   const liga = await env.DB.prepare('SELECT colores, puntos FROM ligas WHERE id = ?')
     .bind(ligaId)
     .first<{ colores: string; puntos: string | null }>()
@@ -465,19 +479,38 @@ export async function calcularPosiciones(env: Env, ligaId: string): Promise<Tabl
   })
 
   // En orden cronológico: las rachas necesitan saber qué pasó antes.
-  const { results: partidas } = await env.DB.prepare(
+  const { results: todas } = await env.DB.prepare(
     `SELECT id, fecha, nombre, tipo, torneo FROM partidas
      WHERE liga_id = ? AND estado = 'cerrada' ORDER BY fecha ASC, creada_en ASC`,
   )
     .bind(ligaId)
     .all<FilaPartida>()
 
-  const abiertas = await env.DB.prepare(
-    "SELECT COUNT(*) AS n FROM partidas WHERE liga_id = ? AND estado = 'abierta'",
+  /*
+   * El corte por temporada.
+   *
+   * Se filtra aquí y no en la consulta para que la liga salga igual aunque la base
+   * todavía no sepa de temporadas: sin temporadas, `viendo` es null y entran todas las
+   * noches, que es como se ha visto siempre.
+   *
+   * La fecha de hoy se saca en UTC. En la noche de un 31 de diciembre eso puede
+   * adelantar el cambio de temporada unas horas; para un semestre no cambia nada, y a
+   * cambio no hay que confiar en la hora del teléfono de quien mira.
+   */
+  const temporadas = await temporadasDe(env, ligaId)
+  const sueltas = await nochesSueltas(env, ligaId)
+  const hoy = new Date().toISOString().slice(0, 10)
+  const viendo = cualVer(temporadas, temporadaPedida, hoy)
+  const cuenta = (p: { id: string; fecha: string }) =>
+    !sueltas.has(p.id) && (viendo === null || dentroDe(viendo, p.fecha))
+  const partidas = (todas ?? []).filter(cuenta)
+
+  const { results: enCurso } = await env.DB.prepare(
+    "SELECT id, fecha FROM partidas WHERE liga_id = ? AND estado = 'abierta'",
   )
     .bind(ligaId)
-    .first<{ n: number }>()
-  const partidasAbiertas = abiertas?.n ?? 0
+    .all<{ id: string; fecha: string }>()
+  const partidasAbiertas = (enCurso ?? []).filter(cuenta).length
 
   const vacia: TablaLiga = {
     posiciones: [],
@@ -489,6 +522,8 @@ export async function calcularPosiciones(env: Env, ligaId: string): Promise<Tabl
     records: [],
     fechas: [],
     caraACara: [],
+    temporadas,
+    temporada: viendo?.id ?? null,
   }
   if (partidas.length === 0) return vacia
 
@@ -713,5 +748,7 @@ export async function calcularPosiciones(env: Env, ligaId: string): Promise<Tabl
     records,
     fechas,
     caraACara: [...duelos.values()],
+    temporadas,
+    temporada: viendo?.id ?? null,
   }
 }

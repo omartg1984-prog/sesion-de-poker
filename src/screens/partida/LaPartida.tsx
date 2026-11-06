@@ -1,4 +1,4 @@
-import { Check, Pencil, Share2, Trash2 } from 'lucide-react'
+import { CalendarOff, Check, Pencil, Share2, Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import Avatar, { AvatarEditable } from '../../components/Avatar'
 import Sheet from '../../components/Sheet'
@@ -51,6 +51,8 @@ interface Props {
   onFoto: (foto: string | null) => void
   onCompartir: () => void
   onError: (mensaje: string) => void
+  /** Dejar la noche fuera del campeonato, o volver a contarla. Sólo para admins. */
+  onCuenta: (cuenta: boolean) => void
 }
 
 export default function LaPartida({
@@ -64,11 +66,15 @@ export default function LaPartida({
   onFoto,
   onCompartir,
   onError,
+  onCuenta,
 }: Props) {
   const p = datos.partida
   const esTorneo = p.tipo === 'torneo'
   const cerrada = p.estado === 'cerrada'
   const titulo = p.nombre || fechaLarga(p.fecha)
+  /* Sin el dato —una liga cuya base todavía no sabe de temporadas— la noche cuenta, que
+     es lo que ha pasado siempre. */
+  const cuenta = p.cuenta_para_tabla !== 0
 
   const [editando, setEditando] = useState(false)
   const [nombre, setNombre] = useState(p.nombre ?? '')
@@ -254,6 +260,15 @@ export default function LaPartida({
             </>
           )}
 
+          {/* Si la noche no cuenta, que se sepa aquí: alguien va a venir a buscar sus
+              puntos y el único lugar donde se explica es la ficha de la noche. */}
+          {!cuenta && (
+            <div className="balance balance-off">
+              <CalendarOff size={16} strokeWidth={2.4} />
+              <span>Esta noche no cuenta para el campeonato.</span>
+            </div>
+          )}
+
           {!cerrada && (
             <button type="button" className="btn btn-share mb-2" onClick={onCompartir}>
               <Share2 size={17} strokeWidth={2.4} />
@@ -265,6 +280,20 @@ export default function LaPartida({
             <button type="button" className="btn btn-ghost mb-2" onClick={() => setEditando(true)}>
               <Pencil size={16} strokeWidth={2.4} />
               Cambiar nombre y foto
+            </button>
+          )}
+
+          {/* El torneo de cumpleaños, la noche de relajo: se jugó y el dinero es real,
+              pero no tiene por qué mover el campeonato. Se decide casi siempre después
+              de cerrarla, así que esto sigue a mano con la noche ya cerrada. */}
+          {datos.soyAdmin && (
+            <button
+              type="button"
+              className="btn btn-ghost mb-2"
+              onClick={() => onCuenta(!cuenta)}
+            >
+              <CalendarOff size={16} strokeWidth={2.4} />
+              {cuenta ? 'Dejarla fuera del campeonato' : 'Volver a contarla en el campeonato'}
             </button>
           )}
         </>

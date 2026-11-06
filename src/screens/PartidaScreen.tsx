@@ -389,6 +389,21 @@ export default function PartidaScreen() {
     if (r) avisar(foto ? 'Foto de la partida actualizada' : 'Foto quitada')
   }
 
+  /*
+   * Si esta noche cuenta para el campeonato.
+   *
+   * Si el servidor la rechaza —la liga todavía no puede, porque su base no sabe de
+   * temporadas— se vuelve a pedir la partida para no quedarse con un botón mintiendo.
+   */
+  const cambiarCuenta = async (cuenta: boolean) => {
+    setDatos((d) =>
+      d ? { ...d, partida: { ...d.partida, cuenta_para_tabla: cuenta ? 1 : 0 } } : d,
+    )
+    const r = await conAviso(() => api.guardarPartida(partidaId, { cuentaParaTabla: cuenta }))
+    if (r) avisar(cuenta ? 'Esta noche vuelve a contar' : 'Esta noche queda fuera del campeonato')
+    else void cargar()
+  }
+
   /* El nombre de la noche. Vacío la deja con su fecha, que es como nace. */
   const cambiarNombre = (nombre: string) => {
     setDatos((d) => (d ? { ...d, partida: { ...d.partida, nombre: nombre || null } } : d))
@@ -763,6 +778,7 @@ export default function PartidaScreen() {
         onFoto={(f) => void cambiarFoto(f)}
         onCompartir={() => void compartirPartida()}
         onError={avisar}
+        onCuenta={(c) => void cambiarCuenta(c)}
       />
 
       {/* ---- terminar la partida ---- */}

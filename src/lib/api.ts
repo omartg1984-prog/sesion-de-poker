@@ -579,6 +579,23 @@ export interface TablaPosiciones {
   fechas: string[]
   /** Quién le ha ganado a quién, contando sólo las noches en que jugaron los dos. */
   caraACara: Duelo[]
+  /** Las temporadas de la liga, de la más nueva a la más vieja. Vacío si no usa. */
+  temporadas: Temporada[]
+  /** Cuál se está viendo. En null, la liga entera. */
+  temporada: string | null
+}
+
+/**
+ * Un pedazo del calendario de la liga: el semestre que se cobra en diciembre.
+ *
+ * Cada noche cae en la suya por su fecha, sin etiquetar nada. `hasta` en null es la que
+ * sigue corriendo. Una liga sin temporadas cuenta todas sus noches, como siempre.
+ */
+export interface Temporada {
+  id: string
+  nombre: string
+  desde: string
+  hasta: string | null
 }
 
 export interface DetallePartida {
@@ -589,6 +606,13 @@ export interface DetallePartida {
     estructura: string | null
     /** JSON con desde cuándo corre el reloj y cuánto llevaba antes de la pausa. */
     reloj: string | null
+    /**
+     * 0 si la noche quedó fuera del campeonato.
+     *
+     * Puede no venir: las ligas cuya base todavía no sabe de temporadas no la mandan, y
+     * ahí toda noche cuenta, que es lo que ha pasado siempre.
+     */
+    cuenta_para_tabla?: number
   }
   liga: { id: string; nombre: string; codigo: string; colores: ChipColor[] }
   participaciones: Participacion[]
@@ -664,7 +688,27 @@ export const api = {
   sacarMiembro: (ligaId: string, usuarioId: string) =>
     borrar<{ ok: true }>(`ligas/${ligaId}/miembros/${usuarioId}`),
 
-  posiciones: (ligaId: string) => pedir<TablaPosiciones>(`ligas/${ligaId}/posiciones`),
+  /**
+   * La tabla. Sin `temporada` sale la que corre hoy; con 'todo', la liga entera.
+   */
+  posiciones: (ligaId: string, temporada?: string | null) =>
+    pedir<TablaPosiciones>(
+      `ligas/${ligaId}/posiciones${temporada ? `?temporada=${encodeURIComponent(temporada)}` : ''}`,
+    ),
+
+  /* temporadas */
+  crearTemporada: (
+    ligaId: string,
+    datos: { nombre: string; desde: string; hasta: string | null },
+  ) => post<{ ok: true; id: string }>(`ligas/${ligaId}/temporadas`, datos),
+  cambiarTemporada: (
+    ligaId: string,
+    temporadaId: string,
+    cambios: { nombre?: string; desde?: string; hasta?: string | null },
+  ) => patch<{ ok: true }>(`ligas/${ligaId}/temporadas/${temporadaId}`, cambios),
+  /** Quitarla no borra ninguna noche: vuelven a contar donde les toque. */
+  borrarTemporada: (ligaId: string, temporadaId: string) =>
+    borrar<{ ok: true }>(`ligas/${ligaId}/temporadas/${temporadaId}`),
   /** El nombre detrás de un código de invitación, para poder preguntar antes de entrar. */
   invitacion: (codigo: string) =>
     pedir<{ liga: { id: string; nombre: string }; yaEstaba: boolean }>(
@@ -720,6 +764,8 @@ export const api = {
       terminarAhora?: boolean
       /** null la quita; no mandarla la deja como estaba. */
       foto?: string | null
+      /** false deja la noche fuera del campeonato, sin borrarle nada. */
+      cuentaParaTabla?: boolean
     },
   ) => patch<{ ok: true }>(`partidas/${id}`, cambios),
   cargarJugadores: (partidaId: string, jugadores: { usuarioId: string; entrada: number }[]) =>
