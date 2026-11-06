@@ -37,15 +37,13 @@ import BannerFeria from './partida/BannerFeria'
 import BannerFichas from './partida/BannerFichas'
 import Numeros from './partida/Numeros'
 import Presume from './partida/Presume'
-import { useAvisoDeCambio, useAvisoDeNivel } from './partida/usarReloj'
+import { useAvisoDeNivel } from './partida/usarReloj'
 import { calcularCuadre, porQueNoSePuedeCerrar } from './partida/cuadre'
 import { puestoPor, tablaTornecash } from '../lib/tornecash'
 import { calcularRepartoCash, invertidoDe } from './partida/comun'
 import { dineroDeLaCaja } from '../lib/distribution'
 import { num } from '../lib/money'
 import { RELOJ_PARADO, pausarReloj, type Estructura, type RelojTorneo } from '../lib/torneo'
-import { MINIMO_PARA_MESAS, mesasVacias, type Mesas as Reparto } from '../lib/mesas'
-import Mesas from './partida/Mesas'
 import TiempoDeJuego from './partida/TiempoDeJuego'
 import LaPartida from './partida/LaPartida'
 import PartidaCash, { PESTANAS_CASH, type PestanaCash } from './partida/PartidaCash'
@@ -60,7 +58,7 @@ import PartidaTorneo, {
   type PestanaTorneo,
 } from './partida/PartidaTorneo'
 
-type Pestana = PestanaCash | PestanaTorneo | 'numeros' | 'mesas'
+type Pestana = PestanaCash | PestanaTorneo | 'numeros'
 
 /**
  * Junta los cambios seguidos y manda uno solo por campo: teclear un monto no dispara
@@ -166,17 +164,6 @@ export default function PartidaScreen() {
   )
   useAvisoDeNivel(estructuraDelAviso, relojDelAviso)
 
-  /*
-   * El sorteo de mesas de la noche, con su reloj de cambio.
-   *
-   * Se memoriza contra el texto crudo por lo mismo que el reloj del torneo: abrirlo en
-   * cada render daría un objeto nuevo cada vez y el aviso del cambio estaría
-   * reiniciándose solo cada segundo.
-   */
-  const crudoMesas = datos?.partida.mesas ?? null
-  const mesas = useMemo(() => leerJson<Reparto>(crudoMesas, mesasVacias()), [crudoMesas])
-  useAvisoDeCambio(datos?.partida.tipo === 'cash' ? mesas : null)
-
   const colores = useMemo(() => datos?.liga.colores ?? [], [datos])
   const esTorneo = datos?.partida.tipo === 'torneo'
   const esTornecash = datos?.partida.tipo === 'tornecash'
@@ -186,22 +173,8 @@ export default function PartidaScreen() {
      el banco, aunque haya otros admins en la liga. */
   const puedeContar = !cerrada
   const soyJefe = !!datos?.soyJefe
-  /*
-   * La pestaña de mesas no sale siempre: la noche de seis juega en una mesa y no tiene
-   * por qué cargar con un botón que no va a tocar. Aparece cuando llega gente de más, y
-   * se queda mientras haya un sorteo hecho aunque luego se vayan algunos.
-   */
-  const hayMesas = mesas.ronda > 0 && mesas.mesas.length > 0
-  const conMesas =
-    !esTorneo &&
-    !esTornecash &&
-    (hayMesas || (!cerrada && (datos?.participaciones.length ?? 0) >= MINIMO_PARA_MESAS))
-  const base = esTorneo ? PESTANAS_TORNEO : esTornecash ? PESTANAS_TORNECASH : PESTANAS_CASH
   const pestanas = [
-    base[0],
-    /* Justo después del registro: se sortea cuando ya se sabe quiénes llegaron. */
-    ...(conMesas ? [{ id: 'mesas' as const, label: 'Mesas' }] : []),
-    ...base.slice(1),
+    ...(esTorneo ? PESTANAS_TORNEO : esTornecash ? PESTANAS_TORNECASH : PESTANAS_CASH),
     { id: 'numeros' as const, label: 'Estadísticas' },
   ]
 
@@ -244,13 +217,6 @@ export default function PartidaScreen() {
   const cambiarReloj = (r: RelojTorneo) => {
     setDatos((d) => (d ? { ...d, partida: { ...d.partida, reloj: JSON.stringify(r) } } : d))
     void api.guardarPartida(partidaId, { reloj: r })
-  }
-
-  /* Igual que el reloj del torneo, sin diferir: en la mesa hay varios teléfonos y el
-     sorteo tiene que aparecerles ya, no en dos segundos. */
-  const cambiarMesas = (m: Reparto) => {
-    setDatos((d) => (d ? { ...d, partida: { ...d.partida, mesas: JSON.stringify(m) } } : d))
-    void api.guardarPartida(partidaId, { mesas: m })
   }
 
   const cambiarTorneo = (t: ConfigTorneo) => {
@@ -635,13 +601,6 @@ export default function PartidaScreen() {
             </button>
           )}
         </section>
-      ) : pestana === 'mesas' ? (
-        <Mesas
-          datos={datos}
-          mesas={mesas}
-          puedeEditar={puedeEditar}
-          onMesas={cambiarMesas}
-        />
       ) : pestana === 'numeros' ? (
         <Numeros {...comunes} torneo={torneo} />
       ) : esTorneo ? (
