@@ -5,14 +5,17 @@ import Medalla from '../../components/Medalla'
 import MoneyInput from '../../components/MoneyInput'
 import ShareBlock from '../../components/ShareBlock'
 import Inventario from './Inventario'
+import PlanDeFichas from './PlanDeFichas'
 import RepartoDinero from './RepartoDinero'
 import { calcularCuadre } from './cuadre'
 import { leerJson } from '../../lib/api'
 import { EPS, money, num, signed } from '../../lib/money'
+import { entradaMasComun } from '../../lib/plan-fichas'
 import type { DatosCash } from '../../lib/shareImage'
 import type { Chips } from '../../store/types'
 import {
   CompartirReparto,
+  ENTRADA_POR_DEFECTO,
   FichasDelJugador,
   aplicarRepartoATodos,
   GuardarConteo,
@@ -45,6 +48,7 @@ export default function PartidaCash({
   puedeEditar,
   puedeContar,
   tocar,
+  recargar,
   onRedondeo,
 }: PropsPestana & { pestana: PestanaCash; onRedondeo: (paso: number) => void }) {
   const conTotales = datos.participaciones.map((p) => {
@@ -73,6 +77,24 @@ export default function PartidaCash({
       <>
         <ListaDeLaMesa
           filas={conTotales.map((p) => ({ id: p.id, nombre: p.nombre, monto: p.invertido }))}
+        />
+
+        {/*
+         * Cómo se van a repartir las fichas y para cuántos alcanzan, antes de bajar por
+         * las tarjetas de cada quien. Las pilas son las filas del reparto —una por
+         * entrada y una por recompra—, que es lo que de verdad sale de la caja.
+         */}
+        <PlanDeFichas
+          ligaId={datos.liga.id}
+          colores={colores}
+          objetivo={entradaMasComun(
+            datos.participaciones.map((p) => num(p.entrada)),
+            ENTRADA_POR_DEFECTO,
+          )}
+          hoy={reparto.rows.length}
+          jugadores={datos.participaciones.length}
+          puedeEditar={puedeEditar}
+          recargar={recargar}
         />
 
         {conTotales.map((p, i) => {
