@@ -14,6 +14,7 @@ import {
 } from '../../lib/distribution'
 import type { DatosTabla } from '../../lib/imagenTablas'
 import { EPS, money, num } from '../../lib/money'
+import { ENTRADA_POR_DEFECTO } from '../../lib/plan-fichas'
 import { api, leerJson, type DetallePartida, type Participacion } from '../../lib/api'
 import { repartoPara } from '../../lib/reparto-de-la-casa'
 import { conAviso } from '../../store/app'
@@ -43,13 +44,10 @@ export interface Recompra {
   dinero: number
 }
 
-/**
- * Con cuánto entra alguien a una partida cash si nadie dice otra cosa.
- *
- * Casi todos entran con esto, así que arrancar en cero obligaba a teclear el mismo
- * número una vez por jugador. Se puede cambiar por persona antes de guardar.
- */
-export const ENTRADA_POR_DEFECTO = 500
+/* Vive en la librería del plan de fichas, que es donde se usa para armar la pila, y se
+   vuelve a exportar aquí porque las pantallas de la partida siempre la han pedido de
+   este archivo. */
+export { ENTRADA_POR_DEFECTO }
 
 export const recomprasDe = (p: Participacion) => leerJson<Recompra[]>(p.recompras, [])
 

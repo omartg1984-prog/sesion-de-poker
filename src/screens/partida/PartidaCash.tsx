@@ -4,8 +4,8 @@ import NumInput from '../../components/NumInput'
 import Medalla from '../../components/Medalla'
 import MoneyInput from '../../components/MoneyInput'
 import ShareBlock from '../../components/ShareBlock'
+import PlanDeFichas from '../../components/PlanDeFichas'
 import Inventario from './Inventario'
-import PlanDeFichas from './PlanDeFichas'
 import RepartoDinero from './RepartoDinero'
 import { calcularCuadre } from './cuadre'
 import { leerJson } from '../../lib/api'
@@ -40,6 +40,13 @@ export const PESTANAS_CASH: { id: PestanaCash; label: string }[] = [
   { id: 'final', label: 'Cash out' },
   { id: 'resultado', label: 'Resultado' },
 ]
+
+/** "Hoy van 14 apuntados y 2 recompras": de dónde sale el número del plan de fichas. */
+function deDondeSalenLasPilas(apuntados: number, recompras: number): string {
+  const gente = `Hoy van ${apuntados} ${apuntados === 1 ? 'apuntado' : 'apuntados'}`
+  if (recompras <= 0) return gente
+  return `${gente} y ${recompras} ${recompras === 1 ? 'recompra' : 'recompras'}`
+}
 
 export default function PartidaCash({
   pestana,
@@ -83,6 +90,9 @@ export default function PartidaCash({
          * Cómo se van a repartir las fichas y para cuántos alcanzan, antes de bajar por
          * las tarjetas de cada quien. Las pilas son las filas del reparto —una por
          * entrada y una por recompra—, que es lo que de verdad sale de la caja.
+         *
+         * Aquí el plan no se escribe solo: se prueba y se guarda con su botón. Mover el
+         * reparto a media noche no le debe cambiar las fichas a nadie por accidente.
          */}
         <PlanDeFichas
           ligaId={datos.liga.id}
@@ -91,8 +101,11 @@ export default function PartidaCash({
             datos.participaciones.map((p) => num(p.entrada)),
             ENTRADA_POR_DEFECTO,
           )}
-          hoy={reparto.rows.length}
-          jugadores={datos.participaciones.length}
+          pilas={reparto.rows.length}
+          deDonde={deDondeSalenLasPilas(
+            datos.participaciones.length,
+            reparto.rows.length - datos.participaciones.length,
+          )}
           puedeEditar={puedeEditar}
           recargar={recargar}
         />

@@ -23,6 +23,9 @@ import {
 import { useEffect, useState } from 'react'
 import EditorFichas from '../components/EditorFichas'
 import NumInput from '../components/NumInput'
+import PlanDeFichas from '../components/PlanDeFichas'
+import { ENTRADA_POR_DEFECTO } from '../lib/plan-fichas'
+import { repartoDeLaCasa } from '../lib/reparto-de-la-casa'
 import Sheet from '../components/Sheet'
 import Palmares from './liga/Palmares'
 import { EditorDeTemporadas, EncabezadoDeTemporada } from './liga/Temporadas'
@@ -158,6 +161,15 @@ export default function LigaScreen() {
   const [fichasEntrada, setFichasEntrada] = useState(500)
   const [premios, setPremios] = useState<Premio[]>([{ pct: 50 }, { pct: 30 }, { pct: 20 }])
   const [colores, setColores] = useState<ChipColor[]>([])
+  /*
+   * Con cuánto se entra, para el plan de fichas.
+   *
+   * Se toma de lo que valía la entrada de siempre al abrir la liga y no se vuelve a
+   * calcular: si saliera de las fichas que están en pantalla, al quitarle una verde el
+   * objetivo bajaría con ella y el plan nunca avisaría que el reparto dejó de cuadrar,
+   * que es justo para lo que sirve.
+   */
+  const [entradaDelPlan, setEntradaDelPlan] = useState(ENTRADA_POR_DEFECTO)
 
   const cargar = async () => {
     const [l, p, t] = await Promise.all([
@@ -170,6 +182,7 @@ export default function LigaScreen() {
       setMiembros(l.miembros)
       setSoyAdmin(l.soyAdmin)
       setColores(l.liga.colores)
+      setEntradaDelPlan(repartoDeLaCasa(l.liga.colores)?.total || ENTRADA_POR_DEFECTO)
     }
     if (p) {
       setPartidas(p.partidas)
@@ -1177,11 +1190,39 @@ ${link}`
 
       <Sheet abierta={fichas} onCerrar={() => setFichas(false)} titulo="Inventario de fichas">
         <p className="mt-0 mb-3 text-[13px] leading-snug text-ink-soft">
-          Con esto la app calcula cuántas fichas darle a cada quien según el dinero con el que
-          entra.
+          Aquí se decide cómo se reparten las fichas y se ve para cuántos alcanzan. Muévelo
+          cuanto quieras: nada cambia hasta que le des a guardar, hasta abajo.
           {!soyAdmin && ' Solo un admin de la liga puede cambiarlo.'}
         </p>
-        <EditorFichas colores={colores} onChange={setColores} soloLectura={!soyAdmin} />
+        {/*
+         * El plan va arriba del inventario: lo que se viene a hacer a esta hoja es
+         * decidir cómo se reparten, y para eso hay que ver para cuántos alcanzan. El
+         * inventario de abajo es el dato con el que se hace esa cuenta.
+         *
+         * Aquí el plan sí escribe al vuelo —es el editor de la entrada de siempre— y se
+         * guarda con el botón del final, junto con todo lo demás de la hoja.
+         */}
+        <PlanDeFichas
+          colores={colores}
+          objetivo={entradaDelPlan}
+          objetivoEditable
+          pilas={Math.max(2, miembros.length)}
+          deDonde={`En la liga son ${miembros.length}`}
+          puedeEditar={soyAdmin}
+          onCambio={(fichas) =>
+            setColores(colores.map((c) => ({ ...c, entrada: Math.max(0, Math.floor(fichas[c.key] ?? 0)) })))
+          }
+        />
+
+        <p className="panel-title">
+          <span>Lo que hay en la caja</span>
+        </p>
+        <EditorFichas
+          colores={colores}
+          onChange={setColores}
+          soloLectura={!soyAdmin}
+          sinEntrada
+        />
         {soyAdmin && (
           <button
             type="button"

@@ -12,13 +12,26 @@ interface Props {
   onChange: (colores: ChipColor[]) => void
   /** Sin permisos solo se muestra, no se edita. */
   soloLectura?: boolean
+  /**
+   * Esconde lo de la entrada de siempre.
+   *
+   * Donde el plan de fichas está a la vista, él se encarga de la entrada —y la enseña
+   * entera, con la cuenta de para cuántos alcanza—, así que repetir aquí una casilla por
+   * color sería tener el mismo número en dos lados de la misma hoja.
+   */
+  sinEntrada?: boolean
 }
 
 /**
  * Valor e inventario de cada color de ficha. Controlado: no toca ningún estado
  * global, así sirve igual para crear una liga que para editarla.
  */
-export default function EditorFichas({ colores, onChange, soloLectura = false }: Props) {
+export default function EditorFichas({
+  colores,
+  onChange,
+  soloLectura = false,
+  sinEntrada = false,
+}: Props) {
   const caja = dineroDeLaCaja(colores)
   const casa = repartoDeLaCasa(colores)
 
@@ -115,17 +128,19 @@ export default function EditorFichas({ colores, onChange, soloLectura = false }:
                 />
               </div>
             </div>
-            <div className="flex flex-1 flex-col gap-1">
-              <span className="field-label">En la entrada</span>
-              <div className="field-box">
-                <NumInput
-                  value={casa?.fichas[c.key] ?? 0}
-                  showZero
-                  aria-label={`Cuántas ${c.label || 'fichas'} lleva la entrada`}
-                  onChange={(v) => cambiar(c.key, { entrada: Math.max(0, Math.floor(v)) })}
-                />
+            {!sinEntrada && (
+              <div className="flex flex-1 flex-col gap-1">
+                <span className="field-label">En la entrada</span>
+                <div className="field-box">
+                  <NumInput
+                    value={casa?.fichas[c.key] ?? 0}
+                    showZero
+                    aria-label={`Cuántas ${c.label || 'fichas'} lleva la entrada`}
+                    onChange={(v) => cambiar(c.key, { entrada: Math.max(0, Math.floor(v)) })}
+                  />
+                </div>
               </div>
-            </div>
+            )}
           </div>
         </div>
       ))}
@@ -149,28 +164,33 @@ export default function EditorFichas({ colores, onChange, soloLectura = false }:
        * Al que entre con justo eso se le dan ésas; al que entre con más o con menos, la
        * app se las reparte sola. Con todo en cero, se las reparte a todos.
        */}
-      <div className="mt-1 flex items-baseline justify-between rounded-xl border border-paper-line bg-paper-soft px-3.5 py-2.5">
-        <span className="text-[11px] font-semibold tracking-[.5px] text-ink-soft uppercase">
-          La entrada de siempre
-        </span>
-        <b className="font-display text-xl font-bold text-ink tabular-nums">
-          {casa ? money(casa.total) : 'se reparte sola'}
-        </b>
-      </div>
-      <p className="mt-1.5 mb-3 text-[12px] leading-snug text-ink-soft">
-        {casa ? (
-          <>
-            Al que entre con <b className="text-ink">{money(casa.total)}</b> se le dan esas
-            fichas tal cual, las mismas cada noche. Al que entre con más o con menos, la app se
-            las reparte sola. Déjalas todas en cero si prefieres que siempre las reparta ella.
-          </>
-        ) : (
-          <>
-            Nadie tiene fichas puestas en la entrada, así que la app reparte sola según el
-            dinero con el que entra cada quien.
-          </>
-        )}
-      </p>
+      {!sinEntrada && (
+        <>
+          <div className="mt-1 flex items-baseline justify-between rounded-xl border border-paper-line bg-paper-soft px-3.5 py-2.5">
+            <span className="text-[11px] font-semibold tracking-[.5px] text-ink-soft uppercase">
+              La entrada de siempre
+            </span>
+            <b className="font-display text-xl font-bold text-ink tabular-nums">
+              {casa ? money(casa.total) : 'se reparte sola'}
+            </b>
+          </div>
+          <p className="mt-1.5 mb-3 text-[12px] leading-snug text-ink-soft">
+            {casa ? (
+              <>
+                Al que entre con <b className="text-ink">{money(casa.total)}</b> se le dan esas
+                fichas tal cual, las mismas cada noche. Al que entre con más o con menos, la app
+                se las reparte sola. Déjalas todas en cero si prefieres que siempre las reparta
+                ella.
+              </>
+            ) : (
+              <>
+                Nadie tiene fichas puestas en la entrada, así que la app reparte sola según el
+                dinero con el que entra cada quien.
+              </>
+            )}
+          </p>
+        </>
+      )}
 
       {!soloLectura && (
         <button

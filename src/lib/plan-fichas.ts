@@ -16,6 +16,14 @@ import type { ChipColor, Chips } from '../store/types'
  */
 
 /**
+ * Con cuánto entra alguien a una partida cash si nadie dice otra cosa.
+ *
+ * Casi todos entran con esto, así que arrancar en cero obligaba a teclear el mismo
+ * número una vez por jugador. Se puede cambiar por persona antes de guardar.
+ */
+export const ENTRADA_POR_DEFECTO = 500
+
+/**
  * Cuántas fichas lleva una entrada cuando la caja alcanza de sobra.
  *
  * Va por valor y no por color: así da lo mismo que las de $50 sean moradas aquí y
