@@ -4,7 +4,7 @@ import Chip from '../../components/Chip'
 import ChipsGrid from '../../components/ChipsGrid'
 import Stepper from '../../components/Stepper'
 import { dineroDeLaCaja } from '../../lib/distribution'
-import { count, money, num } from '../../lib/money'
+import { count, money } from '../../lib/money'
 import {
   armarEntrada,
   cuantasAguanta,
@@ -366,34 +366,30 @@ export default function PlanDeFichas({
       <div className="mt-3 border-t border-dashed border-paper-line pt-3">
         <p className="field-label mb-1">Queda en la caja</p>
 
-        {/* Un renglón por color, como el conteo del cash out: la ficha, cuántas quedan y
-            lo que valen. Es la misma lectura que se hace con las fichas en la mano. */}
-        <ul className="m-0 list-none p-0">
+        {/*
+         * Un solo renglón, el mismo de las fichas que faltan en el cash out: la ficha y
+         * cuántas quedan, nada más. Un renglón por color con nombre y pesos era una lista
+         * tan larga como la mesa, y para armar una recompra no se lee: se ve.
+         *
+         * Reparte el hueco que sobra en vez de llevar separación fija, y si la caja está
+         * llena —tres dígitos en los siete colores— se recorre de lado como el del cash
+         * out. Lo que no hace es partirse en dos renglones: eso ya era otra lista.
+         */}
+        <div className="no-scrollbar flex items-center justify-between gap-x-2 overflow-x-auto rounded-lg bg-paper-soft px-2.5 py-2">
           {colores.map((c) => {
             const quedan = count(resto.fichas[c.key])
             return (
-              <li
+              <span
                 key={c.key}
-                className={`flex items-center gap-2.5 border-b border-dashed border-paper-line py-2 last:border-b-0 ${
-                  quedan === 0 ? 'opacity-45' : ''
-                }`}
+                className={`flex shrink-0 items-center gap-1 ${quedan === 0 ? 'opacity-35' : ''}`}
+                title={c.label}
               >
-                <Chip color={c} size={32} />
-                <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink">
-                  {c.label}
-                </span>
-                <b className="shrink-0 font-display text-xl tabular-nums text-ink">{quedan}</b>
-                <span
-                  className={`w-[72px] shrink-0 text-right font-display text-sm font-bold tabular-nums ${
-                    quedan > 0 ? 'text-ink-soft' : 'text-ink-soft/40'
-                  }`}
-                >
-                  {money(quedan * num(c.value))}
-                </span>
-              </li>
+                <Chip color={c} size={18} />
+                <b className="font-display text-[14px] tabular-nums text-ink">{quedan}</b>
+              </span>
             )
           })}
-        </ul>
+        </div>
 
         <p className="mt-2.5 mb-0 text-[12.5px] leading-snug text-ink-soft">
           <b className="text-ink">{money(resto.dinero)}</b> en fichas
