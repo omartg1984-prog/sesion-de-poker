@@ -26,6 +26,33 @@ const EJEMPLOS = [4, 6, 8]
 /** Más lugares que esto en una tabla ya no los llena nadie. */
 const MAX_LUGARES = 12
 
+/*
+ * Cuánto hay que haber venido para poder ser campeón.
+ *
+ * En por ciento y no en noches porque las temporadas no miden lo mismo: "la mitad" son
+ * cuatro de siete en una temporada de siete y nueve de dieciocho en una de dieciocho, y
+ * la liga no tiene que volver a tocar esto cada vez.
+ */
+const MINIMOS = [
+  {
+    valor: 0,
+    corto: 'Sin mínimo',
+    ayuda: 'Como siempre: campeón es el de más puntos, aunque haya venido una sola vez.',
+  },
+  {
+    valor: 33,
+    corto: 'Un tercio',
+    ayuda:
+      'Para subir al podio hay que haber venido a un tercio de las noches. Los demás suman puntos y salen en la tabla, pero no se coronan.',
+  },
+  {
+    valor: 50,
+    corto: 'La mitad',
+    ayuda:
+      'Para subir al podio hay que haber venido a la mitad de las noches. Así una racha de dos viernes no desplaza a quien no se ha perdido una.',
+  },
+]
+
 const ordinal = (l: number) => `${l}º`
 
 interface Props {
@@ -39,6 +66,7 @@ interface Props {
 export default function Puntos({ abierta, esquema, soyAdmin, onCerrar, onGuardar }: Props) {
   const [reglas, setReglas] = useState(esquema.reglas)
   const [tabla, setTabla] = useState<number[]>(esquema.tabla ?? [])
+  const [minimo, setMinimo] = useState(esquema.minimoPodio ?? 0)
   const [ocupado, setOcupado] = useState(false)
   const [agregando, setAgregando] = useState(false)
   const [mesa, setMesa] = useState(EJEMPLOS[1])
@@ -48,14 +76,18 @@ export default function Puntos({ abierta, esquema, soyAdmin, onCerrar, onGuardar
     if (abierta) {
       setReglas(esquema.reglas)
       setTabla(esquema.tabla ?? [])
+      setMinimo(esquema.minimoPodio ?? 0)
       setAgregando(false)
     }
   }, [abierta, esquema])
 
   /* Una tabla vacía y una tabla ausente son lo mismo, así que se comparan igualadas. */
-  const sinVacios = (e: EsquemaPuntos): EsquemaPuntos =>
-    e.tabla && e.tabla.length > 0 ? { reglas: e.reglas, tabla: e.tabla } : { reglas: e.reglas }
-  const actual = sinVacios({ reglas, tabla })
+  const sinVacios = (e: EsquemaPuntos): EsquemaPuntos => ({
+    reglas: e.reglas,
+    ...(e.tabla && e.tabla.length > 0 ? { tabla: e.tabla } : {}),
+    ...(e.minimoPodio ? { minimoPodio: e.minimoPodio } : {}),
+  })
+  const actual = sinVacios({ reglas, tabla, minimoPodio: minimo })
   const igualA = (e: EsquemaPuntos) => JSON.stringify(actual) === JSON.stringify(sinVacios(e))
   const comoEstaba = igualA(esquema)
   const comoSiempre = igualA(PUNTOS_POR_DEFECTO)
@@ -72,6 +104,7 @@ export default function Puntos({ abierta, esquema, soyAdmin, onCerrar, onGuardar
   const usarElReglamento = () => {
     setReglas(PUNTOS_DEL_REGLAMENTO.reglas.map((r) => ({ ...r })))
     setTabla([...(PUNTOS_DEL_REGLAMENTO.tabla ?? [])])
+    setMinimo(PUNTOS_DEL_REGLAMENTO.minimoPodio ?? 0)
     setAgregando(false)
   }
 
@@ -84,6 +117,12 @@ export default function Puntos({ abierta, esquema, soyAdmin, onCerrar, onGuardar
   const aparte = reglas.filter((r) => !CONSIDERACIONES.find((c) => c.id === r.id)?.porLugar)
   const esquemaDeLugar: EsquemaPuntos =
     tabla.length > 0 ? { reglas: porLugar, tabla } : { reglas: porLugar }
+
+  /* Un guardado de otra versión puede traer un por ciento que no es ninguno de los
+     tres; se resalta el más cercano en vez de dejar los tres apagados. */
+  const elMinimo = MINIMOS.reduce((a, b) =>
+    Math.abs(b.valor - minimo) < Math.abs(a.valor - minimo) ? b : a,
+  )
 
   const lugares = Array.from({ length: mesa }, (_, i) => i + 1)
   const deLugar = (l: number) =>
@@ -337,6 +376,30 @@ export default function Puntos({ abierta, esquema, soyAdmin, onCerrar, onGuardar
         </div>
       )}
 
+      {/*
+        Esto no es una consideración y por eso va aparte: no cambia lo que suma nadie,
+        sino a quién se puede coronar. Lo que resuelve es el viernes de suerte —dos
+        noches, dos palazos— que de otro modo se lleva una temporada entera.
+      */}
+      <p className="field-label mt-4 mb-1.5">Quién puede subir al podio</p>
+      <div className="mb-1.5 flex gap-1.5">
+        {MINIMOS.map((m) => (
+          <button
+            key={m.valor}
+            type="button"
+            disabled={!soyAdmin}
+            aria-pressed={m.valor === elMinimo.valor}
+            onClick={() => setMinimo(m.valor)}
+            className={`flex-1 cursor-pointer rounded-lg border-none py-2 text-[13px] font-bold transition-colors disabled:cursor-default ${
+              m.valor === elMinimo.valor ? 'bg-marca text-white' : 'bg-[#e6e1d8] text-ink-soft'
+            }`}
+          >
+            {m.corto}
+          </button>
+        ))}
+      </div>
+      <p className="mt-0 mb-4 text-[12px] leading-snug text-ink-soft">{elMinimo.ayuda}</p>
+
       {soyAdmin ? (
         <>
           <button
@@ -360,6 +423,7 @@ export default function Puntos({ abierta, esquema, soyAdmin, onCerrar, onGuardar
               onClick={() => {
                 setReglas(PUNTOS_POR_DEFECTO.reglas)
                 setTabla([...(PUNTOS_POR_DEFECTO.tabla ?? [])])
+                setMinimo(PUNTOS_POR_DEFECTO.minimoPodio ?? 0)
               }}
             >
               <RotateCcw size={16} strokeWidth={2.4} />

@@ -229,3 +229,65 @@ describe('la tabla por lugar', () => {
     expect(e.tabla).toEqual([25, 0, 0, 999])
   })
 })
+
+/*
+ * Los dos arreglos que pidió la liga después de ver la temporada: que el dinero cuente
+ * completo —y no sólo si saliste ganando— y que para coronarse haya que haber venido.
+ */
+describe('cuando el dinero cuenta completo', () => {
+  it('ganar más paga más', () => {
+    const e = con({ porCadaCien: 1 })
+    expect(puntosDeLaNoche(noche(1, 8, { resultado: 1200 }), e)).toBe(12)
+    expect(puntosDeLaNoche(noche(1, 8, { resultado: 100 }), e)).toBe(1)
+  })
+
+  it('perder poco duele menos que perder mucho', () => {
+    /* Era el defecto de fondo: con el bono de "salir ganando", perder $38 y perder
+       $1,245 daban exactamente lo mismo. */
+    const e = con({ porCadaCienPerdido: -1 })
+    expect(puntosDeLaNoche(noche(6, 8, { resultado: -300 }), e)).toBeGreaterThan(
+      puntosDeLaNoche(noche(8, 8, { resultado: -1200 }), e),
+    )
+  })
+
+  it('lo que se lleva no castiga y lo que se deja no premia', () => {
+    const e = con({ porCadaCien: 1, porCadaCienPerdido: -1 })
+    expect(puntosDeLaNoche(noche(1, 8, { resultado: 500 }), e)).toBe(5)
+    expect(puntosDeLaNoche(noche(8, 8, { resultado: -500 }), e)).toBe(-5)
+    expect(puntosDeLaNoche(noche(4, 8, { resultado: 0 }), e)).toBe(0)
+  })
+
+  it('los centavos sueltos no suman: se cobra por cada cien completos', () => {
+    const e = con({ porCadaCien: 1 })
+    expect(puntosDeLaNoche(noche(1, 8, { resultado: 99 }), e)).toBe(0)
+    expect(puntosDeLaNoche(noche(1, 8, { resultado: 199 }), e)).toBe(1)
+  })
+})
+
+describe('el mínimo de asistencia para el podio', () => {
+  it('se guarda con el resto del esquema', () => {
+    const e = esquemaDePuntos(JSON.stringify({ reglas: [{ id: 'base', puntos: 1 }], minimoPodio: 50 }))
+    expect(e.minimoPodio).toBe(50)
+  })
+
+  it('en cero es como si no estuviera', () => {
+    const e = esquemaDePuntos(JSON.stringify({ reglas: [], minimoPodio: 0 }))
+    expect(e.minimoPodio).toBeUndefined()
+  })
+
+  it('es un por ciento: no se sale de 0 a 100', () => {
+    const arriba = esquemaDePuntos(JSON.stringify({ reglas: [], minimoPodio: 900 }))
+    expect(arriba.minimoPodio).toBe(100)
+    const abajo = esquemaDePuntos(JSON.stringify({ reglas: [], minimoPodio: -40 }))
+    expect(abajo.minimoPodio).toBeUndefined()
+    const basura = esquemaDePuntos(JSON.stringify({ reglas: [], minimoPodio: 'la mitad' }))
+    expect(basura.minimoPodio).toBeUndefined()
+  })
+
+  it('no cambia lo que suma una noche', () => {
+    /* Es una regla del podio, no de los puntos: nadie deja de sumar por faltar. */
+    const sin: EsquemaPuntos = { reglas: [{ id: 'base', puntos: 5 }] }
+    const con: EsquemaPuntos = { reglas: [{ id: 'base', puntos: 5 }], minimoPodio: 50 }
+    expect(puntosDeLaNoche(noche(3, 8), con)).toBe(puntosDeLaNoche(noche(3, 8), sin))
+  })
+})

@@ -464,6 +464,20 @@ export default function TablaPosiciones({ tabla, nombreLiga, partidas }: Props) 
   })
   const ayuda = ORDENES.find((o) => o.id === orden)!.ayuda
 
+  /*
+   * El mínimo de asistencia sólo manda en el campeonato.
+   *
+   * Es una regla sobre quién se corona, no sobre el dinero: el que se llevó más feria se
+   * la llevó aunque haya venido una noche, y taparlo sería mentir. Así que cuando la
+   * tabla está ordenada por puntos, el podio salta a quien no alcanzó el mínimo; en los
+   * otros órdenes, el podio es el de arriba y punto.
+   *
+   * Los saltados no desaparecen: siguen en la tabla, en su lugar, con su aviso.
+   */
+  const esCampeonato = orden === 'puntos' || orden === 'puntosNoche'
+  const alPodio = esCampeonato ? ordenadas.filter((p) => p.puedePodio !== false) : ordenadas
+  const hayVetados = esCampeonato && alPodio.length < ordenadas.length
+
   const datosImagen: DatosLiga = {
     tipo: 'liga',
     titulo: nombreLiga,
@@ -513,7 +527,7 @@ export default function TablaPosiciones({ tabla, nombreLiga, partidas }: Props) 
       {Interruptor}
 
       <Podio
-        top={ordenadas.slice(0, 3).map((p) => ({
+        top={alPodio.slice(0, 3).map((p) => ({
           id: p.usuarioId,
           nombre: p.nombre,
           foto: p.foto,
@@ -562,7 +576,17 @@ export default function TablaPosiciones({ tabla, nombreLiga, partidas }: Props) 
           </button>
         ))}
       </div>
-      <p className="mt-1 mb-3 px-1 text-[11px] leading-snug text-tiza-suave">{ayuda}</p>
+      <p className="mt-1 mb-3 px-1 text-[11px] leading-snug text-tiza-suave">
+        {ayuda}
+        {/* Hay que decir qué significa el asterisco donde se ve, no en otra pantalla. */}
+        {hayVetados && (
+          <>
+            {' '}
+            <span className="text-marca-alta">*</span> Suma puntos y sale en la tabla, pero le
+            falta venir a suficientes noches para subir al podio.
+          </>
+        )}
+      </p>
 
       {vista === 'tabla' ? (
         /*
@@ -597,6 +621,15 @@ export default function TablaPosiciones({ tabla, nombreLiga, partidas }: Props) 
                 <tr key={p.usuarioId} className="border-t border-white/10">
                   <td className="px-1 py-2 font-display text-[13px] font-bold text-tiza-suave">
                     {i + 1}
+                    {/* El asterisco de toda la vida: va arriba en puntos, pero no se
+                        corona porque le faltó venir. Sin esto, el número uno de la
+                        tabla y el primero del podio son dos nombres distintos y nadie
+                        entiende por qué. */}
+                    {hayVetados && p.puedePodio === false && (
+                      <span className="text-marca-alta" title="Le falta venir para subir al podio">
+                        *
+                      </span>
+                    )}
                   </td>
                   <td className="max-w-[112px] px-1 py-2">
                     <span className="flex items-center gap-1.5">
@@ -638,6 +671,11 @@ export default function TablaPosiciones({ tabla, nombreLiga, partidas }: Props) 
                   {p.partidas} {p.partidas === 1 ? 'partida' : 'partidas'} · ganó {p.ganadas}
                   {!p.esMiembro && ' · ya no está'}
                 </span>
+                {hayVetados && p.puedePodio === false && (
+                  <span className="shrink-0 rounded bg-marca/15 px-1.5 py-px text-[10.5px] font-semibold text-marca-alta">
+                    le falta venir
+                  </span>
+                )}
                 <Calificacion p={p} />
                 <Racha n={p.rachaActual} />
                 <Titulos titulos={p.titulos} max={1} />

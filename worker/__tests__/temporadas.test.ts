@@ -136,6 +136,18 @@ describe('quién se llevó la temporada', () => {
     expect(campeon?.usuarioId).toBe('chuy')
   })
 
+  it('no corona a quien no alcanzó el mínimo de asistencia', () => {
+    /* El de más puntos de la temporada, pero vino dos viernes: suma, sale en la tabla y
+       no se corona. El del dinero sí es él: esa línea es la caja y la caja no pide
+       asistencia. */
+    const { campeon, dinero } = quienSeLaLlevo([
+      { ...j('agustin', 40, 1252), puedePodio: false },
+      { ...j('webo', 35, 843), puedePodio: true },
+    ])
+    expect(campeon?.usuarioId).toBe('webo')
+    expect(dinero?.usuarioId).toBe('agustin')
+  })
+
   it('una temporada sin nadie no tiene campeón', () => {
     expect(quienSeLaLlevo([])).toEqual({ campeon: null, dinero: null })
   })

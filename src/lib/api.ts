@@ -159,6 +159,21 @@ export const CONSIDERACIONES: Consideracion[] = [
     sugerido: 2,
   },
   {
+    id: 'porCadaCien',
+    etiqueta: 'Por cada $100 que te llevas',
+    ayuda: 'El dinero contado completo: ganar $1,200 no vale lo mismo que ganar $100.',
+    veces: (n) => Math.floor(Math.max(0, n.resultado) / 100),
+    sugerido: 1,
+  },
+  {
+    id: 'porCadaCienPerdido',
+    etiqueta: 'Por cada $100 que dejas',
+    ayuda: 'Para restar. Con esto, perder poco duele menos que perder mucho.',
+    veces: (n) => Math.floor(Math.max(0, -n.resultado) / 100),
+    sugerido: -1,
+    castigo: true,
+  },
+  {
     id: 'sinRecompras',
     etiqueta: 'Por aguantar sin recomprar',
     ayuda: 'Premia al que hizo rendir su entrada.',
@@ -193,6 +208,17 @@ export interface EsquemaPuntos {
   reglas: ReglaPuntos[]
   /** Puntos por lugar: [1º, 2º, 3º…]. Vacía o ausente = no se usa. */
   tabla?: number[]
+  /**
+   * Cuánto hay que haber venido para poder subir al podio, en por ciento de las noches
+   * de la temporada.
+   *
+   * No es una regla de puntos sino del podio, y por eso vive aparte: todos suman desde
+   * su primera noche, pero para salir en el cuadro de campeones hay que haber sostenido
+   * la temporada. Así una racha de dos viernes no desplaza a quien no se ha perdido
+   * una, y no hace falta castigar a nadie en la fórmula. En 0 —o sin poner— nadie queda
+   * fuera, que es como ha funcionado siempre.
+   */
+  minimoPodio?: number
 }
 
 export const PUNTOS_POR_DEFECTO: EsquemaPuntos = {
@@ -241,7 +267,12 @@ export function esquemaGuardado(crudo: string | null): EsquemaPuntos {
     const tabla = Array.isArray(g.tabla)
       ? (g.tabla as unknown[]).map((v) => (typeof v === 'number' ? v : 0))
       : []
-    return tabla.length > 0 ? { reglas, tabla } : { reglas }
+    const m = typeof g.minimoPodio === 'number' ? Math.max(0, Math.min(100, g.minimoPodio)) : 0
+    return {
+      reglas,
+      ...(tabla.length > 0 ? { tabla } : {}),
+      ...(m > 0 ? { minimoPodio: m } : {}),
+    }
   }
   const viejas = ['base', 'porJugador', 'bonoGanar', 'bonoPodio']
   const convertidas = viejas
@@ -528,6 +559,13 @@ export interface Posicion {
 
   /** `false` si ya no está en la liga pero jugó partidas que siguen contando. */
   esMiembro: boolean
+
+  /**
+   * Si tiene derecho a subir al podio. Sus puntos cuentan igual y sale en la tabla donde
+   * le toque; lo único que no puede es salir en el cuadro de campeones sin haber venido
+   * lo que pida la liga. Sin mínimo puesto, todos lo tienen.
+   */
+  puedePodio?: boolean
 
   /** Lo que se ganó presumir. */
   titulos: Titulo[]

@@ -83,6 +83,21 @@ export const CONSIDERACIONES: Consideracion[] = [
     sugerido: 2,
   },
   {
+    id: 'porCadaCien',
+    etiqueta: 'Por cada $100 que te llevas',
+    ayuda: 'El dinero contado completo: ganar $1,200 no vale lo mismo que ganar $100.',
+    veces: (n) => Math.floor(Math.max(0, n.resultado) / 100),
+    sugerido: 1,
+  },
+  {
+    id: 'porCadaCienPerdido',
+    etiqueta: 'Por cada $100 que dejas',
+    ayuda: 'Para restar. Con esto, perder poco duele menos que perder mucho.',
+    veces: (n) => Math.floor(Math.max(0, -n.resultado) / 100),
+    sugerido: -1,
+    castigo: true,
+  },
+  {
     id: 'sinRecompras',
     etiqueta: 'Por aguantar sin recomprar',
     ayuda: 'Premia al que hizo rendir su entrada.',
@@ -122,6 +137,17 @@ export interface EsquemaPuntos {
    * estar encendidas a la vez, aunque normalmente se usa una.
    */
   tabla?: number[]
+  /**
+   * Cuánto hay que haber venido para poder subir al podio, en por ciento de las noches
+   * de la temporada.
+   *
+   * No es una regla de puntos sino del podio, y por eso vive aparte: todos suman desde
+   * su primera noche, pero para salir en el cuadro de campeones hay que haber sostenido
+   * la temporada. Así una racha de dos viernes no desplaza a quien no se ha perdido
+   * una, y no hace falta castigar a nadie en la fórmula. En 0 —o sin poner— nadie queda
+   * fuera, que es como ha funcionado siempre.
+   */
+  minimoPodio?: number
 }
 
 /* Los de siempre: un punto por venir y uno por cada quien al que le ganaste. Las ligas
@@ -176,12 +202,24 @@ export function esquemaDePuntos(crudo: string | null | undefined): EsquemaPuntos
     ? (g.tabla as unknown[]).map((v) => limpio(v) ?? 0).slice(0, 12)
     : undefined
 
+  /* El mínimo del podio es un por ciento: fuera de 0 a 100 no quiere decir nada, y en
+     0 es como si no estuviera. */
+  const crudoMinimo = limpio(g.minimoPodio)
+  const minimoPodio = crudoMinimo === null ? 0 : Math.max(0, Math.min(100, crudoMinimo))
+
+  /** Arma el esquema dejando fuera lo que está apagado: vacío y ausente son lo mismo. */
+  const armar = (reglas: ReglaPuntos[]): EsquemaPuntos => ({
+    reglas,
+    ...(tabla && tabla.length > 0 ? { tabla } : {}),
+    ...(minimoPodio > 0 ? { minimoPodio } : {}),
+  })
+
   if (deLista) {
     /* Una lista vacía es una decisión válida —nadie suma nada—, pero repetir un id no:
        se queda el primero. */
     const vistos = new Set<string>()
     const reglas = deLista.filter((r) => !vistos.has(r.id) && vistos.add(r.id))
-    return tabla && tabla.length > 0 ? { reglas, tabla } : { reglas }
+    return armar(reglas)
   }
 
   /* La forma vieja: { base, porJugador, bonoGanar, bonoPodio }. */
@@ -189,7 +227,7 @@ export function esquemaDePuntos(crudo: string | null | undefined): EsquemaPuntos
   const convertidas = viejas
     .map((id) => ({ id, puntos: limpio(g[id]) }))
     .filter((r): r is ReglaPuntos => r.puntos !== null && r.puntos !== 0)
-  return convertidas.length > 0 ? { reglas: convertidas } : PUNTOS_POR_DEFECTO
+  return convertidas.length > 0 ? armar(convertidas) : armar(PUNTOS_POR_DEFECTO.reglas)
 }
 
 /** Lo que suma una noche para el campeonato. */
@@ -296,6 +334,15 @@ export interface Posicion {
 
   /** `false` si ya no está en la liga pero jugó partidas que siguen contando. */
   esMiembro: boolean
+
+  /**
+   * Si tiene derecho a subir al podio.
+   *
+   * Sus puntos cuentan igual que los de todos y aparece en la tabla donde le toque; lo
+   * único que no puede es salir en el cuadro de campeones sin haber venido lo que pida
+   * la liga. Sin mínimo puesto, todos lo tienen.
+   */
+  puedePodio: boolean
 
   /** Lo que se ganó presumir. */
   titulos: Titulo[]
@@ -663,9 +710,25 @@ export async function calcularPosiciones(
       recompras: noches.reduce((a, n) => a + n.recompras, 0),
       montoRecompras: noches.reduce((a, n) => a + n.montoRecompras, 0),
       esMiembro: dentro.has(datos.usuario_id),
+      puedePodio: true,
       titulos: [],
     }
   })
+
+  /*
+   * El mínimo de asistencia para el podio.
+   *
+   * Se decide aquí, con la temporada que se está viendo: "la mitad de las noches" son
+   * cuatro de siete en una temporada de siete, no la mitad de la historia de la liga.
+   *
+   * Si el mínimo deja a todos fuera —se puso muy alto, o la temporada apenas arranca—
+   * no se aplica. Un podio vacío no es más justo que uno flojo, es una pantalla rota.
+   */
+  const minimo = esquema.minimoPodio ?? 0
+  if (minimo > 0) {
+    const alguno = posiciones.some((p) => p.asistencia >= minimo)
+    if (alguno) for (const p of posiciones) p.puedePodio = p.asistencia >= minimo
+  }
 
   posiciones.sort((a, b) => b.balance - a.balance)
 
@@ -820,11 +883,14 @@ export async function calcularPalmares(env: Env, ligaId: string): Promise<Laurea
  * interesante el palmarés —la constancia gana el campeonato, no la caja— así que
  * conviene que salga bien.
  */
-export function quienSeLaLlevo<T extends { usuarioId: string; puntos: number; balance: number }>(
-  posiciones: T[],
-): { campeon: T | null; dinero: T | null } {
+export function quienSeLaLlevo<
+  T extends { usuarioId: string; puntos: number; balance: number; puedePodio?: boolean },
+>(posiciones: T[]): { campeon: T | null; dinero: T | null } {
+  /* El campeonato lo gana quien tenga derecho al podio. El del dinero no: esa línea es
+     la caja, y la caja no pide asistencia. */
+  const conDerecho = posiciones.filter((p) => p.puedePodio !== false)
   const campeon =
-    [...posiciones].sort((a, b) => b.puntos - a.puntos || b.balance - a.balance)[0] ?? null
+    [...conDerecho].sort((a, b) => b.puntos - a.puntos || b.balance - a.balance)[0] ?? null
   const rico = [...posiciones].sort((a, b) => b.balance - a.balance)[0] ?? null
   return {
     campeon,
