@@ -129,9 +129,23 @@ export default function PlanDeFichas({
 
   const vacia = colores.every((c) => count(pila[c.key]) === 0)
 
-  /* Lo que queda en la caja ahorita, con todo lo que ya se repartió descontado. */
-  const resto = loQueQueda(colores, repartidas)
+  /*
+   * Lo que queda en la caja.
+   *
+   * Con la cuenta puesta en los de hoy es lo que hay de verdad: el inventario menos lo
+   * que ya salió, apuntado jugador por jugador. Pero el contador de arriba está para
+   * preguntarse "¿y si llegan cuatro más?", y entonces esto tiene que moverse con él:
+   * quedarse quieto es contestar otra pregunta. Cada pila de más se lleva su puñado;
+   * cada una de menos lo devuelve.
+   */
+  const demas = pilas - Math.max(0, pilasBase)
+  const salidas: Chips = {}
+  for (const c of colores)
+    salidas[c.key] = Math.max(0, count(repartidas[c.key]) + demas * count(pila[c.key]))
+  const resto = loQueQueda(colores, salidas)
   const paraRecompras = cuantasAguanta(resto.colores, pila)
+  /** La cuenta no va en los de hoy: lo de abajo es un "y si", no lo que hay. */
+  const suponiendo = demas !== 0
 
   const guardar = async () => {
     setGuardando(true)
@@ -364,7 +378,13 @@ export default function PlanDeFichas({
        * las entradas y las recompras.
        */}
       <div className="mt-3 border-t border-dashed border-paper-line pt-3">
-        <p className="field-label mb-1">Queda en la caja</p>
+        {/* El título dice de cuál de las dos cuentas se trata: lo que hay, o lo que
+            quedaría si le repartes a los que estás contando arriba. */}
+        <p className="field-label mb-1">
+          {suponiendo
+            ? `Quedaría en la caja con ${pilas} ${pilas === 1 ? 'pila' : 'pilas'}`
+            : 'Queda en la caja'}
+        </p>
 
         {/*
          * Un solo renglón, el mismo de las fichas que faltan en el cash out: la ficha y
