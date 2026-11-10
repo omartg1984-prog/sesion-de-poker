@@ -4,15 +4,16 @@ import NumInput from '../../components/NumInput'
 import Medalla from '../../components/Medalla'
 import MoneyInput from '../../components/MoneyInput'
 import ShareBlock from '../../components/ShareBlock'
-import PlanDeFichas from '../../components/PlanDeFichas'
 import Inventario from './Inventario'
+import PlanDeFichas from './PlanDeFichas'
 import RepartoDinero from './RepartoDinero'
 import { calcularCuadre } from './cuadre'
-import { leerJson } from '../../lib/api'
+import { api, leerJson } from '../../lib/api'
 import { EPS, money, num, signed } from '../../lib/money'
 import { entradaMasComun } from '../../lib/plan-fichas'
 import type { DatosCash } from '../../lib/shareImage'
-import type { Chips } from '../../store/types'
+import { conAviso } from '../../store/app'
+import type { ChipColor, Chips } from '../../store/types'
 import {
   CompartirReparto,
   ENTRADA_POR_DEFECTO,
@@ -75,6 +76,49 @@ export default function PartidaCash({
   const reparto = calcularRepartoCash(datos.participaciones, colores)
   const cuadre = calcularCuadre(datos.participaciones, colores, reparto, invertidoDe)
 
+  /* Con cuánto entra la mayoría: es la pila que el plan de fichas arma y guarda. */
+  const entrada = entradaMasComun(
+    datos.participaciones.map((p) => num(p.entrada)),
+    ENTRADA_POR_DEFECTO,
+  )
+
+  /* Lo que ya salió de la caja, color por color, para saber con qué quedan las
+     recompras. Es lo mismo que enseña "Fichas en uso", visto al revés. */
+  const yaRepartidas: Chips = {}
+  for (const c of colores) yaRepartidas[c.key] = reparto.usage[c.key]?.used ?? 0
+
+  /**
+   * Dejar el reparto puesto: se guarda en la liga y se le da a todos los apuntados.
+   *
+   * Lo segundo es lo que pide la mesa. Si al cambiar el plan se respetaran las fichas
+   * que alguien ya tenía corregidas a mano, esa persona se quedaría con las de antes y
+   * nadie se enteraría hasta contar al final; así que la corrección se quita y se puede
+   * volver a hacer encima.
+   */
+  const guardarElPlan = async (fichas: Chips): Promise<boolean> => {
+    const nuevos: ChipColor[] = colores.map((c) => ({
+      ...c,
+      entrada: Math.max(0, Math.floor(fichas[c.key] ?? 0)),
+    }))
+    const r = await conAviso(() => api.guardarLiga(datos.liga.id, { colores: nuevos }))
+    if (!r) return false
+
+    const corregidos = datos.participaciones.filter(
+      (p) => manualesDe(p).entrada && Math.abs(num(p.entrada) - entrada) < EPS,
+    )
+    for (const p of corregidos) {
+      const resto = { ...manualesDe(p) }
+      delete resto.entrada
+      const vacio = Object.keys(resto).length === 0
+      await conAviso(() =>
+        api.guardarParticipacion(p.id, { fichasManual: vacio ? null : resto }),
+      )
+    }
+
+    recargar()
+    return true
+  }
+
   /* ---- jugadores y sus recompras ---- */
   if (pestana === 'jugadores') {
     const cambiarRecompras = (id: string, lista: Recompra[]) =>
@@ -87,27 +131,25 @@ export default function PartidaCash({
         />
 
         {/*
-         * Cómo se van a repartir las fichas y para cuántos alcanzan, antes de bajar por
-         * las tarjetas de cada quien. Las pilas son las filas del reparto —una por
-         * entrada y una por recompra—, que es lo que de verdad sale de la caja.
+         * Cómo se van a repartir las fichas, para cuántos alcanzan y qué queda en la
+         * caja, antes de bajar por las tarjetas de cada quien. Las pilas son las filas
+         * del reparto —una por entrada y una por recompra—, que es lo que de verdad sale
+         * de la caja.
          *
-         * Aquí el plan no se escribe solo: se prueba y se guarda con su botón. Mover el
-         * reparto a media noche no le debe cambiar las fichas a nadie por accidente.
+         * Mover el plan no le cambia las fichas a nadie hasta que se guarda: a media
+         * noche, con la gente esperando, eso no puede pasar por accidente.
          */}
         <PlanDeFichas
-          ligaId={datos.liga.id}
           colores={colores}
-          objetivo={entradaMasComun(
-            datos.participaciones.map((p) => num(p.entrada)),
-            ENTRADA_POR_DEFECTO,
-          )}
+          objetivo={entrada}
           pilas={reparto.rows.length}
           deDonde={deDondeSalenLasPilas(
             datos.participaciones.length,
             reparto.rows.length - datos.participaciones.length,
           )}
+          repartidas={yaRepartidas}
           puedeEditar={puedeEditar}
-          recargar={recargar}
+          onGuardar={guardarElPlan}
         />
 
         {conTotales.map((p, i) => {

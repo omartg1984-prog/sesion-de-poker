@@ -205,6 +205,37 @@ export function cuantasAguanta(colores: ChipColor[], fichas: Chips): Aguante {
   return { entregas, seAcabaPrimero }
 }
 
+export interface Resto {
+  /** Cuántas de cada color siguen en la caja. */
+  fichas: Chips
+  /** Lo que valen las que quedan. */
+  dinero: number
+  /** Los mismos colores pero con el inventario puesto en lo que queda. */
+  colores: ChipColor[]
+}
+
+/**
+ * Lo que queda en la caja después de lo que ya se repartió esta noche.
+ *
+ * Es la pregunta de media noche: alguien pide una recompra de $500 y hay que saber si
+ * todavía hay con qué armársela, y de qué color. Contarla en pesos no basta —puede
+ * haber $3,000 en la caja y ni una ficha chica para el cambio—, así que va color por
+ * color, y de paso devuelve los colores con el inventario ya descontado para poder
+ * preguntarle a `cuantasAguanta` cuántas pilas más salen de ahí.
+ */
+export function loQueQueda(colores: ChipColor[], repartidas: Chips): Resto {
+  const fichas: Chips = {}
+  let dinero = 0
+  const quedan: ChipColor[] = []
+  for (const c of colores) {
+    const n = Math.max(0, count(c.inventory) - count(repartidas[c.key]))
+    fichas[c.key] = n
+    dinero += n * num(c.value)
+    quedan.push({ ...c, inventory: n })
+  }
+  return { fichas, dinero, colores: quedan }
+}
+
 export interface PlanDeFichas extends Entrada, Aguante {
   /** Las fichas valen justo lo que pone cada quien. */
   cuadra: boolean

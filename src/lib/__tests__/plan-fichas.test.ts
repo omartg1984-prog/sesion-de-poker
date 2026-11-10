@@ -5,6 +5,7 @@ import {
   entradaDeArranque,
   entradaMasComun,
   entradaSugerida,
+  loQueQueda,
   planDeFichas,
 } from '../plan-fichas'
 import { DEFAULT_COLORS } from '../../store/defaults'
@@ -202,5 +203,54 @@ describe('con cuánto entra la mayoría', () => {
   it('sin nadie apuntado, la de siempre', () => {
     expect(entradaMasComun([], 500)).toBe(500)
     expect(entradaMasComun([0, 0], 500)).toBe(500)
+  })
+})
+
+describe('la feria que queda en la caja', () => {
+  const pila = entradaSugerida(CON_MORADAS, 500).fichas
+
+  /** Lo que sale de la caja con `n` pilas repartidas. */
+  const repartidas = (n: number) => {
+    const usadas: Record<string, number> = {}
+    for (const c of CON_MORADAS) usadas[c.key] = (pila[c.key] ?? 0) * n
+    return usadas
+  }
+
+  it('es el inventario menos lo que ya se repartió', () => {
+    const r = loQueQueda(CON_MORADAS, repartidas(6))
+    expect(r.fichas.verdes ?? r.fichas.green).toBe(100 - 60)
+    expect(r.fichas.white).toBe(200 - 60)
+    /* Las amarillas no se repartieron: siguen enteras. */
+    expect(r.fichas.yellow).toBe(40)
+  })
+
+  it('y lo que vale, para saber cuánta feria hay', () => {
+    const r = loQueQueda(CON_MORADAS, repartidas(6))
+    const caja = CON_MORADAS.reduce((t, c) => t + c.inventory * c.value, 0)
+    expect(r.dinero).toBe(caja - 500 * 6)
+  })
+
+  it('con la caja llena queda todo', () => {
+    const r = loQueQueda(CON_MORADAS, {})
+    expect(r.fichas.green).toBe(100)
+    expect(r.dinero).toBe(CON_MORADAS.reduce((t, c) => t + c.inventory * c.value, 0))
+  })
+
+  it('nunca queda en negativo aunque se haya repartido de más', () => {
+    const r = loQueQueda(CON_MORADAS, repartidas(99))
+    expect(Object.values(r.fichas).every((n) => n >= 0)).toBe(true)
+    /* Lo único que queda son las 40 amarillas, que este reparto no toca: son la
+       reserva y por eso siguen enteras. */
+    expect(r.dinero).toBe(40 * 100)
+    expect(r.fichas.green).toBe(0)
+  })
+
+  it('devuelve los colores con lo que queda, para contar las recompras que faltan', () => {
+    /* Diez pilas vacían las verdes; con lo que queda no sale ni una recompra más. */
+    const r = loQueQueda(CON_MORADAS, repartidas(10))
+    expect(cuantasAguanta(r.colores, pila).entregas).toBe(0)
+
+    const aMedias = loQueQueda(CON_MORADAS, repartidas(6))
+    expect(cuantasAguanta(aMedias.colores, pila).entregas).toBe(4)
   })
 })
