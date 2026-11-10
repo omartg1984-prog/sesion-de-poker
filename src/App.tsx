@@ -3,6 +3,7 @@ import Logo from './components/Logo'
 import { useEffect } from 'react'
 import Invitacion from './components/Invitacion'
 import Toast from './components/Toast'
+import VersionNueva from './components/VersionNueva'
 import AdminScreen from './screens/AdminScreen'
 import EntrarScreen from './screens/EntrarScreen'
 import HomeScreen from './screens/HomeScreen'
@@ -48,6 +49,8 @@ export default function App() {
       {/* La invitación vive fuera de las pantallas: puede llegar esté donde esté. */}
       <Invitacion />
       <Toast />
+      {/* Y el aviso de que la app de este teléfono se quedó atrás. */}
+      <VersionNueva />
     </>
   )
 }

@@ -158,7 +158,7 @@ export default function PlanDeFichas({
           <>
             Así propongo repartirle las fichas al que entra con{' '}
             <b className="text-ink">{money(objetivo)}</b>. Muévelo a tu gusto y déjalo puesto
-            con el botón de abajo.
+            con el botón que está ahí mismo.
           </>
         )}
       </p>
@@ -187,65 +187,76 @@ export default function PlanDeFichas({
             </>
           )}
         </p>
+
+        {/*
+         * Los botones van aquí dentro, pegados a las casillas.
+         *
+         * Afuera del recuadro quedaban a un renglón de distancia de lo que acabas de
+         * mover, y en un teléfono eso basta para no verlos: se mueve una ficha, se mira
+         * el total, y el botón que deja el cambio puesto estaba fuera del cuadro que
+         * estabas mirando. Dentro, lo que mueves y lo que lo guarda son la misma cosa.
+         */}
+        {puedeEditar && (
+          <div className="mt-3 border-t border-dashed border-paper-line pt-3">
+            {/*
+             * El botón está siempre, aunque el reparto sea el que ya estaba guardado.
+             * Escondiéndolo cuando no había cambiado, quien quería volver a repartirle a
+             * todos —porque alguien tenía fichas corregidas, o porque se apuntó más
+             * gente— se quedaba sin botón y sin saber por qué.
+             */}
+            <button
+              type="button"
+              className="btn btn-marca disabled:opacity-45"
+              disabled={guardando || !plan.cuadra || vacia}
+              onClick={() => void guardar()}
+            >
+              {guardando
+                ? 'Guardando…'
+                : yaPuesto
+                  ? 'Dárselo así a todos'
+                  : 'Dejarlo así y dárselo a todos'}
+            </button>
+
+            <div className="mt-2 flex flex-wrap gap-2">
+              {/*
+               * La sugerencia es el reparto que la casa quiere casi siempre —toda la
+               * morralla y nada de fichas de $100—, así que se ofrece sola en vez de
+               * esconderse. Apretarla mueve las casillas de arriba: se ve aplicada, no
+               * descrita.
+               */}
+              {haySugerencia && (
+                <button
+                  type="button"
+                  className="btn-dashed flex flex-1 items-center justify-center gap-1.5"
+                  onClick={() => setTocada(sugerida.fichas)}
+                >
+                  <Sparkles size={14} strokeWidth={2.6} />
+                  Como sugiere la app
+                </button>
+              )}
+
+              {/* La salida para el dedo chueco: si se movió una casilla sin querer, hay
+                  cómo volver a lo que estaba sin acordarse de los números. */}
+              {tocada && casa && Math.abs(casa.total - objetivo) < 1e-9 && (
+                <button
+                  type="button"
+                  className="btn-dashed flex flex-1 items-center justify-center gap-1.5"
+                  onClick={() => setTocada(null)}
+                >
+                  <RotateCcw size={14} strokeWidth={2.6} />
+                  Dejarlo como estaba
+                </button>
+              )}
+            </div>
+
+            <p className="mt-2 mb-0 text-[11.5px] leading-snug text-ink-soft">
+              Se les da a todos los apuntados que entraron con {money(objetivo)} —aunque ya
+              les hubieras corregido las fichas a mano— y queda puesto para las noches que
+              vienen. Después puedes volver a corregirle a quien quieras.
+            </p>
+          </div>
+        )}
       </div>
-
-      {puedeEditar && (
-        <div className="mt-2">
-          {/*
-           * La sugerencia es el reparto que la casa quiere casi siempre —toda la morralla
-           * y nada de fichas de $100—, así que se ofrece sola en vez de esconderse.
-           * Apretarla mueve las casillas de arriba: se ve aplicada, no descrita.
-           */}
-          {haySugerencia && (
-            <button
-              type="button"
-              className="btn-dashed mb-2 flex items-center justify-center gap-1.5"
-              onClick={() => setTocada(sugerida.fichas)}
-            >
-              <Sparkles size={14} strokeWidth={2.6} />
-              Repartirlas como sugiere la app
-            </button>
-          )}
-
-          {/*
-           * El botón está siempre, aunque el reparto sea el que ya estaba guardado.
-           * Escondiéndolo cuando no había cambiado, quien quería volver a repartirle a
-           * todos —porque alguien tenía fichas corregidas, o porque se apuntó más gente—
-           * se quedaba sin botón y sin saber por qué.
-           */}
-          <button
-            type="button"
-            className="btn btn-marca disabled:opacity-45"
-            disabled={guardando || !plan.cuadra || vacia}
-            onClick={() => void guardar()}
-          >
-            {guardando
-              ? 'Guardando…'
-              : yaPuesto
-                ? 'Dárselo así a todos'
-                : 'Dejarlo así y dárselo a todos'}
-          </button>
-
-          {/* La salida para el dedo chueco: si se movió una casilla sin querer, hay cómo
-              volver a lo que estaba sin tener que acordarse de los números. */}
-          {tocada && casa && Math.abs(casa.total - objetivo) < 1e-9 && (
-            <button
-              type="button"
-              className="btn-dashed mt-2 flex items-center justify-center gap-1.5"
-              onClick={() => setTocada(null)}
-            >
-              <RotateCcw size={14} strokeWidth={2.6} />
-              Dejarlo como estaba
-            </button>
-          )}
-
-          <p className="mt-2 mb-0 text-[11.5px] leading-snug text-ink-soft">
-            Se les da a todos los apuntados que entraron con {money(objetivo)} —aunque ya les
-            hubieras corregido las fichas a mano— y queda puesto para las noches que vienen.
-            Después puedes volver a corregirle a quien quieras.
-          </p>
-        </div>
-      )}
 
       {vacia ? (
         <p className="mt-3 mb-0 text-[13px] leading-snug text-ink-soft">
