@@ -232,6 +232,14 @@ export interface DatosTabla {
   /** La línea chica de hasta arriba, en rojo. */
   gorro: string
   columnas: string[]
+  /**
+   * La ficha que encabeza cada columna, cuando la columna es de un color de ficha.
+   *
+   * Dibujada se reconoce de un golpe y ocupa lo mismo siempre; escrita, "Amarillas"
+   * junto a "Moradas" en siete columnas no cabe, y la letra se encoge hasta que la
+   * tabla deja de leerse. `null` en las columnas que son de texto.
+   */
+  fichas?: ({ color: string; valor: number } | null)[]
   /** Celdas ya con su formato: la imagen no calcula nada. */
   filas: string[][]
   /** Foto de cada fila, para la primera columna. */
@@ -268,22 +276,32 @@ export async function dibujarTabla(d: DatosTabla): Promise<HTMLCanvasElement> {
   const primeraX = d.fotos ? colName + 42 : colName
   const hueco = 26
 
+  /* La ficha del encabezado, cuando la columna lleva una. Encoge con la letra: una
+     liga con diez colores se saldría de la hoja dibujándolas siempre del mismo tamaño. */
+  let radioFicha = 20
+  const fichaDe = (i: number) => d.fichas?.[i] ?? null
+
   const FUENTE_DATO = (px: number) => `500 ${px}px 'Inter',Arial,sans-serif`
   const anchoDe = (i: number, px: number) => {
     ctx.font = FUENTE_DATO(px)
     const celdas = d.filas.map((f) => ctx.measureText(f[i] ?? '').width)
-    ctx.font = "600 16px 'Inter',Arial,sans-serif"
-    celdas.push(ctx.measureText((d.columnas[i] ?? '').toUpperCase()).width)
+    if (fichaDe(i)) {
+      celdas.push(radioFicha * 2)
+    } else {
+      ctx.font = "600 16px 'Inter',Arial,sans-serif"
+      celdas.push(ctx.measureText((d.columnas[i] ?? '').toUpperCase()).width)
+    }
     return Math.max(0, ...celdas)
   }
 
   const disponible = W - pad - (primeraX + anchoNombre)
+  const loQueOcupan = (px: number) =>
+    d.columnas.slice(1).reduce((s, _, k) => s + anchoDe(k + 1, px) + hueco, 0)
   let px = 21
-  while (
-    px > 14 &&
-    d.columnas.slice(1).reduce((s, _, k) => s + anchoDe(k + 1, px) + hueco, 0) > disponible
-  )
-    px -= 1
+  while (loQueOcupan(px) > disponible && (px > 14 || radioFicha > 12)) {
+    if (px > 14) px -= 1
+    else radioFicha -= 1
+  }
   const anchos = d.columnas.slice(1).map((_, k) => anchoDe(k + 1, px))
 
   /* Cada columna termina donde empieza la siguiente: así ninguna puede pisar a otra. */
@@ -295,9 +313,29 @@ export async function dibujarTabla(d: DatosTabla): Promise<HTMLCanvasElement> {
   }
   const xDe = (i: number) => (i === 0 ? colName : derechaDe[i - 1])
 
-  ctx.font = "600 16px 'Inter',Arial,sans-serif"
-  ctx.fillStyle = 'rgba(255,255,255,.65)'
   d.columnas.forEach((c, i) => {
+    const ficha = fichaDe(i)
+    if (ficha) {
+      /* La ficha se dibuja pegada al borde derecho de su columna, que es donde empieza
+         la cuenta de abajo: así el número queda debajo de su propia ficha. */
+      const texto = moneyShort(ficha.valor).replace('$', '')
+      const cuerpo = Math.min(
+        (radioFicha / 20) * 13,
+        ((radioFicha * 1.3) / Math.max(2, texto.length)) * 1.7,
+      )
+      pintarFicha(
+        ctx,
+        xDe(i) - radioFicha,
+        headerH + theadH / 2,
+        radioFicha,
+        ficha.color,
+        texto,
+        cuerpo,
+      )
+      return
+    }
+    ctx.font = "600 16px 'Inter',Arial,sans-serif"
+    ctx.fillStyle = 'rgba(255,255,255,.65)'
     ctx.textAlign = i === 0 ? 'left' : 'right'
     ctx.fillText(c.toUpperCase(), xDe(i), headerH + theadH / 2 + 5)
   })

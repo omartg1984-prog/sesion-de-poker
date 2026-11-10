@@ -4,7 +4,7 @@ import Chip from '../../components/Chip'
 import ChipsGrid from '../../components/ChipsGrid'
 import Stepper from '../../components/Stepper'
 import { dineroDeLaCaja } from '../../lib/distribution'
-import { count, money } from '../../lib/money'
+import { count, money, num } from '../../lib/money'
 import {
   armarEntrada,
   cuantasAguanta,
@@ -207,35 +207,43 @@ export default function PlanDeFichas({
             </button>
           )}
 
-          {!yaPuesto && (
-            <>
-              <button
-                type="button"
-                className="btn btn-marca disabled:opacity-45"
-                disabled={guardando || !plan.cuadra || vacia}
-                onClick={() => void guardar()}
-              >
-                {guardando ? 'Guardando…' : 'Dejarlo así y dárselo a todos'}
-              </button>
-              {/* La salida para el dedo chueco: si se movió una casilla sin querer, hay
-                  cómo volver a lo que estaba sin tener que acordarse de los números. */}
-              {tocada && casa && Math.abs(casa.total - objetivo) < 1e-9 && (
-                <button
-                  type="button"
-                  className="btn-dashed mt-2 flex items-center justify-center gap-1.5"
-                  onClick={() => setTocada(null)}
-                >
-                  <RotateCcw size={14} strokeWidth={2.6} />
-                  Dejarlo como estaba
-                </button>
-              )}
-              <p className="mt-2 mb-0 text-[11.5px] leading-snug text-ink-soft">
-                Se les da a todos los apuntados que entraron con {money(objetivo)} —aunque ya
-                les hubieras corregido las fichas a mano— y queda puesto para las noches que
-                vienen. Después puedes volver a corregirle a quien quieras.
-              </p>
-            </>
+          {/*
+           * El botón está siempre, aunque el reparto sea el que ya estaba guardado.
+           * Escondiéndolo cuando no había cambiado, quien quería volver a repartirle a
+           * todos —porque alguien tenía fichas corregidas, o porque se apuntó más gente—
+           * se quedaba sin botón y sin saber por qué.
+           */}
+          <button
+            type="button"
+            className="btn btn-marca disabled:opacity-45"
+            disabled={guardando || !plan.cuadra || vacia}
+            onClick={() => void guardar()}
+          >
+            {guardando
+              ? 'Guardando…'
+              : yaPuesto
+                ? 'Dárselo así a todos'
+                : 'Dejarlo así y dárselo a todos'}
+          </button>
+
+          {/* La salida para el dedo chueco: si se movió una casilla sin querer, hay cómo
+              volver a lo que estaba sin tener que acordarse de los números. */}
+          {tocada && casa && Math.abs(casa.total - objetivo) < 1e-9 && (
+            <button
+              type="button"
+              className="btn-dashed mt-2 flex items-center justify-center gap-1.5"
+              onClick={() => setTocada(null)}
+            >
+              <RotateCcw size={14} strokeWidth={2.6} />
+              Dejarlo como estaba
+            </button>
           )}
+
+          <p className="mt-2 mb-0 text-[11.5px] leading-snug text-ink-soft">
+            Se les da a todos los apuntados que entraron con {money(objetivo)} —aunque ya les
+            hubieras corregido las fichas a mano— y queda puesto para las noches que vienen.
+            Después puedes volver a corregirle a quien quieras.
+          </p>
         </div>
       )}
 
@@ -345,8 +353,37 @@ export default function PlanDeFichas({
        * las entradas y las recompras.
        */}
       <div className="mt-3 border-t border-dashed border-paper-line pt-3">
-        <p className="field-label mb-2">Queda en la caja</p>
-        <Pila fichas={resto.fichas} colores={resto.colores} />
+        <p className="field-label mb-1">Queda en la caja</p>
+
+        {/* Un renglón por color, como el conteo del cash out: la ficha, cuántas quedan y
+            lo que valen. Es la misma lectura que se hace con las fichas en la mano. */}
+        <ul className="m-0 list-none p-0">
+          {colores.map((c) => {
+            const quedan = count(resto.fichas[c.key])
+            return (
+              <li
+                key={c.key}
+                className={`flex items-center gap-2.5 border-b border-dashed border-paper-line py-2 last:border-b-0 ${
+                  quedan === 0 ? 'opacity-45' : ''
+                }`}
+              >
+                <Chip color={c} size={32} />
+                <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink">
+                  {c.label}
+                </span>
+                <b className="shrink-0 font-display text-xl tabular-nums text-ink">{quedan}</b>
+                <span
+                  className={`w-[72px] shrink-0 text-right font-display text-sm font-bold tabular-nums ${
+                    quedan > 0 ? 'text-ink-soft' : 'text-ink-soft/40'
+                  }`}
+                >
+                  {money(quedan * num(c.value))}
+                </span>
+              </li>
+            )
+          })}
+        </ul>
+
         <p className="mt-2.5 mb-0 text-[12.5px] leading-snug text-ink-soft">
           <b className="text-ink">{money(resto.dinero)}</b> en fichas
           {!vacia && plan.cuadra && (

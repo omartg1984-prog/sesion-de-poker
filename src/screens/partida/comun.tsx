@@ -592,6 +592,9 @@ export function CompartirReparto({
     subtitulo: datos.partida.nombre || datos.partida.fecha,
     gorro: datos.liga.nombre,
     columnas: ['Jugador', ...colores.map((c) => c.label), 'Total'],
+    /* Las columnas de fichas se encabezan con la ficha dibujada: siete nombres de color
+       no caben en el ancho de la imagen y la letra se encogía hasta no leerse. */
+    fichas: [null, ...colores.map((c) => ({ color: c.color, valor: num(c.value) })), null],
     filas: reparto.rows.map((r) => [
       r.name,
       ...colores.map((c) => String(r.counts[c.key] ?? 0)),
