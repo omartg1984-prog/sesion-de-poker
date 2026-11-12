@@ -219,6 +219,18 @@ export interface EsquemaPuntos {
    * fuera, que es como ha funcionado siempre.
    */
   minimoPodio?: number
+  /**
+   * Tope de lo que pueden pagar —o cobrar— las consideraciones del dinero en una noche.
+   * En 0, o sin poner, no hay tope.
+   */
+  topeDinero?: number
+  /**
+   * Qué parte de las noches de la temporada cuenta para el campeonato, en por ciento.
+   * En 0, o sin poner, cuentan todas. Esto no cambia lo que vale una noche suelta, así
+   * que la cuenta de aquí abajo no lo mira: se reparte al armar la temporada, y eso lo
+   * hace el servidor.
+   */
+  mejoresNoches?: number
 }
 
 export const PUNTOS_POR_DEFECTO: EsquemaPuntos = {
@@ -237,13 +249,42 @@ export const PUNTOS_DEL_REGLAMENTO: EsquemaPuntos = {
   tabla: [25, 20, 15, 10, 5],
 }
 
+/**
+ * Contra la mesa: el campeonato mide a cuánta gente le ganaste, no cuánto te llevaste.
+ *
+ * Ni un punto por dinero a propósito —para eso está la columna de saldo—, y en cambio
+ * todo lo que la mesa ve sin sacar la calculadora. Con el descarte de la peor noche y
+ * con medio semestre de asistencia para poder coronarse.
+ */
+export const PUNTOS_CONTRA_LA_MESA: EsquemaPuntos = {
+  reglas: [
+    { id: 'base', puntos: 3 },
+    { id: 'porJugador', puntos: 1 },
+    { id: 'bonoGanar', puntos: 3 },
+    { id: 'bonoPositivo', puntos: 2 },
+  ],
+  mejoresNoches: 80,
+  minimoPodio: 50,
+}
+
+/** Las que cuentan pesos, que son las únicas que el tope recorta. */
+export const DEL_DINERO = ['porCadaCien', 'porCadaCienPerdido']
+
 /** Lo que suma una noche. Es la misma cuenta que hace el servidor. */
 export function puntosDeLaNoche(n: NocheParaPuntos, e: EsquemaPuntos): number {
   let total = 0
+  /* El dinero se junta aparte: el tope se le aplica a la suma de las dos, no a cada
+     una. */
+  let dinero = 0
   for (const regla of e.reglas) {
     const c = CONSIDERACIONES.find((x) => x.id === regla.id)
-    if (c) total += c.veces(n) * regla.puntos
+    if (!c) continue
+    const suma = c.veces(n) * regla.puntos
+    if (DEL_DINERO.indexOf(regla.id) >= 0) dinero += suma
+    else total += suma
   }
+  const tope = e.topeDinero ?? 0
+  total += tope > 0 ? Math.max(-tope, Math.min(tope, dinero)) : dinero
   /* Del largo de la tabla en adelante no se suman puntos de lugar. */
   if (e.tabla && e.tabla.length > 0) total += e.tabla[n.lugar - 1] ?? 0
   return total
@@ -268,10 +309,14 @@ export function esquemaGuardado(crudo: string | null): EsquemaPuntos {
       ? (g.tabla as unknown[]).map((v) => (typeof v === 'number' ? v : 0))
       : []
     const m = typeof g.minimoPodio === 'number' ? Math.max(0, Math.min(100, g.minimoPodio)) : 0
+    const t = typeof g.topeDinero === 'number' ? Math.max(0, g.topeDinero) : 0
+    const mn = typeof g.mejoresNoches === 'number' ? Math.max(0, Math.min(100, g.mejoresNoches)) : 0
     return {
       reglas,
       ...(tabla.length > 0 ? { tabla } : {}),
       ...(m > 0 ? { minimoPodio: m } : {}),
+      ...(t > 0 ? { topeDinero: t } : {}),
+      ...(mn > 0 && mn < 100 ? { mejoresNoches: mn } : {}),
     }
   }
   const viejas = ['base', 'porJugador', 'bonoGanar', 'bonoPodio']
@@ -567,8 +612,24 @@ export interface Posicion {
    */
   puedePodio?: boolean
 
+  /** Cuántas de sus noches entraron al campeonato. Todas, mientras no haya descarte. */
+  nochesContadas?: number
+
+  /** Sus noches de la temporada, en orden, con las descartadas marcadas. */
+  detalle?: NocheDeAlguien[]
+
   /** Lo que se ganó presumir. */
   titulos: Titulo[]
+}
+
+/** Una de las noches de alguien, como se ve al abrir su tarjeta. */
+export interface NocheDeAlguien {
+  fecha: string
+  nombre: string | null
+  resultado: number
+  puntos: number
+  /** `false` si quedó fuera del campeonato por la regla de las mejores noches. */
+  cuenta: boolean
 }
 
 export type IdTitulo =
@@ -621,6 +682,10 @@ export interface TablaPosiciones {
   temporadas: Temporada[]
   /** Cuál se está viendo. En null, la liga entera. */
   temporada: string | null
+  /** El por ciento de noches que cuenta para los puntos. 0 = cuentan todas. */
+  mejoresNoches?: number
+  /** Cuántas noches son ésas, ya sacada la cuenta. 0 = cuentan todas. */
+  cupoDeNoches?: number
 }
 
 /**

@@ -148,6 +148,25 @@ export interface EsquemaPuntos {
    * fuera, que es como ha funcionado siempre.
    */
   minimoPodio?: number
+  /**
+   * Tope de lo que pueden pagar —o cobrar— las consideraciones del dinero en una noche.
+   *
+   * Sin tope, la noche que alguien se lleva cinco mil pesos vale cincuenta puntos y se
+   * come la temporada entera: el campeonato se vuelve la columna de saldo con otro
+   * nombre. Con tope, el dinero cuenta y sigue contando más mientras más es, pero deja
+   * de decidirlo todo. En 0 —o sin poner— no hay tope.
+   */
+  topeDinero?: number
+  /**
+   * Qué parte de las noches de la temporada cuenta para el campeonato, en por ciento.
+   *
+   * En 80, a cada quien se le cuentan sus mejores noches hasta llegar al 80% de las que
+   * se jugaron: la peor se cae. Es el "tira tu peor noche" de toda la vida, y lo que
+   * hace es que un viernes malo no arrastre una temporada buena. Ojo con a quién le
+   * pega: sólo le quita noches a los que vienen mucho, porque al que vino tres veces en
+   * una temporada de siete no le sobra ninguna. En 0 —o sin poner— cuentan todas.
+   */
+  mejoresNoches?: number
 }
 
 /* Los de siempre: un punto por venir y uno por cada quien al que le ganaste. Las ligas
@@ -166,6 +185,26 @@ export const PUNTOS_DEL_REGLAMENTO: EsquemaPuntos = {
     { id: 'bonoPositivo', puntos: 5 },
   ],
   tabla: [25, 20, 15, 10, 5],
+}
+
+/**
+ * Contra la mesa: el campeonato mide a cuánta gente le ganaste, no cuánto te llevaste.
+ *
+ * No hay un solo punto por dinero a propósito —para eso está la columna de saldo— y en
+ * cambio sí está todo lo que la mesa puede ver sin sacar la calculadora: viniste,
+ * ganaste la noche, saliste arriba, y a cuántos dejaste atrás. Con el descarte de la
+ * peor noche para que un viernes aciago no pese toda la temporada, y con medio semestre
+ * de asistencia para poder coronarse.
+ */
+export const PUNTOS_CONTRA_LA_MESA: EsquemaPuntos = {
+  reglas: [
+    { id: 'base', puntos: 3 },
+    { id: 'porJugador', puntos: 1 },
+    { id: 'bonoGanar', puntos: 3 },
+    { id: 'bonoPositivo', puntos: 2 },
+  ],
+  mejoresNoches: 80,
+  minimoPodio: 50,
 }
 
 const limpio = (v: unknown) => {
@@ -207,11 +246,22 @@ export function esquemaDePuntos(crudo: string | null | undefined): EsquemaPuntos
   const crudoMinimo = limpio(g.minimoPodio)
   const minimoPodio = crudoMinimo === null ? 0 : Math.max(0, Math.min(100, crudoMinimo))
 
+  /* El tope es una cantidad de puntos: en negativo no quiere decir nada. */
+  const crudoTope = limpio(g.topeDinero)
+  const topeDinero = crudoTope === null ? 0 : Math.max(0, crudoTope)
+
+  /* Las mejores noches son un por ciento, como el mínimo del podio. */
+  const crudoMejores = limpio(g.mejoresNoches)
+  const mejoresNoches = crudoMejores === null ? 0 : Math.max(0, Math.min(100, crudoMejores))
+
   /** Arma el esquema dejando fuera lo que está apagado: vacío y ausente son lo mismo. */
   const armar = (reglas: ReglaPuntos[]): EsquemaPuntos => ({
     reglas,
     ...(tabla && tabla.length > 0 ? { tabla } : {}),
     ...(minimoPodio > 0 ? { minimoPodio } : {}),
+    ...(topeDinero > 0 ? { topeDinero } : {}),
+    /* En 100 cuentan todas, que es lo mismo que apagado: no se guarda. */
+    ...(mejoresNoches > 0 && mejoresNoches < 100 ? { mejoresNoches } : {}),
   })
 
   if (deLista) {
@@ -230,16 +280,29 @@ export function esquemaDePuntos(crudo: string | null | undefined): EsquemaPuntos
   return convertidas.length > 0 ? armar(convertidas) : armar(PUNTOS_POR_DEFECTO.reglas)
 }
 
+/** Las que cuentan pesos, que son las únicas que el tope recorta. */
+const DEL_DINERO = ['porCadaCien', 'porCadaCienPerdido']
+
 /** Lo que suma una noche para el campeonato. */
 export function puntosDeLaNoche(
   noche: NocheParaPuntos,
   esquema: EsquemaPuntos = PUNTOS_POR_DEFECTO,
 ): number {
   let total = 0
+  /* El dinero se junta aparte porque el tope se le aplica a la suma de las dos
+     consideraciones, no a cada una: si no, un tope de 5 dejaría pasar 10 la noche que
+     alguien ganara y perdiera a la vez, que no existe pero no hay por qué dejarlo
+     abierto. */
+  let dinero = 0
   for (const regla of esquema.reglas) {
     const c = CONSIDERACIONES.find((x) => x.id === regla.id)
-    if (c) total += c.veces(noche) * regla.puntos
+    if (!c) continue
+    const suma = c.veces(noche) * regla.puntos
+    if (DEL_DINERO.indexOf(regla.id) >= 0) dinero += suma
+    else total += suma
   }
+  const tope = esquema.topeDinero ?? 0
+  total += tope > 0 ? Math.max(-tope, Math.min(tope, dinero)) : dinero
   /* Del largo de la tabla en adelante no se suman puntos de lugar, pero lo de asistir
      se cobra igual: es justo lo que dice el reglamento. */
   if (esquema.tabla && esquema.tabla.length > 0) total += esquema.tabla[noche.lugar - 1] ?? 0
@@ -304,6 +367,18 @@ export interface Posicion {
    */
   puntosPorNoche: number
 
+  /**
+   * Cuántas de sus noches entraron al campeonato.
+   *
+   * Es igual a `partidas` mientras la liga no encienda las mejores noches. Cuando las
+   * enciende, las que sobran se quedan fuera de los puntos pero siguen contando para
+   * todo lo demás: el saldo, el rendimiento, la gráfica y la asistencia son de todas.
+   */
+  nochesContadas: number
+
+  /** Sus noches de la temporada, en orden, con las descartadas marcadas. */
+  detalle: NocheDeAlguien[]
+
   /** Positiva = noches ganando seguidas; negativa = perdiendo. */
   rachaActual: number
   mejorRacha: number
@@ -346,6 +421,22 @@ export interface Posicion {
 
   /** Lo que se ganó presumir. */
   titulos: Titulo[]
+}
+
+/**
+ * Una de las noches de alguien, como se ve al abrir su tarjeta.
+ *
+ * Existe para que el descarte de las mejores noches no sea un número que aparece de la
+ * nada: si a alguien le quitaron una noche, tiene derecho a ver cuál y por qué.
+ */
+export interface NocheDeAlguien {
+  fecha: string
+  /** El nombre que le pusieron a la partida, si le pusieron alguno. */
+  nombre: string | null
+  resultado: number
+  puntos: number
+  /** `false` si quedó fuera del campeonato por la regla de las mejores noches. */
+  cuenta: boolean
 }
 
 /**
@@ -421,6 +512,10 @@ export interface TablaLiga {
   temporadas: Temporada[]
   /** Cuál se está viendo. En null, la liga entera. */
   temporada: string | null
+  /** El por ciento de noches que cuenta para los puntos. 0 = cuentan todas. */
+  mejoresNoches: number
+  /** Cuántas noches son ésas, ya sacada la cuenta. 0 = cuentan todas. */
+  cupoDeNoches: number
 }
 
 /** Lo que hizo una persona en una noche concreta. */
@@ -434,6 +529,37 @@ interface Noche {
   deCuantos: number
   /** Cuál de las noches de la temporada fue, para poder dibujar la gráfica. */
   indice: number
+}
+
+/**
+ * Cuántas noches cuentan para los puntos, con el por ciento que puso la liga.
+ *
+ * Se mide contra las noches que jugó la liga y no contra las que vino cada quien, que
+ * es lo que convierte esto en un "tira tu peor noche": al que no se perdió una le sobra
+ * alguna, y al que vino tres veces en siete no le sobra ninguna. Nunca baja de una: un
+ * cupo de cero dejaría la tabla entera en ceros.
+ */
+export function cupoDeNoches(nochesDeLaLiga: number, porCiento: number): number {
+  if (!porCiento || porCiento <= 0 || porCiento >= 100) return 0
+  return Math.max(1, Math.ceil((nochesDeLaLiga * porCiento) / 100))
+}
+
+/**
+ * Cuáles de las noches de alguien cuentan: las mejores, hasta el cupo.
+ *
+ * Devuelve los índices que entran. El orden del descarte está fijado a propósito —más
+ * puntos, luego mejor saldo, luego la más vieja— para que el número no cambie solo
+ * entre dos visitas a la misma pantalla cuando dos noches empatan en el corte.
+ */
+export function cualesCuentan(
+  noches: { indice: number; puntos: number; resultado: number }[],
+  cupo: number,
+): Set<number> {
+  if (cupo <= 0 || noches.length <= cupo) return new Set(noches.map((n) => n.indice))
+  const ordenadas = [...noches].sort(
+    (a, b) => b.puntos - a.puntos || b.resultado - a.resultado || a.indice - b.indice,
+  )
+  return new Set(ordenadas.slice(0, cupo).map((n) => n.indice))
 }
 
 /**
@@ -571,6 +697,8 @@ export async function calcularPosiciones(
     caraACara: [],
     temporadas,
     temporada: viendo?.id ?? null,
+    mejoresNoches: esquema.mejoresNoches ?? 0,
+    cupoDeNoches: 0,
   }
   if (partidas.length === 0) return vacia
 
@@ -677,10 +805,31 @@ export async function calcularPosiciones(
     .all<{ usuario_id: string }>()
   const dentro = new Set(socios.map((m) => m.usuario_id))
 
+  /* Cuántas noches cuentan para los puntos. Se saca una vez: es de la liga, no de
+     cada quien. */
+  const cupo = cupoDeNoches(partidas.length, esquema.mejoresNoches ?? 0)
+
   const posiciones: Posicion[] = [...historial.values()].map(({ datos, noches }) => {
     const invertido = noches.reduce((a, n) => a + n.puesto, 0)
     const recuperado = noches.reduce((a, n) => a + n.saco, 0)
     const balance = recuperado - invertido
+
+    /*
+     * Los puntos, noche por noche, y cuáles de ellas entran.
+     *
+     * El dinero no se descarta nunca: `balance` de arriba es la suma de todas, porque
+     * lo que se pagó en la mesa se pagó. Lo que se descarta son puntos, que es lo único
+     * que la liga decidió medir así.
+     */
+    const conPuntos = noches.map((n) => ({
+      indice: n.indice,
+      resultado: n.resultado,
+      puntos: puntosDeLaNoche(paraPuntos(n), esquema),
+    }))
+    const cuentan = cualesCuentan(conPuntos, cupo)
+    const puntos = conPuntos.reduce((a, n) => a + (cuentan.has(n.indice) ? n.puntos : 0), 0)
+    const nochesContadas = conPuntos.filter((n) => cuentan.has(n.indice)).length
+
     return {
       usuarioId: datos.usuario_id,
       nombre: datos.nombre,
@@ -699,10 +848,18 @@ export async function calcularPosiciones(
       // Un podio en una mesa de tres no dice nada: los tres estarían en él.
       podios: noches.filter((n) => n.lugarEnLaMesa <= 3 && n.deCuantos > 3).length,
       ultimos: noches.filter((n) => n.lugarEnLaMesa === n.deCuantos && n.deCuantos > 1).length,
-      puntos: noches.reduce((a, n) => a + puntosDeLaNoche(paraPuntos(n), esquema), 0),
-      puntosPorNoche: noches.length
-        ? noches.reduce((a, n) => a + puntosDeLaNoche(paraPuntos(n), esquema), 0) / noches.length
-        : 0,
+      puntos,
+      /* Entre las que contaron y no entre todas: si no, descartarte una noche mala te
+         bajaría el promedio igual y el descarte no habría servido de nada. */
+      puntosPorNoche: nochesContadas ? puntos / nochesContadas : 0,
+      nochesContadas,
+      detalle: conPuntos.map((n) => ({
+        fecha: partidas[n.indice].fecha,
+        nombre: partidas[n.indice].nombre,
+        resultado: n.resultado,
+        puntos: n.puntos,
+        cuenta: cuentan.has(n.indice),
+      })),
       rachaActual: rachaAlCierre(noches),
       mejorRacha: mejorRachaDe(noches),
       volatilidad: volatilidadDe(noches.map((n) => n.resultado)),
@@ -813,6 +970,8 @@ export async function calcularPosiciones(
     caraACara: [...duelos.values()],
     temporadas,
     temporada: viendo?.id ?? null,
+    mejoresNoches: esquema.mejoresNoches ?? 0,
+    cupoDeNoches: cupo,
   }
 }
 

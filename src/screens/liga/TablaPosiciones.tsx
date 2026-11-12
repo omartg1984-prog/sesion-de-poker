@@ -2,6 +2,7 @@ import { Flame, Snowflake, Trophy } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import Cara from '../../components/Cara'
 import Esqueleto from '../../components/Esqueleto'
+import Sheet from '../../components/Sheet'
 import ShareBlock from '../../components/ShareBlock'
 import LigaEnNumeros from './LigaEnNumeros'
 import Titulos from '../../components/Titulos'
@@ -10,6 +11,7 @@ import type { DatosLiga, DatosTabla } from '../../lib/imagenTablas'
 import {
   api,
   calificacionDe,
+  type NocheDeAlguien,
   type PartidaResumen,
   type Posicion,
   type ResultadoNoche,
@@ -185,6 +187,84 @@ function Podio({
   )
 }
 
+/**
+ * Las noches de una persona, una por una.
+ *
+ * Existe por el descarte de las mejores noches: si a alguien le quitaron una noche de
+ * la suma, tiene derecho a ver cuál fue y cuánto valía. De paso contesta la pregunta
+ * que la app no contestaba —"¿cómo me ha ido a mí?"— sin tener que ir noche por noche.
+ */
+function SusNoches({ p, onCerrar }: { p: Posicion | null; onCerrar: () => void }) {
+  const noches: NocheDeAlguien[] = p?.detalle ?? []
+  const fuera = noches.filter((n) => !n.cuenta).length
+  return (
+    <Sheet abierta={!!p} onCerrar={onCerrar} titulo={p?.nombre ?? ''}>
+      {noches.length === 0 ? (
+        <p className="mt-0 mb-0 text-[13px] text-ink-soft">
+          De esta temporada no hay noches que mostrar.
+        </p>
+      ) : (
+        <>
+          <p className="mt-0 mb-3 text-[13px] leading-relaxed text-ink-soft">
+            {fuera === 0
+              ? `${noches.length} ${noches.length === 1 ? 'noche' : 'noches'}, y todas cuentan para el campeonato.`
+              : `${noches.length} noches. ${fuera === 1 ? 'Una no cuenta' : `${fuera} no cuentan`} para el campeonato: la liga puso que sólo sumen tus mejores. El saldo en dinero sí las cuenta todas.`}
+          </p>
+
+          <ul className="m-0 list-none p-0">
+            {noches.map((n, i) => (
+              <li
+                key={`${n.fecha}-${i}`}
+                className={`flex items-center gap-2.5 border-b border-paper-line py-2 last:border-b-0 ${
+                  n.cuenta ? '' : 'opacity-55'
+                }`}
+              >
+                <span className="min-w-0 flex-1">
+                  <b className="block truncate text-[13.5px] text-ink">
+                    {n.nombre || fechaCorta(n.fecha)}
+                  </b>
+                  <span className="block text-[11px] text-ink-soft">
+                    {n.nombre ? fechaCorta(n.fecha) : null}
+                    {!n.cuenta && (
+                      <span className={n.nombre ? 'ml-1' : ''}>· descartada</span>
+                    )}
+                  </span>
+                </span>
+                <span
+                  className={`w-[72px] shrink-0 text-right font-display text-[14px] font-bold tabular-nums ${claseSaldo(n.resultado)}`}
+                >
+                  {signed(n.resultado)}
+                </span>
+                <span className="w-[52px] shrink-0 text-right">
+                  <b
+                    className={`font-display text-[15px] font-bold tabular-nums ${
+                      n.cuenta ? 'text-ink' : 'text-ink-soft line-through'
+                    }`}
+                  >
+                    {n.puntos}
+                  </b>
+                  <span className="block text-[9px] tracking-[.4px] text-ink-soft uppercase">
+                    pts
+                  </span>
+                </span>
+              </li>
+            ))}
+          </ul>
+
+          <p className="mt-3 mb-0 text-[12px] leading-snug text-ink-soft">
+            Suman <b className="text-ink">{p?.puntos}</b> puntos en{' '}
+            {p?.nochesContadas ?? noches.length}{' '}
+            {(p?.nochesContadas ?? noches.length) === 1 ? 'noche' : 'noches'}, y el saldo de
+            la temporada es{' '}
+            <b className={claseSaldo(p?.balance ?? 0)}>{signed(p?.balance ?? 0)}</b> contando
+            las {noches.length}.
+          </p>
+        </>
+      )}
+    </Sheet>
+  )
+}
+
 /** Una tarjeta: quién, cuánto, y cuatro números al pie. */
 function Tarjeta({
   puesto,
@@ -194,6 +274,7 @@ function Tarjeta({
   tono,
   bajo,
   pies,
+  onAbrir,
 }: {
   puesto: number
   nombre: string
@@ -205,10 +286,26 @@ function Tarjeta({
   tono: string
   bajo?: React.ReactNode
   pies: { k: string; v: string; clase?: string }[]
+  /** Si viene, el renglón de arriba se vuelve botón y abre el detalle de la persona. */
+  onAbrir?: () => void
 }) {
+  /* El renglón de arriba es el botón y el pie no: picarle a un número para abrir otra
+     cosa se siente como un error de la app. */
+  const Arriba = onAbrir ? 'button' : 'div'
   return (
     <article className="mb-2 rounded-[14px] bg-paper p-3 shadow-[0_6px_16px_rgba(0,0,0,.22)]">
-      <div className="flex items-center gap-2.5">
+      <Arriba
+        {...(onAbrir
+          ? {
+              type: 'button' as const,
+              onClick: onAbrir,
+              'aria-label': `Ver las noches de ${nombre}`,
+            }
+          : {})}
+        className={`flex w-full items-center gap-2.5 border-none bg-transparent p-0 text-left ${
+          onAbrir ? 'cursor-pointer active:scale-[.995]' : ''
+        }`}
+      >
         <span className="w-5 shrink-0 text-center font-display text-[15px] font-bold text-ink-soft">
           {puesto}
         </span>
@@ -224,7 +321,7 @@ function Tarjeta({
         <span className={`font-display text-[19px] font-bold tabular-nums ${tono}`}>
           {cifra}
         </span>
-      </div>
+      </Arriba>
 
       <dl className="mt-2.5 flex gap-1.5">
         {pies.map((pie) => (
@@ -256,6 +353,8 @@ export default function TablaPosiciones({ tabla, nombreLiga, partidas }: Props) 
   const [modo, setModo] = useState<'liga' | 'noche'>('liga')
   const [orden, setOrden] = useState<Orden>('puntos')
   const [vista, setVista] = useState<'tarjetas' | 'tabla'>('tabla')
+  /** A quién se le están viendo las noches. */
+  const [mirando, setMirando] = useState<Posicion | null>(null)
 
   /* Sólo las cerradas tienen resultado: en una abierta las fichas no están contadas. */
   const jugadas = partidas.filter((p) => p.estado === 'cerrada')
@@ -474,6 +573,10 @@ export default function TablaPosiciones({ tabla, nombreLiga, partidas }: Props) 
    *
    * Los saltados no desaparecen: siguen en la tabla, en su lugar, con su aviso.
    */
+  /* El descarte de las mejores noches: cuántas cuentan de cuántas. */
+  const cupo = tabla.cupoDeNoches ?? 0
+  const hayDescarte = cupo > 0 && cupo < tabla.partidasContadas
+
   const esCampeonato = orden === 'puntos' || orden === 'puntosNoche'
   const alPodio = esCampeonato ? ordenadas.filter((p) => p.puedePodio !== false) : ordenadas
   const hayVetados = esCampeonato && alPodio.length < ordenadas.length
@@ -578,6 +681,14 @@ export default function TablaPosiciones({ tabla, nombreLiga, partidas }: Props) 
       </div>
       <p className="mt-1 mb-3 px-1 text-[11px] leading-snug text-tiza-suave">
         {ayuda}
+        {/* Lo mismo con el descarte: se dice donde se ve. */}
+        {hayDescarte && esCampeonato && (
+          <>
+            {' '}
+            A cada quien le cuentan sus mejores {cupo} de {tabla.partidasContadas} noches; la
+            peor se cae. El saldo en dinero sí las cuenta todas.
+          </>
+        )}
         {/* Hay que decir qué significa el asterisco donde se ve, no en otra pantalla. */}
         {hayVetados && (
           <>
@@ -665,6 +776,7 @@ export default function TablaPosiciones({ tabla, nombreLiga, partidas }: Props) 
             foto={p.foto}
             cifra={cifraDe(p).texto}
             tono={cifraDe(p).tono}
+            onAbrir={() => setMirando(p)}
             bajo={
               <>
                 <span className="truncate">
@@ -685,7 +797,16 @@ export default function TablaPosiciones({ tabla, nombreLiga, partidas }: Props) 
               { k: 'Rendim.', v: pct(p.roi), clase: claseSaldo(p.roi) },
               { k: 'Por noche', v: signed(p.promedio), clase: claseSaldo(p.promedio) },
               { k: 'Mejor', v: signed(p.mejor), clase: 'text-win' },
-              { k: 'Podios', v: String(p.podios) },
+              /* Con descarte encendido, cuántas noches le contaron es más interesante
+                 que los podios —que casi siempre son cero— y además es lo que explica
+                 su número de puntos. Sin descarte, los podios de siempre. */
+              hayDescarte && p.nochesContadas !== undefined
+                ? {
+                    k: 'Cuentan',
+                    v: `${p.nochesContadas} de ${p.partidas}`,
+                    clase: p.nochesContadas < p.partidas ? 'text-marca' : 'text-ink',
+                  }
+                : { k: 'Podios', v: String(p.podios) },
             ]}
           />
         ))
@@ -701,6 +822,8 @@ export default function TablaPosiciones({ tabla, nombreLiga, partidas }: Props) 
         </p>
         <ShareBlock datos={datosImagen} texto={texto} alt="Tabla de la liga" />
       </section>
+
+      <SusNoches p={mirando} onCerrar={() => setMirando(null)} />
     </>
   )
 }
