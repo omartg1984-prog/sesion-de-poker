@@ -693,8 +693,12 @@ export default function TablaPosiciones({ tabla, nombreLiga, partidas }: Props) 
         {hayVetados && (
           <>
             {' '}
-            <span className="text-marca-alta">*</span> Suma puntos y sale en la tabla, pero le
-            falta venir a suficientes noches para subir al podio.
+            <span className="text-marca-alta">*</span> Suma puntos y sale en la tabla, pero
+            {(tabla.minimoNoches ?? 0) > 0
+              ? ` hay que haber venido a ${tabla.minimoNoches} ${
+                  tabla.minimoNoches === 1 ? 'noche' : 'noches'
+                } para subir al podio.`
+              : ' le falta venir a suficientes noches para subir al podio.'}
           </>
         )}
       </p>

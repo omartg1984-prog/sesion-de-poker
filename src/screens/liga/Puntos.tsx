@@ -50,13 +50,13 @@ const DESCARTES = [
   },
   {
     valor: 80,
-    corto: 'Las mejores 80%',
+    corto: 'Mejores 80%',
     ayuda:
       'Se te cae tu peor noche de cada cinco. En una temporada de siete cuentan seis. Ojo: sólo le quita noches a los que vienen mucho, porque al que vino tres veces no le sobra ninguna.',
   },
   {
     valor: 60,
-    corto: 'Las mejores 60%',
+    corto: 'Mejores 60%',
     ayuda:
       'Cuentan poco más de la mitad de las noches de la temporada. Premia fuerte las noches buenas y perdona casi todo lo demás.',
   },
@@ -98,6 +98,8 @@ export default function Puntos({ abierta, esquema, soyAdmin, onCerrar, onGuardar
   const [minimo, setMinimo] = useState(esquema.minimoPodio ?? 0)
   const [tope, setTope] = useState(esquema.topeDinero ?? 0)
   const [mejores, setMejores] = useState(esquema.mejoresNoches ?? 0)
+  const [descarta, setDescarta] = useState(esquema.descartaNoches ?? 0)
+  const [minNoches, setMinNoches] = useState(esquema.minimoNoches ?? 0)
   const [ocupado, setOcupado] = useState(false)
   const [agregando, setAgregando] = useState(false)
   const [mesa, setMesa] = useState(EJEMPLOS[1])
@@ -110,6 +112,8 @@ export default function Puntos({ abierta, esquema, soyAdmin, onCerrar, onGuardar
       setMinimo(esquema.minimoPodio ?? 0)
       setTope(esquema.topeDinero ?? 0)
       setMejores(esquema.mejoresNoches ?? 0)
+      setDescarta(esquema.descartaNoches ?? 0)
+      setMinNoches(esquema.minimoNoches ?? 0)
       setAgregando(false)
     }
   }, [abierta, esquema])
@@ -124,15 +128,21 @@ export default function Puntos({ abierta, esquema, soyAdmin, onCerrar, onGuardar
     ...(e.minimoPodio ? { minimoPodio: e.minimoPodio } : {}),
     ...(e.topeDinero ? { topeDinero: e.topeDinero } : {}),
     ...(e.mejoresNoches ? { mejoresNoches: e.mejoresNoches } : {}),
+    ...(e.descartaNoches ? { descartaNoches: e.descartaNoches } : {}),
+    ...(e.minimoNoches ? { minimoNoches: e.minimoNoches } : {}),
   })
   const actual = sinVacios({
     reglas,
     tabla,
-    minimoPodio: minimo,
     /* El tope no se guarda si no hay ninguna consideración de dinero que recortar: un
        número suelto que no hace nada sólo confunde al que abra esto en seis meses. */
     topeDinero: hayDinero ? tope : 0,
-    mejoresNoches: mejores,
+    /* Sólo viaja la forma elegida: guardar las dos dejaría una apagada esperando a
+       confundir a quien abra esto el semestre que viene. */
+    mejoresNoches: descarta > 0 ? 0 : mejores,
+    descartaNoches: descarta,
+    minimoPodio: minNoches > 0 ? 0 : minimo,
+    minimoNoches: minNoches,
   })
   const igualA = (e: EsquemaPuntos) => JSON.stringify(actual) === JSON.stringify(sinVacios(e))
   const comoEstaba = igualA(esquema)
@@ -155,6 +165,8 @@ export default function Puntos({ abierta, esquema, soyAdmin, onCerrar, onGuardar
     setMinimo(e.minimoPodio ?? 0)
     setTope(e.topeDinero ?? 0)
     setMejores(e.mejoresNoches ?? 0)
+    setDescarta(e.descartaNoches ?? 0)
+    setMinNoches(e.minimoNoches ?? 0)
     setAgregando(false)
   }
 
@@ -176,6 +188,26 @@ export default function Puntos({ abierta, esquema, soyAdmin, onCerrar, onGuardar
   const elDescarte = DESCARTES.reduce((a, b) =>
     Math.abs(b.valor - mejores) < Math.abs(a.valor - mejores) ? b : a,
   )
+  /* Las dos formas de decir lo mismo: en por ciento, que se acomoda solo cuando la
+     temporada se alarga, o en noches, que es como se dice en la mesa. */
+  const porNoches = descarta > 0
+  const minPorNoches = minNoches > 0
+
+  /* Las ayudas de las dos formas en noches se arman aquí y no en el renglón: con el
+     plural y el cero metidos ahí abajo, el JSX se volvía ilegible. */
+  const ayudaDescarte =
+    descarta === 0
+      ? 'En cero no se descarta ninguna: cuentan todas.'
+      : `A cada quien se le ${
+          descarta === 1 ? 'cae su peor noche' : `caen sus ${descarta} peores noches`
+        } de la temporada. Al que vino poco no le quitan nada, porque no le sobran.`
+
+  const ayudaMinimo =
+    minNoches === 0
+      ? 'En cero no se pide nada: cualquiera puede coronarse.'
+      : `El que no haya venido a ${minNoches} ${
+          minNoches === 1 ? 'noche' : 'noches'
+        } suma puntos y sale en la tabla, pero no sube al podio. A diferencia del por ciento, esto no se mueve aunque la temporada se alargue.`
 
   const lugares = Array.from({ length: mesa }, (_, i) => i + 1)
   const deLugar = (l: number) =>
@@ -481,24 +513,69 @@ export default function Puntos({ abierta, esquema, soyAdmin, onCerrar, onGuardar
         ellas entran a la suma del campeonato. Por eso va aquí abajo y no arriba.
       */}
       <p className="field-label mt-4 mb-1.5">Cuántas noches cuentan</p>
-      <div className="mb-1.5 flex gap-1.5">
+      <div className="mb-1.5 flex flex-wrap gap-1.5">
         {DESCARTES.map((d) => (
           <button
             key={d.valor}
             type="button"
             disabled={!soyAdmin}
-            aria-pressed={d.valor === elDescarte.valor}
-            onClick={() => setMejores(d.valor)}
-            className={`flex-1 cursor-pointer rounded-lg border-none px-1 py-2 text-[12.5px] font-bold transition-colors disabled:cursor-default ${
-              d.valor === elDescarte.valor ? 'bg-marca text-white' : 'bg-[#e6e1d8] text-ink-soft'
+            aria-pressed={!porNoches && d.valor === elDescarte.valor}
+            onClick={() => {
+              setDescarta(0)
+              setMejores(d.valor)
+            }}
+            className={`min-w-[86px] flex-1 cursor-pointer rounded-lg border-none px-1 py-2 text-[12.5px] font-bold transition-colors disabled:cursor-default ${
+              !porNoches && d.valor === elDescarte.valor
+                ? 'bg-marca text-white'
+                : 'bg-[#e6e1d8] text-ink-soft'
             }`}
           >
             {d.corto}
           </button>
         ))}
+        {/* La misma regla, dicha en noches. Es como se dice en la mesa: "se cae la
+            peor". El por ciento se acomoda solo cuando la temporada se alarga; el
+            número no, y a veces eso es justo lo que se quiere. */}
+        <button
+          type="button"
+          disabled={!soyAdmin}
+          aria-pressed={porNoches}
+          onClick={() => {
+            setMejores(0)
+            setDescarta(descarta > 0 ? descarta : 1)
+          }}
+          className={`min-w-[86px] flex-1 cursor-pointer rounded-lg border-none px-1 py-2 text-[12.5px] font-bold transition-colors disabled:cursor-default ${
+            porNoches ? 'bg-marca text-white' : 'bg-[#e6e1d8] text-ink-soft'
+          }`}
+        >
+          Por noches
+        </button>
       </div>
-      <p className="mt-0 mb-2 text-[12px] leading-snug text-ink-soft">{elDescarte.ayuda}</p>
-      {mejores > 0 && (
+
+      {porNoches ? (
+        <>
+          <div className="mb-1.5 flex items-center gap-2">
+            <span className="shrink-0 text-[11.5px] text-ink-soft">Se descartan</span>
+            <div className="field-box flex-1">
+              <NumInput
+                value={descarta}
+                showZero
+                mode="decimal"
+                aria-label="Cuántas noches se descartan"
+                onChange={(v) => soyAdmin && setDescarta(Math.max(0, v))}
+              />
+            </div>
+            <span className="shrink-0 text-[11.5px] text-ink-soft">
+              {descarta === 1 ? 'noche' : 'noches'}
+            </span>
+          </div>
+          <p className="mt-0 mb-2 text-[12px] leading-snug text-ink-soft">{ayudaDescarte}</p>
+        </>
+      ) : (
+        <p className="mt-0 mb-2 text-[12px] leading-snug text-ink-soft">{elDescarte.ayuda}</p>
+      )}
+
+      {(mejores > 0 || descarta > 0) && (
         <p className="mt-0 mb-4 text-[12px] leading-snug text-ink-soft">
           El saldo en dinero no se descarta nunca: ahí siguen contando todas las noches,
           como debe ser, porque lo que se pagó en la mesa se pagó.
@@ -511,23 +588,66 @@ export default function Puntos({ abierta, esquema, soyAdmin, onCerrar, onGuardar
         noches, dos palazos— que de otro modo se lleva una temporada entera.
       */}
       <p className="field-label mt-4 mb-1.5">Quién puede subir al podio</p>
-      <div className="mb-1.5 flex gap-1.5">
+      <div className="mb-1.5 flex flex-wrap gap-1.5">
         {MINIMOS.map((m) => (
           <button
             key={m.valor}
             type="button"
             disabled={!soyAdmin}
-            aria-pressed={m.valor === elMinimo.valor}
-            onClick={() => setMinimo(m.valor)}
-            className={`flex-1 cursor-pointer rounded-lg border-none py-2 text-[13px] font-bold transition-colors disabled:cursor-default ${
-              m.valor === elMinimo.valor ? 'bg-marca text-white' : 'bg-[#e6e1d8] text-ink-soft'
+            aria-pressed={!minPorNoches && m.valor === elMinimo.valor}
+            onClick={() => {
+              setMinNoches(0)
+              setMinimo(m.valor)
+            }}
+            className={`min-w-[86px] flex-1 cursor-pointer rounded-lg border-none px-1 py-2 text-[12.5px] font-bold transition-colors disabled:cursor-default ${
+              !minPorNoches && m.valor === elMinimo.valor
+                ? 'bg-marca text-white'
+                : 'bg-[#e6e1d8] text-ink-soft'
             }`}
           >
             {m.corto}
           </button>
         ))}
+        {/* En noches no se mueve aunque la temporada se alargue: "hay que venir a
+            cuatro" quiere decir cuatro en diciembre y cuatro en julio. */}
+        <button
+          type="button"
+          disabled={!soyAdmin}
+          aria-pressed={minPorNoches}
+          onClick={() => {
+            setMinimo(0)
+            setMinNoches(minNoches > 0 ? minNoches : 4)
+          }}
+          className={`min-w-[86px] flex-1 cursor-pointer rounded-lg border-none px-1 py-2 text-[12.5px] font-bold transition-colors disabled:cursor-default ${
+            minPorNoches ? 'bg-marca text-white' : 'bg-[#e6e1d8] text-ink-soft'
+          }`}
+        >
+          Por noches
+        </button>
       </div>
-      <p className="mt-0 mb-4 text-[12px] leading-snug text-ink-soft">{elMinimo.ayuda}</p>
+
+      {minPorNoches ? (
+        <>
+          <div className="mb-1.5 flex items-center gap-2">
+            <span className="shrink-0 text-[11.5px] text-ink-soft">Hay que venir a</span>
+            <div className="field-box flex-1">
+              <NumInput
+                value={minNoches}
+                showZero
+                mode="decimal"
+                aria-label="A cuántas noches hay que haber venido para el podio"
+                onChange={(v) => soyAdmin && setMinNoches(Math.max(0, v))}
+              />
+            </div>
+            <span className="shrink-0 text-[11.5px] text-ink-soft">
+              {minNoches === 1 ? 'noche' : 'noches'}
+            </span>
+          </div>
+          <p className="mt-0 mb-4 text-[12px] leading-snug text-ink-soft">{ayudaMinimo}</p>
+        </>
+      ) : (
+        <p className="mt-0 mb-4 text-[12px] leading-snug text-ink-soft">{elMinimo.ayuda}</p>
+      )}
 
       {soyAdmin ? (
         <>

@@ -6,7 +6,9 @@ import {
   PUNTOS_POR_DEFECTO,
   cualesCuentan,
   cupoDeNoches,
+  cupoDeTemporada,
   esquemaDePuntos,
+  puedeSubir,
   puntosDeLaNoche,
   type EsquemaPuntos,
 } from '../posiciones'
@@ -481,5 +483,96 @@ describe('contra la mesa', () => {
     expect(PUNTOS_CONTRA_LA_MESA.minimoPodio).toBe(50)
     expect(PUNTOS_CONTRA_LA_MESA.tabla).toBeUndefined()
     expect(PUNTOS_CONTRA_LA_MESA.topeDinero).toBeUndefined()
+  })
+})
+
+describe('las dos formas de decir lo mismo', () => {
+  const con = (e: Partial<EsquemaPuntos>): EsquemaPuntos => ({ reglas: [], ...e })
+
+  it('descartar una noche es lo mismo que contar seis de siete', () => {
+    expect(cupoDeTemporada(7, con({ descartaNoches: 1 }))).toBe(cupoDeTemporada(7, con({ mejoresNoches: 80 })))
+  })
+
+  it('el número se queda quieto cuando la temporada se alarga, el por ciento no', () => {
+    /* Es la diferencia de fondo entre las dos formas, y por eso están las dos. */
+    expect(cupoDeTemporada(20, con({ descartaNoches: 1 }))).toBe(19)
+    expect(cupoDeTemporada(20, con({ mejoresNoches: 80 }))).toBe(16)
+  })
+
+  it('descartar más noches de las que se jugaron deja una en pie', () => {
+    expect(cupoDeTemporada(3, con({ descartaNoches: 9 }))).toBe(1)
+  })
+
+  it('sin nada puesto cuentan todas', () => {
+    expect(cupoDeTemporada(7, con({}))).toBe(0)
+    expect(cupoDeTemporada(7, con({ descartaNoches: 0 }))).toBe(0)
+  })
+
+  it('si por error están las dos, manda la de noches', () => {
+    expect(cupoDeTemporada(7, con({ descartaNoches: 1, mejoresNoches: 50 }))).toBe(6)
+  })
+
+  it('se guarda y se limpia', () => {
+    expect(
+      esquemaDePuntos(JSON.stringify({ reglas: [], descartaNoches: 2 })).descartaNoches,
+    ).toBe(2)
+    expect(
+      esquemaDePuntos(JSON.stringify({ reglas: [], descartaNoches: 0 })).descartaNoches,
+    ).toBeUndefined()
+    expect(
+      esquemaDePuntos(JSON.stringify({ reglas: [], descartaNoches: -2 })).descartaNoches,
+    ).toBeUndefined()
+  })
+})
+
+describe('el podio pedido en noches', () => {
+  const con = (e: Partial<EsquemaPuntos>): EsquemaPuntos => ({ reglas: [], ...e })
+  /** Alguien con tantas noches de tantas jugadas. */
+  const quien = (vino: number, deCuantas: number) => ({
+    partidas: vino,
+    asistencia: (vino / deCuantas) * 100,
+  })
+
+  it('cuenta noches y no por ciento', () => {
+    const e = con({ minimoNoches: 4 })
+    expect(puedeSubir(quien(4, 7), e)).toBe(true)
+    expect(puedeSubir(quien(3, 7), e)).toBe(false)
+    /* Cuatro de veinte es el 20% y aun así alcanza: el número manda. */
+    expect(puedeSubir(quien(4, 20), e)).toBe(true)
+  })
+
+  it('en noches no se mueve aunque la temporada se alargue', () => {
+    const porNoches = con({ minimoNoches: 4 })
+    const porCiento = con({ minimoPodio: 50 })
+    expect(puedeSubir(quien(4, 20), porNoches)).toBe(true)
+    expect(puedeSubir(quien(4, 20), porCiento)).toBe(false)
+  })
+
+  it('si están las dos, manda la de noches', () => {
+    const e = con({ minimoNoches: 2, minimoPodio: 90 })
+    expect(puedeSubir(quien(2, 7), e)).toBe(true)
+  })
+
+  it('sin nada puesto todos pueden', () => {
+    expect(puedeSubir(quien(1, 20), con({}))).toBe(true)
+    expect(puedeSubir(quien(1, 20), con({ minimoNoches: 0, minimoPodio: 0 }))).toBe(true)
+  })
+
+  it('se guarda y se limpia', () => {
+    expect(esquemaDePuntos(JSON.stringify({ reglas: [], minimoNoches: 4 })).minimoNoches).toBe(4)
+    expect(
+      esquemaDePuntos(JSON.stringify({ reglas: [], minimoNoches: 0 })).minimoNoches,
+    ).toBeUndefined()
+    expect(
+      esquemaDePuntos(JSON.stringify({ reglas: [], minimoNoches: 'cuatro' })).minimoNoches,
+    ).toBeUndefined()
+  })
+
+  it('un guardado viejo no trae ninguna de las dos formas nuevas', () => {
+    const viejo = esquemaDePuntos(JSON.stringify({ reglas: [{ id: 'base', puntos: 1 }] }))
+    expect(viejo.descartaNoches).toBeUndefined()
+    expect(viejo.minimoNoches).toBeUndefined()
+    expect(cupoDeTemporada(7, viejo)).toBe(0)
+    expect(puedeSubir({ partidas: 1, asistencia: 14 }, viejo)).toBe(true)
   })
 })

@@ -167,6 +167,22 @@ export interface EsquemaPuntos {
    * una temporada de siete no le sobra ninguna. En 0 —o sin poner— cuentan todas.
    */
   mejoresNoches?: number
+  /**
+   * Lo mismo, dicho en noches en vez de en por ciento: cuántas se descartan.
+   *
+   * En 1, de la temporada se cae la peor noche de cada quien. Es la misma regla y la
+   * misma cuenta —se mide contra las noches que jugó la liga—, nada más que escrita
+   * como se dice en la mesa. Si está puesto, manda sobre el por ciento.
+   */
+  descartaNoches?: number
+  /**
+   * El mínimo del podio dicho en noches: a cuántas hay que haber venido.
+   *
+   * En 4, el que vino a tres no se corona, se hayan jugado siete noches o veinte. Es
+   * más claro de decir en el grupo que un por ciento, y más duro de cumplir en una
+   * temporada larga. Si está puesto, manda sobre `minimoPodio`.
+   */
+  minimoNoches?: number
 }
 
 /* Los de siempre: un punto por venir y uno por cada quien al que le ganaste. Las ligas
@@ -254,6 +270,12 @@ export function esquemaDePuntos(crudo: string | null | undefined): EsquemaPuntos
   const crudoMejores = limpio(g.mejoresNoches)
   const mejoresNoches = crudoMejores === null ? 0 : Math.max(0, Math.min(100, crudoMejores))
 
+  /* Las dos formas en noches. No se topan con nada: son cuentas, no por cientos. */
+  const crudoDescarta = limpio(g.descartaNoches)
+  const descartaNoches = crudoDescarta === null ? 0 : Math.max(0, crudoDescarta)
+  const crudoMinNoches = limpio(g.minimoNoches)
+  const minimoNoches = crudoMinNoches === null ? 0 : Math.max(0, crudoMinNoches)
+
   /** Arma el esquema dejando fuera lo que está apagado: vacío y ausente son lo mismo. */
   const armar = (reglas: ReglaPuntos[]): EsquemaPuntos => ({
     reglas,
@@ -262,6 +284,8 @@ export function esquemaDePuntos(crudo: string | null | undefined): EsquemaPuntos
     ...(topeDinero > 0 ? { topeDinero } : {}),
     /* En 100 cuentan todas, que es lo mismo que apagado: no se guarda. */
     ...(mejoresNoches > 0 && mejoresNoches < 100 ? { mejoresNoches } : {}),
+    ...(descartaNoches > 0 ? { descartaNoches } : {}),
+    ...(minimoNoches > 0 ? { minimoNoches } : {}),
   })
 
   if (deLista) {
@@ -516,6 +540,10 @@ export interface TablaLiga {
   mejoresNoches: number
   /** Cuántas noches son ésas, ya sacada la cuenta. 0 = cuentan todas. */
   cupoDeNoches: number
+  /** A cuántas noches hay que haber venido para el podio. 0 = no se pide por noches. */
+  minimoNoches: number
+  /** O el por ciento, si la liga lo puso así. 0 = no se pide por ciento. */
+  minimoPodio: number
 }
 
 /** Lo que hizo una persona en una noche concreta. */
@@ -542,6 +570,38 @@ interface Noche {
 export function cupoDeNoches(nochesDeLaLiga: number, porCiento: number): number {
   if (!porCiento || porCiento <= 0 || porCiento >= 100) return 0
   return Math.max(1, Math.ceil((nochesDeLaLiga * porCiento) / 100))
+}
+
+/**
+ * Cuántas noches cuentan, haya puesto la liga un por ciento o un número de descartes.
+ *
+ * Las dos formas dicen lo mismo con otras palabras y se miden igual, contra las noches
+ * que jugó la liga: "descarto una" en una temporada de siete es exactamente "cuentan
+ * seis". Si por error quedaran puestas las dos, manda la que está en noches, que es la
+ * más concreta. Devuelve 0 cuando cuentan todas.
+ */
+export function cupoDeTemporada(nochesDeLaLiga: number, esquema: EsquemaPuntos): number {
+  const descarta = esquema.descartaNoches ?? 0
+  if (descarta > 0) return Math.max(1, nochesDeLaLiga - descarta)
+  return cupoDeNoches(nochesDeLaLiga, esquema.mejoresNoches ?? 0)
+}
+
+/**
+ * Si alguien tiene derecho a subir al podio.
+ *
+ * La liga puede pedirlo en noches —"hay que venir a cuatro"— o en por ciento de las
+ * que se jugaron. En noches es más fácil de decir en el grupo y no se mueve cuando la
+ * temporada se alarga; en por ciento se acomoda solo. Si están las dos, manda la de
+ * noches. Sin nada puesto, todos pueden.
+ */
+export function puedeSubir(
+  quien: { partidas: number; asistencia: number },
+  esquema: EsquemaPuntos,
+): boolean {
+  const noches = esquema.minimoNoches ?? 0
+  if (noches > 0) return quien.partidas >= noches
+  const pct = esquema.minimoPodio ?? 0
+  return pct <= 0 || quien.asistencia >= pct
 }
 
 /**
@@ -699,6 +759,8 @@ export async function calcularPosiciones(
     temporada: viendo?.id ?? null,
     mejoresNoches: esquema.mejoresNoches ?? 0,
     cupoDeNoches: 0,
+    minimoNoches: esquema.minimoNoches ?? 0,
+    minimoPodio: esquema.minimoPodio ?? 0,
   }
   if (partidas.length === 0) return vacia
 
@@ -807,7 +869,7 @@ export async function calcularPosiciones(
 
   /* Cuántas noches cuentan para los puntos. Se saca una vez: es de la liga, no de
      cada quien. */
-  const cupo = cupoDeNoches(partidas.length, esquema.mejoresNoches ?? 0)
+  const cupo = cupoDeTemporada(partidas.length, esquema)
 
   const posiciones: Posicion[] = [...historial.values()].map(({ datos, noches }) => {
     const invertido = noches.reduce((a, n) => a + n.puesto, 0)
@@ -881,10 +943,9 @@ export async function calcularPosiciones(
    * Si el mínimo deja a todos fuera —se puso muy alto, o la temporada apenas arranca—
    * no se aplica. Un podio vacío no es más justo que uno flojo, es una pantalla rota.
    */
-  const minimo = esquema.minimoPodio ?? 0
-  if (minimo > 0) {
-    const alguno = posiciones.some((p) => p.asistencia >= minimo)
-    if (alguno) for (const p of posiciones) p.puedePodio = p.asistencia >= minimo
+  if ((esquema.minimoPodio ?? 0) > 0 || (esquema.minimoNoches ?? 0) > 0) {
+    const alguno = posiciones.some((p) => puedeSubir(p, esquema))
+    if (alguno) for (const p of posiciones) p.puedePodio = puedeSubir(p, esquema)
   }
 
   posiciones.sort((a, b) => b.balance - a.balance)
@@ -972,6 +1033,8 @@ export async function calcularPosiciones(
     temporada: viendo?.id ?? null,
     mejoresNoches: esquema.mejoresNoches ?? 0,
     cupoDeNoches: cupo,
+    minimoNoches: esquema.minimoNoches ?? 0,
+    minimoPodio: esquema.minimoPodio ?? 0,
   }
 }
 

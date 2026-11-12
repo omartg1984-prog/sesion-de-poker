@@ -231,6 +231,16 @@ export interface EsquemaPuntos {
    * hace el servidor.
    */
   mejoresNoches?: number
+  /**
+   * Lo mismo dicho en noches: cuántas se descartan. En 1, se cae la peor de cada quien.
+   * Si está puesto, manda sobre el por ciento.
+   */
+  descartaNoches?: number
+  /**
+   * El mínimo del podio dicho en noches: a cuántas hay que haber venido. Si está
+   * puesto, manda sobre `minimoPodio`.
+   */
+  minimoNoches?: number
 }
 
 export const PUNTOS_POR_DEFECTO: EsquemaPuntos = {
@@ -311,12 +321,16 @@ export function esquemaGuardado(crudo: string | null): EsquemaPuntos {
     const m = typeof g.minimoPodio === 'number' ? Math.max(0, Math.min(100, g.minimoPodio)) : 0
     const t = typeof g.topeDinero === 'number' ? Math.max(0, g.topeDinero) : 0
     const mn = typeof g.mejoresNoches === 'number' ? Math.max(0, Math.min(100, g.mejoresNoches)) : 0
+    const dn = typeof g.descartaNoches === 'number' ? Math.max(0, g.descartaNoches) : 0
+    const minN = typeof g.minimoNoches === 'number' ? Math.max(0, g.minimoNoches) : 0
     return {
       reglas,
       ...(tabla.length > 0 ? { tabla } : {}),
       ...(m > 0 ? { minimoPodio: m } : {}),
       ...(t > 0 ? { topeDinero: t } : {}),
       ...(mn > 0 && mn < 100 ? { mejoresNoches: mn } : {}),
+      ...(dn > 0 ? { descartaNoches: dn } : {}),
+      ...(minN > 0 ? { minimoNoches: minN } : {}),
     }
   }
   const viejas = ['base', 'porJugador', 'bonoGanar', 'bonoPodio']
@@ -686,6 +700,10 @@ export interface TablaPosiciones {
   mejoresNoches?: number
   /** Cuántas noches son ésas, ya sacada la cuenta. 0 = cuentan todas. */
   cupoDeNoches?: number
+  /** A cuántas noches hay que haber venido para el podio. 0 = no se pide por noches. */
+  minimoNoches?: number
+  /** O el por ciento, si la liga lo puso así. 0 = no se pide por ciento. */
+  minimoPodio?: number
 }
 
 /**
