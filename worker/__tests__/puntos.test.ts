@@ -1,578 +1,254 @@
 import { describe, expect, it } from 'vitest'
 import {
-  CONSIDERACIONES,
-  PUNTOS_CONTRA_LA_MESA,
-  PUNTOS_DEL_REGLAMENTO,
-  PUNTOS_POR_DEFECTO,
-  cualesCuentan,
-  cupoDeNoches,
-  cupoDeTemporada,
   esquemaDePuntos,
+  PESOS_POR_PUNTO,
+  PESOS_SUGERIDOS,
   puedeSubir,
   puntosDeLaNoche,
+  puntosDeLaTemporada,
+  PUNTOS_POR_DEFECTO,
+  vencidosEn,
   type EsquemaPuntos,
 } from '../posiciones'
 
 /*
- * El campeonato reparte "un punto por cada jugador al que le ganaste, más uno por
- * presentarte". Lo que se fija aquí no es la fórmula sino lo que debe cumplir, que es
- * lo que se rompería sin querer al cambiarla.
+ * El campeonato de la liga, en una sola cuenta:
+ *
+ *     puntos = saldo de la temporada ÷ lo que vale un punto + a cuántos les ganaste
+ *
+ * Lo que se prueba aquí es sobre todo lo que la mesa va a discutir: que la cuenta dé
+ * exactamente lo que se acordó, que el dinero entre una sola vez —sobre el saldo del
+ * semestre y no noche por noche— y que mover lo que vale el punto haga lo que promete.
  */
 
-/** Una noche cualquiera, con lo mínimo para puntuar. */
-const noche = (lugar: number, deCuantos: number, extra: { resultado?: number; recompras?: number } = {}) => ({
-  lugar,
-  deCuantos,
-  resultado: extra.resultado ?? 0,
-  recompras: extra.recompras ?? 0,
+/** Lo que vale un punto, dicho corto. */
+const a = (pesosPorPunto: number, minimoNoches = 0): EsquemaPuntos => ({
+  pesosPorPunto,
+  minimoNoches,
 })
 
-const con = (reglas: Record<string, number>): EsquemaPuntos => ({
-  reglas: Object.entries(reglas).map(([id, puntos]) => ({ id, puntos })),
+const CIEN = a(100)
+
+describe('la fórmula, como se acordó', () => {
+  /* Los cuatro casos que se pusieron por escrito antes de tocar el código. */
+  it('ocho noches, +$2,000 y 48 vencidos son 68 puntos', () => {
+    expect(puntosDeLaTemporada(2000, 48, CIEN)).toBe(68)
+  })
+
+  it('una sola noche, +$1,500 y 13 vencidos son 28', () => {
+    expect(puntosDeLaTemporada(1500, 13, CIEN)).toBe(28)
+  })
+
+  it('tres noches, +$600 y 18 vencidos son 24', () => {
+    expect(puntosDeLaTemporada(600, 18, CIEN)).toBe(24)
+  })
+
+  it('el saldo en contra resta: −$900 con 30 vencidos son 21', () => {
+    expect(puntosDeLaTemporada(-900, 30, CIEN)).toBe(21)
+  })
+
+  it('sin nada guardado el punto cuesta cien y el podio está abierto', () => {
+    expect(PUNTOS_POR_DEFECTO).toEqual({ pesosPorPunto: PESOS_POR_PUNTO, minimoNoches: 0 })
+    expect(PESOS_POR_PUNTO).toBe(100)
+    expect(PESOS_SUGERIDOS).toContain(100)
+  })
 })
 
-describe('puntos de campeonato', () => {
-  it('el que gana se lleva tantos puntos como jugadores había', () => {
-    expect(puntosDeLaNoche(noche(1, 8))).toBe(8)
-    expect(puntosDeLaNoche(noche(1, 4))).toBe(4)
+describe('los vencidos', () => {
+  it('son los que quedaron abajo, no el lugar', () => {
+    /* Sexto en una mesa de quince: nueve abajo. */
+    expect(vencidosEn({ lugar: 6, deCuantos: 15 })).toBe(9)
   })
 
-  it('el último siempre se lleva uno, por presentarse', () => {
-    for (const mesa of [2, 3, 5, 9]) {
-      expect(puntosDeLaNoche(noche(mesa, mesa))).toBe(1)
-    }
+  it('el que gana le gana a todos los demás', () => {
+    expect(vencidosEn({ lugar: 1, deCuantos: 8 })).toBe(7)
   })
 
-  it('nunca reparte cero: venir siempre suma algo', () => {
-    for (let mesa = 1; mesa <= 12; mesa++) {
-      for (let lugar = 1; lugar <= mesa; lugar++) {
-        expect(puntosDeLaNoche(noche(lugar, mesa))).toBeGreaterThan(0)
-      }
-    }
+  it('el último no le gana a nadie', () => {
+    expect(vencidosEn({ lugar: 8, deCuantos: 8 })).toBe(0)
+    expect(vencidosEn({ lugar: 1, deCuantos: 1 })).toBe(0)
   })
 
-  it('ganar una mesa grande vale más que ganar una chica', () => {
-    // Es la razón de no usar una tabla fija de puntos por lugar.
-    expect(puntosDeLaNoche(noche(1, 8))).toBeGreaterThan(puntosDeLaNoche(noche(1, 4)))
+  it('la mesa grande vale más: ganar entre quince no es ganar entre cuatro', () => {
+    expect(vencidosEn({ lugar: 1, deCuantos: 15 })).toBeGreaterThan(
+      vencidosEn({ lugar: 1, deCuantos: 4 }),
+    )
   })
 
-  it('quedar mejor nunca da menos puntos', () => {
-    for (let lugar = 1; lugar < 8; lugar++) {
-      expect(puntosDeLaNoche(noche(lugar, 8))).toBeGreaterThan(puntosDeLaNoche(noche(lugar + 1, 8)))
-    }
-  })
-
-  it('una noche reparte siempre el mismo total, sin importar quién ganó', () => {
-    const total = (mesa: number) =>
-      Array.from({ length: mesa }, (_, i) => puntosDeLaNoche(noche(i + 1, mesa))).reduce(
-        (a, b) => a + b,
-        0,
+  it('quedar mejor nunca da menos', () => {
+    for (let lugar = 1; lugar < 10; lugar++) {
+      expect(vencidosEn({ lugar, deCuantos: 10 })).toBeGreaterThanOrEqual(
+        vencidosEn({ lugar: lugar + 1, deCuantos: 10 }),
       )
-    expect(total(8)).toBe(36)
-    expect(total(4)).toBe(10)
+    }
+  })
+
+  it('un lugar imposible no da puntos negativos', () => {
+    expect(vencidosEn({ lugar: 12, deCuantos: 8 })).toBe(0)
   })
 })
 
-/*
- * Las consideraciones que puede encender o apagar cada casa. Lo que se fija es que los
- * números de siempre sigan dando lo de siempre y que lo guardado no rompa la tabla.
- */
-describe('cuando la liga cambia las consideraciones', () => {
-  it('sin nada guardado puntúa como toda la vida', () => {
-    expect(esquemaDePuntos(null)).toEqual(PUNTOS_POR_DEFECTO)
-    expect(puntosDeLaNoche(noche(1, 8), esquemaDePuntos(null))).toBe(8)
+describe('lo que aporta una noche', () => {
+  it('es a cuántos les ganó más lo que se llevó', () => {
+    /* Quinto de diez —cinco abajo— y +$340 en la bolsa, a cien el punto. */
+    expect(puntosDeLaNoche({ lugar: 5, deCuantos: 10, resultado: 340 }, CIEN)).toBeCloseTo(8.4, 9)
   })
 
-  it('el bono de ganar sólo le toca al primero', () => {
-    const e = con({ base: 1, porJugador: 1, bonoGanar: 5 })
-    expect(puntosDeLaNoche(noche(1, 8), e)).toBe(13)
-    expect(puntosDeLaNoche(noche(2, 8), e)).toBe(7)
+  it('no se redondea: el entero se saca una sola vez, al final', () => {
+    expect(puntosDeLaNoche({ lugar: 3, deCuantos: 4, resultado: 150 }, CIEN)).toBeCloseTo(2.5, 9)
   })
 
-  it('el bono de podio no se da en mesas de tres', () => {
-    const e = con({ base: 1, porJugador: 1, bonoPodio: 3 })
-    expect(puntosDeLaNoche(noche(3, 8), e)).toBe(6 + 3)
-    expect(puntosDeLaNoche(noche(3, 3), e)).toBe(1)
+  it('perder resta aunque haya quedado arriba de alguien', () => {
+    expect(puntosDeLaNoche({ lugar: 7, deCuantos: 10, resultado: -800 }, CIEN)).toBeCloseTo(-5, 9)
   })
 
-  it('se puede premiar salir ganando, que no es lo mismo que quedar bien', () => {
-    const e = con({ base: 1, porJugador: 1, bonoPositivo: 4 })
-    expect(puntosDeLaNoche(noche(3, 6, { resultado: 200 }), e)).toBe(4 + 4)
-    expect(puntosDeLaNoche(noche(3, 6, { resultado: -200 }), e)).toBe(4)
+  it('sin esquema usa los cien de siempre', () => {
+    expect(puntosDeLaNoche({ lugar: 1, deCuantos: 5, resultado: 500 })).toBeCloseTo(9, 9)
+  })
+})
+
+describe('el dinero entra una sola vez, sobre el saldo del semestre', () => {
+  it('la noche del palazo no vale cincuenta puntos sueltos', () => {
+    /* Ganar cinco mil un viernes y dejar cuatro mil el siguiente es ir +$1,000: diez
+       puntos del dinero, no cincuenta de una noche. */
+    expect(puntosDeLaTemporada(5000 - 4000, 0, CIEN)).toBe(10)
   })
 
-  it('y se puede castigar: las consideraciones también restan', () => {
-    const e = con({ base: 1, porJugador: 1, porRecompra: -2 })
-    expect(puntosDeLaNoche(noche(2, 6, { recompras: 3 }), e)).toBe(5 - 6)
+  it('el redondeo al final no infla la cuenta', () => {
+    /* Dos noches de +$150 son tres puntos. Redondeando cada una serían cuatro, y así se
+       le regalaba un punto a quien partiera su dinero en más noches. */
+    expect(puntosDeLaTemporada(300, 0, CIEN)).toBe(3)
   })
 
-  it('aguantar sin recomprar paga, recomprar una vez ya no', () => {
-    const e = con({ base: 1, sinRecompras: 3 })
-    expect(puntosDeLaNoche(noche(4, 6), e)).toBe(4)
-    expect(puntosDeLaNoche(noche(4, 6, { recompras: 1 }), e)).toBe(1)
+  it('el medio punto se va para arriba, también en contra', () => {
+    expect(puntosDeLaTemporada(250, 0, CIEN)).toBe(3)
+    expect(puntosDeLaTemporada(-250, 0, CIEN)).toBe(-2)
   })
 
-  it('quitar todas las consideraciones deja a todos en cero, no rompe nada', () => {
-    const e: EsquemaPuntos = { reglas: [] }
-    for (let l = 1; l <= 8; l++) expect(puntosDeLaNoche(noche(l, 8), e)).toBe(0)
+  it('los pesos sueltos cuentan: no hace falta completar cien', () => {
+    expect(puntosDeLaTemporada(60, 10, CIEN)).toBe(11)
+    expect(puntosDeLaTemporada(40, 10, CIEN)).toBe(10)
   })
 
-  it('subir lo que vale asistir le da la vuelta al que viene siempre', () => {
-    const normal = esquemaDePuntos(null)
-    const fiel = con({ base: 5, porJugador: 1 })
-    /* Diez noches quedando último contra dos noches ganando, en mesas de seis. */
-    const vieneSiempre = (e: EsquemaPuntos) => 10 * puntosDeLaNoche(noche(6, 6), e)
-    const vieneYGana = (e: EsquemaPuntos) => 2 * puntosDeLaNoche(noche(1, 6), e)
+  it('sin saldo y sin vencidos nadie suma', () => {
+    expect(puntosDeLaTemporada(0, 0, CIEN)).toBe(0)
+  })
+})
 
-    /* Con los puntos de siempre mandan las dos victorias, y está bien que así sea. */
-    expect(vieneSiempre(normal)).toBeLessThan(vieneYGana(normal))
-    /* Subiendo lo que paga presentarse, la constancia se impone. Para eso se edita. */
-    expect(vieneSiempre(fiel)).toBeGreaterThan(vieneYGana(fiel))
+describe('lo que vale un punto', () => {
+  it('a cincuenta el dinero pesa el doble', () => {
+    expect(puntosDeLaTemporada(2000, 40, a(50))).toBe(80)
+    expect(puntosDeLaTemporada(2000, 40, a(100))).toBe(60)
+    expect(puntosDeLaTemporada(2000, 40, a(200))).toBe(50)
+  })
+
+  it('le da la vuelta a la temporada', () => {
+    /* El que no se pierde una y acaba tablas contra el que vino tres veces y arrasó: con
+       el punto barato gana la caja, con el punto caro gana la constancia. */
+    const fiel = { saldo: -200, vencidos: 40 }
+    const palazo = { saldo: 2400, vencidos: 18 }
+    const con = (p: number, q: { saldo: number; vencidos: number }) =>
+      puntosDeLaTemporada(q.saldo, q.vencidos, a(p))
+
+    expect(con(50, palazo)).toBeGreaterThan(con(50, fiel))
+    expect(con(200, fiel)).toBeGreaterThan(con(200, palazo))
+  })
+
+  it('los vencidos no se mueven con la perilla', () => {
+    expect(puntosDeLaTemporada(0, 33, a(50))).toBe(33)
+    expect(puntosDeLaTemporada(0, 33, a(100))).toBe(33)
+    expect(puntosDeLaTemporada(0, 33, a(5000))).toBe(33)
+  })
+
+  it('un cero guardado no revienta la cuenta: vale como los cien de siempre', () => {
+    expect(puntosDeLaTemporada(500, 5, a(0))).toBe(puntosDeLaTemporada(500, 5, CIEN))
   })
 })
 
 describe('lo que se lee de la base', () => {
-  it('un guardado con basura cae a los números de siempre', () => {
-    expect(esquemaDePuntos('no es json')).toEqual(PUNTOS_POR_DEFECTO)
-    expect(esquemaDePuntos(JSON.stringify({ reglas: 'no es lista' }))).toEqual(PUNTOS_POR_DEFECTO)
+  it('sin nada guardado, cien el punto y sin mínimo', () => {
+    expect(esquemaDePuntos(null)).toEqual(PUNTOS_POR_DEFECTO)
+    expect(esquemaDePuntos('')).toEqual(PUNTOS_POR_DEFECTO)
+    expect(esquemaDePuntos('{')).toEqual(PUNTOS_POR_DEFECTO)
+    expect(esquemaDePuntos('[]')).toEqual(PUNTOS_POR_DEFECTO)
   })
 
-  it('ignora consideraciones que no existen y valores que no son números', () => {
-    const e = esquemaDePuntos(
-      JSON.stringify({
-        reglas: [
-          { id: 'base', puntos: 2 },
-          { id: 'inventada', puntos: 50 },
-          { id: 'porJugador', puntos: null },
-        ],
-      }),
+  it('lee las dos cosas que la casa puede mover', () => {
+    expect(esquemaDePuntos(JSON.stringify({ pesosPorPunto: 50, minimoNoches: 4 }))).toEqual({
+      pesosPorPunto: 50,
+      minimoNoches: 4,
+    })
+  })
+
+  it('lo que no es número no cuenta como cero', () => {
+    expect(esquemaDePuntos(JSON.stringify({ pesosPorPunto: 'cien', minimoNoches: null }))).toEqual(
+      PUNTOS_POR_DEFECTO,
     )
-    expect(e.reglas).toEqual([{ id: 'base', puntos: 2 }])
   })
 
-  it('no deja la misma consideración dos veces', () => {
-    const e = esquemaDePuntos(
-      JSON.stringify({ reglas: [{ id: 'base', puntos: 2 }, { id: 'base', puntos: 9 }] }),
-    )
-    expect(e.reglas).toEqual([{ id: 'base', puntos: 2 }])
-  })
-
-  it('una lista vacía es una decisión, no un error', () => {
-    expect(esquemaDePuntos(JSON.stringify({ reglas: [] }))).toEqual({ reglas: [] })
+  it('un punto en cero o en negativo cae a los cien', () => {
+    expect(esquemaDePuntos(JSON.stringify({ pesosPorPunto: 0 })).pesosPorPunto).toBe(100)
+    expect(esquemaDePuntos(JSON.stringify({ pesosPorPunto: -200 })).pesosPorPunto).toBe(100)
   })
 
   it('no acepta números disparatados', () => {
-    const e = esquemaDePuntos(JSON.stringify({ reglas: [{ id: 'base', puntos: 99999 }] }))
-    expect(e.reglas[0].puntos).toBe(999)
+    expect(esquemaDePuntos(JSON.stringify({ pesosPorPunto: 1e12 })).pesosPorPunto).toBe(100000)
+    expect(esquemaDePuntos(JSON.stringify({ minimoNoches: 5000 })).minimoNoches).toBe(999)
+    expect(esquemaDePuntos(JSON.stringify({ minimoNoches: -3 })).minimoNoches).toBe(0)
   })
 
-  it('entiende las ligas guardadas con la forma vieja', () => {
-    /* Antes era { base, porJugador, bonoGanar, bonoPodio } y hubo ligas así. */
-    const e = esquemaDePuntos(
-      JSON.stringify({ base: 1, porJugador: 1, bonoGanar: 5, bonoPodio: 0 }),
-    )
-    expect(puntosDeLaNoche(noche(1, 8), e)).toBe(13)
-    /* El que valía cero no se arrastra como consideración encendida. */
-    expect(e.reglas.some((r) => r.id === 'bonoPodio')).toBe(false)
-  })
-})
-
-describe('el catálogo', () => {
-  it('no repite identificadores', () => {
-    expect(new Set(CONSIDERACIONES.map((c) => c.id)).size).toBe(CONSIDERACIONES.length)
+  it('redondea a números enteros', () => {
+    expect(esquemaDePuntos(JSON.stringify({ pesosPorPunto: 99.6 })).pesosPorPunto).toBe(100)
+    expect(esquemaDePuntos(JSON.stringify({ minimoNoches: 3.4 })).minimoNoches).toBe(3)
   })
 
-  it('las de siempre siguen en el catálogo', () => {
-    for (const id of PUNTOS_POR_DEFECTO.reglas.map((r) => r.id)) {
-      expect(CONSIDERACIONES.some((c) => c.id === id)).toBe(true)
-    }
-  })
-
-  it('las que restan vienen sugeridas en negativo', () => {
-    for (const c of CONSIDERACIONES.filter((x) => x.castigo)) {
-      expect(c.sugerido).toBeLessThan(0)
-    }
-  })
-})
-
-/*
- * La otra forma de puntuar: una tabla fija por lugar. Es la que usa el reglamento de la
- * liga y la que usan casi todas las ligas de casa.
- */
-describe('la tabla por lugar', () => {
-  it('paga lo que dice la tabla y nada del sexto en adelante', () => {
-    const e: EsquemaPuntos = { reglas: [], tabla: [25, 20, 15, 10, 5] }
-    expect(puntosDeLaNoche(noche(1, 8), e)).toBe(25)
-    expect(puntosDeLaNoche(noche(5, 8), e)).toBe(5)
-    expect(puntosDeLaNoche(noche(6, 8), e)).toBe(0)
-    expect(puntosDeLaNoche(noche(8, 8), e)).toBe(0)
-  })
-
-  it('el reglamento de la liga: asistencia, bono y lugar', () => {
-    const e = PUNTOS_DEL_REGLAMENTO
-    /* Ganas dinero y quedas 1º: 5 de asistencia + 5 de bono + 25 de posición. */
-    expect(puntosDeLaNoche(noche(1, 8, { resultado: 900 }), e)).toBe(35)
-    /* Pierdes pero quedas 5º: 5 + 0 + 5. */
-    expect(puntosDeLaNoche(noche(5, 8, { resultado: -300 }), e)).toBe(10)
-    /* Del sexto en adelante sólo quedan los cinco por venir. */
-    expect(puntosDeLaNoche(noche(7, 8, { resultado: -500 }), e)).toBe(5)
-  })
-
-  it('la tabla y las consideraciones pueden convivir', () => {
-    const e: EsquemaPuntos = { reglas: [{ id: 'base', puntos: 5 }], tabla: [25, 20] }
-    expect(puntosDeLaNoche(noche(1, 6), e)).toBe(30)
-    expect(puntosDeLaNoche(noche(3, 6), e)).toBe(5)
-  })
-
-  it('una tabla vacía no se guarda como si existiera', () => {
-    const e = esquemaDePuntos(JSON.stringify({ reglas: [{ id: 'base', puntos: 1 }], tabla: [] }))
-    expect(e.tabla).toBeUndefined()
-  })
-
-  it('la tabla guardada se limpia como todo lo demás', () => {
-    const e = esquemaDePuntos(JSON.stringify({ reglas: [], tabla: [25, 'veinte', null, 99999] }))
-    expect(e.tabla).toEqual([25, 0, 0, 999])
-  })
-})
-
-/*
- * Los dos arreglos que pidió la liga después de ver la temporada: que el dinero cuente
- * completo —y no sólo si saliste ganando— y que para coronarse haya que haber venido.
- */
-describe('cuando el dinero cuenta completo', () => {
-  it('ganar más paga más', () => {
-    const e = con({ porCadaCien: 1 })
-    expect(puntosDeLaNoche(noche(1, 8, { resultado: 1200 }), e)).toBe(12)
-    expect(puntosDeLaNoche(noche(1, 8, { resultado: 100 }), e)).toBe(1)
-  })
-
-  it('perder poco duele menos que perder mucho', () => {
-    /* Era el defecto de fondo: con el bono de "salir ganando", perder $38 y perder
-       $1,245 daban exactamente lo mismo. */
-    const e = con({ porCadaCienPerdido: -1 })
-    expect(puntosDeLaNoche(noche(6, 8, { resultado: -300 }), e)).toBeGreaterThan(
-      puntosDeLaNoche(noche(8, 8, { resultado: -1200 }), e),
-    )
-  })
-
-  it('lo que se lleva no castiga y lo que se deja no premia', () => {
-    const e = con({ porCadaCien: 1, porCadaCienPerdido: -1 })
-    expect(puntosDeLaNoche(noche(1, 8, { resultado: 500 }), e)).toBe(5)
-    expect(puntosDeLaNoche(noche(8, 8, { resultado: -500 }), e)).toBe(-5)
-    expect(puntosDeLaNoche(noche(4, 8, { resultado: 0 }), e)).toBe(0)
-  })
-
-  it('los centavos sueltos no suman: se cobra por cada cien completos', () => {
-    const e = con({ porCadaCien: 1 })
-    expect(puntosDeLaNoche(noche(1, 8, { resultado: 99 }), e)).toBe(0)
-    expect(puntosDeLaNoche(noche(1, 8, { resultado: 199 }), e)).toBe(1)
-  })
-})
-
-describe('el mínimo de asistencia para el podio', () => {
-  it('se guarda con el resto del esquema', () => {
-    const e = esquemaDePuntos(JSON.stringify({ reglas: [{ id: 'base', puntos: 1 }], minimoPodio: 50 }))
-    expect(e.minimoPodio).toBe(50)
-  })
-
-  it('en cero es como si no estuviera', () => {
-    const e = esquemaDePuntos(JSON.stringify({ reglas: [], minimoPodio: 0 }))
-    expect(e.minimoPodio).toBeUndefined()
-  })
-
-  it('es un por ciento: no se sale de 0 a 100', () => {
-    const arriba = esquemaDePuntos(JSON.stringify({ reglas: [], minimoPodio: 900 }))
-    expect(arriba.minimoPodio).toBe(100)
-    const abajo = esquemaDePuntos(JSON.stringify({ reglas: [], minimoPodio: -40 }))
-    expect(abajo.minimoPodio).toBeUndefined()
-    const basura = esquemaDePuntos(JSON.stringify({ reglas: [], minimoPodio: 'la mitad' }))
-    expect(basura.minimoPodio).toBeUndefined()
-  })
-
-  it('no cambia lo que suma una noche', () => {
-    /* Es una regla del podio, no de los puntos: nadie deja de sumar por faltar. */
-    const sin: EsquemaPuntos = { reglas: [{ id: 'base', puntos: 5 }] }
-    const con: EsquemaPuntos = { reglas: [{ id: 'base', puntos: 5 }], minimoPodio: 50 }
-    expect(puntosDeLaNoche(noche(3, 8), con)).toBe(puntosDeLaNoche(noche(3, 8), sin))
-  })
-})
-
-describe('el tope de los puntos por dinero', () => {
-  it('recorta la noche grande sin tocar las chicas', () => {
-    const e: EsquemaPuntos = { reglas: [{ id: 'porCadaCien', puntos: 1 }], topeDinero: 5 }
-    expect(puntosDeLaNoche(noche(1, 8, { resultado: 1200 }), e)).toBe(5)
-    expect(puntosDeLaNoche(noche(1, 8, { resultado: 300 }), e)).toBe(3)
-    expect(puntosDeLaNoche(noche(1, 8, { resultado: 38 }), e)).toBe(0)
-  })
-
-  it('también por abajo: perder mucho tiene piso', () => {
-    const e: EsquemaPuntos = { reglas: [{ id: 'porCadaCienPerdido', puntos: -1 }], topeDinero: 5 }
-    expect(puntosDeLaNoche(noche(8, 8, { resultado: -1245 }), e)).toBe(-5)
-    expect(puntosDeLaNoche(noche(8, 8, { resultado: -300 }), e)).toBe(-3)
-    expect(puntosDeLaNoche(noche(8, 8, { resultado: -38 }), e)).toBe(0)
-  })
-
-  it('el tope es de las dos juntas, no de cada una', () => {
-    const e: EsquemaPuntos = {
-      reglas: [
-        { id: 'porCadaCien', puntos: 1 },
-        { id: 'porCadaCienPerdido', puntos: -1 },
-      ],
-      topeDinero: 5,
-    }
-    expect(puntosDeLaNoche(noche(1, 8, { resultado: 2000 }), e)).toBe(5)
-    expect(puntosDeLaNoche(noche(8, 8, { resultado: -2000 }), e)).toBe(-5)
-  })
-
-  it('no toca lo que no es dinero', () => {
-    /* Un tope de 2 no puede recortar los puntos de ganar la noche. */
-    const e: EsquemaPuntos = {
+  it('la configuración vieja se ignora y la liga pasa a la fórmula', () => {
+    /* Las ligas guardadas con el catálogo de consideraciones —tabla por lugar, tope del
+       dinero, descarte de noches— ya no puntúan con eso. Es a propósito: esa mezcla era
+       justo lo que había que quitar. */
+    const vieja = JSON.stringify({
       reglas: [
         { id: 'base', puntos: 5 },
-        { id: 'bonoGanar', puntos: 10 },
-        { id: 'porCadaCien', puntos: 1 },
+        { id: 'bonoPositivo', puntos: 5 },
       ],
-      topeDinero: 2,
-    }
-    expect(puntosDeLaNoche(noche(1, 8, { resultado: 900 }), e)).toBe(5 + 10 + 2)
+      tabla: [25, 20, 15, 10, 5],
+      topeDinero: 12,
+      mejoresNoches: 80,
+      minimoPodio: 50,
+    })
+    expect(esquemaDePuntos(vieja)).toEqual(PUNTOS_POR_DEFECTO)
   })
 
-  it('en cero no hay tope', () => {
-    const e: EsquemaPuntos = { reglas: [{ id: 'porCadaCien', puntos: 1 }], topeDinero: 0 }
-    expect(puntosDeLaNoche(noche(1, 8, { resultado: 1200 }), e)).toBe(12)
+  it('una liga vieja que sí pedía noches mínimas las conserva', () => {
+    expect(esquemaDePuntos(JSON.stringify({ reglas: [], minimoNoches: 4 }))).toEqual({
+      pesosPorPunto: 100,
+      minimoNoches: 4,
+    })
   })
 
-  it('se guarda y se limpia como todo lo demás', () => {
-    expect(esquemaDePuntos(JSON.stringify({ reglas: [], topeDinero: 5 })).topeDinero).toBe(5)
-    expect(esquemaDePuntos(JSON.stringify({ reglas: [], topeDinero: 0 })).topeDinero).toBeUndefined()
-    expect(esquemaDePuntos(JSON.stringify({ reglas: [], topeDinero: -3 })).topeDinero).toBeUndefined()
-    expect(
-      esquemaDePuntos(JSON.stringify({ reglas: [], topeDinero: 'mucho' })).topeDinero,
-    ).toBeUndefined()
-  })
-})
-
-describe('las mejores noches', () => {
-  /** Una noche de alguien, con lo que hace falta para repartir el descarte. */
-  const n = (indice: number, puntos: number, resultado = 0) => ({ indice, puntos, resultado })
-
-  it('el cupo es el por ciento de las noches de la liga, redondeando hacia arriba', () => {
-    expect(cupoDeNoches(7, 80)).toBe(6) // 5.6 → 6
-    expect(cupoDeNoches(10, 80)).toBe(8)
-    expect(cupoDeNoches(7, 50)).toBe(4) // 3.5 → 4
-  })
-
-  it('en 0 y en 100 cuentan todas', () => {
-    expect(cupoDeNoches(7, 0)).toBe(0)
-    expect(cupoDeNoches(7, 100)).toBe(0)
-  })
-
-  it('nunca deja a nadie sin una sola noche', () => {
-    /* Un por ciento chiquito en una temporada corta daría cero, y la tabla entera
-       quedaría en ceros. */
-    expect(cupoDeNoches(2, 10)).toBe(1)
-  })
-
-  it('se queda con las mejores y tira la peor', () => {
-    const cuentan = cualesCuentan([n(0, 10), n(1, 2), n(2, 8), n(3, 7)], 3)
-    expect([...cuentan].sort()).toEqual([0, 2, 3])
-  })
-
-  it('al que faltó no le quita nada', () => {
-    /* Vino tres veces en una temporada de siete: el cupo es seis y no le sobra
-       ninguna. El descarte sólo le pega a los que vienen mucho. */
-    const cuentan = cualesCuentan([n(0, 4), n(1, 1), n(2, 9)], cupoDeNoches(7, 80))
-    expect(cuentan.size).toBe(3)
-  })
-
-  it('empatados a puntos, se queda el de mejor saldo', () => {
-    const cuentan = cualesCuentan([n(0, 5, -300), n(1, 5, 900), n(2, 9, 0)], 2)
-    expect([...cuentan].sort()).toEqual([1, 2])
-  })
-
-  it('empatados en todo, se queda la más vieja', () => {
-    /* No es que una valga más: es que el número no puede cambiar solo entre dos
-       visitas a la misma pantalla. */
-    const cuentan = cualesCuentan([n(5, 5, 100), n(2, 5, 100), n(9, 5, 100)], 2)
-    expect([...cuentan].sort((a, b) => a - b)).toEqual([2, 5])
-  })
-
-  it('sin cupo cuentan todas', () => {
-    const cuentan = cualesCuentan([n(0, 10), n(1, 2), n(2, 8)], 0)
-    expect(cuentan.size).toBe(3)
-  })
-
-  it('se guarda, y en 100 es como si no estuviera', () => {
-    expect(esquemaDePuntos(JSON.stringify({ reglas: [], mejoresNoches: 80 })).mejoresNoches).toBe(80)
-    expect(
-      esquemaDePuntos(JSON.stringify({ reglas: [], mejoresNoches: 100 })).mejoresNoches,
-    ).toBeUndefined()
-    expect(
-      esquemaDePuntos(JSON.stringify({ reglas: [], mejoresNoches: 0 })).mejoresNoches,
-    ).toBeUndefined()
-    expect(
-      esquemaDePuntos(JSON.stringify({ reglas: [], mejoresNoches: 900 })).mejoresNoches,
-    ).toBeUndefined()
-  })
-
-  it('no cambia lo que vale una noche suelta', () => {
-    /* El descarte se reparte al armar la temporada, no al contar la noche. */
-    const sin: EsquemaPuntos = { reglas: [{ id: 'base', puntos: 5 }] }
-    const con: EsquemaPuntos = { reglas: [{ id: 'base', puntos: 5 }], mejoresNoches: 80 }
-    expect(puntosDeLaNoche(noche(3, 8), con)).toBe(puntosDeLaNoche(noche(3, 8), sin))
+  it('lo que se guarda se vuelve a leer igual', () => {
+    const puesto = a(200, 5)
+    expect(esquemaDePuntos(JSON.stringify(puesto))).toEqual(puesto)
   })
 })
 
-describe('las ligas que ya existen', () => {
-  it('un guardado sin los campos nuevos puntúa exactamente igual que antes', () => {
-    /* Es la prueba que de verdad importa: nadie debe despertar con otra tabla. */
-    const viejo = esquemaDePuntos(
-      JSON.stringify({
-        reglas: [
-          { id: 'base', puntos: 5 },
-          { id: 'bonoPositivo', puntos: 5 },
-        ],
-        tabla: [25, 20, 15, 10, 5],
-      }),
-    )
-    expect(viejo.topeDinero).toBeUndefined()
-    expect(viejo.mejoresNoches).toBeUndefined()
-    expect(viejo.minimoPodio).toBeUndefined()
-
-    for (let mesa = 2; mesa <= 10; mesa++) {
-      for (let lugar = 1; lugar <= mesa; lugar++) {
-        for (const resultado of [-1200, -38, 0, 38, 1200]) {
-          expect(puntosDeLaNoche(noche(lugar, mesa, { resultado }), viejo)).toBe(
-            puntosDeLaNoche(noche(lugar, mesa, { resultado }), PUNTOS_DEL_REGLAMENTO),
-          )
-        }
-      }
-    }
+describe('quién puede subir al podio', () => {
+  it('sin mínimo, todos pueden', () => {
+    expect(puedeSubir({ partidas: 1 }, a(100, 0))).toBe(true)
   })
 
-  it('y los de siempre siguen dando lo de siempre', () => {
-    expect(puntosDeLaNoche(noche(1, 8), PUNTOS_POR_DEFECTO)).toBe(8)
-    expect(puntosDeLaNoche(noche(8, 8), PUNTOS_POR_DEFECTO)).toBe(1)
-  })
-})
-
-describe('contra la mesa', () => {
-  it('no paga un solo punto por dinero', () => {
-    const conFeria = puntosDeLaNoche(noche(3, 8, { resultado: 5000 }), PUNTOS_CONTRA_LA_MESA)
-    const conPoco = puntosDeLaNoche(noche(3, 8, { resultado: 1 }), PUNTOS_CONTRA_LA_MESA)
-    expect(conFeria).toBe(conPoco)
+  it('con cuatro de mínimo, el que vino a tres no se corona', () => {
+    expect(puedeSubir({ partidas: 4 }, a(100, 4))).toBe(true)
+    expect(puedeSubir({ partidas: 3 }, a(100, 4))).toBe(false)
   })
 
-  it('pero sí distingue salir arriba de salir abajo', () => {
-    expect(puntosDeLaNoche(noche(3, 8, { resultado: 100 }), PUNTOS_CONTRA_LA_MESA)).toBe(
-      puntosDeLaNoche(noche(3, 8, { resultado: -100 }), PUNTOS_CONTRA_LA_MESA) + 2,
-    )
+  it('se cuenta en noches y no en por ciento: no se mueve si la temporada se alarga', () => {
+    /* Cuatro noches alcanzan en una temporada de siete y también en una de veinte: es lo
+       que se dice en la mesa y no cambia solo en diciembre. */
+    expect(puedeSubir({ partidas: 4 }, a(100, 4))).toBe(true)
   })
 
-  it('ganarle a siete vale más que ganarle a tres', () => {
-    expect(puntosDeLaNoche(noche(1, 8, { resultado: 100 }), PUNTOS_CONTRA_LA_MESA)).toBe(
-      3 + 7 + 3 + 2,
-    )
-    expect(puntosDeLaNoche(noche(1, 4, { resultado: 100 }), PUNTOS_CONTRA_LA_MESA)).toBe(
-      3 + 3 + 3 + 2,
-    )
-  })
-
-  it('trae el descarte y el mínimo del podio puestos, y ninguna tabla fija', () => {
-    expect(PUNTOS_CONTRA_LA_MESA.mejoresNoches).toBe(80)
-    expect(PUNTOS_CONTRA_LA_MESA.minimoPodio).toBe(50)
-    expect(PUNTOS_CONTRA_LA_MESA.tabla).toBeUndefined()
-    expect(PUNTOS_CONTRA_LA_MESA.topeDinero).toBeUndefined()
-  })
-})
-
-describe('las dos formas de decir lo mismo', () => {
-  const con = (e: Partial<EsquemaPuntos>): EsquemaPuntos => ({ reglas: [], ...e })
-
-  it('descartar una noche es lo mismo que contar seis de siete', () => {
-    expect(cupoDeTemporada(7, con({ descartaNoches: 1 }))).toBe(cupoDeTemporada(7, con({ mejoresNoches: 80 })))
-  })
-
-  it('el número se queda quieto cuando la temporada se alarga, el por ciento no', () => {
-    /* Es la diferencia de fondo entre las dos formas, y por eso están las dos. */
-    expect(cupoDeTemporada(20, con({ descartaNoches: 1 }))).toBe(19)
-    expect(cupoDeTemporada(20, con({ mejoresNoches: 80 }))).toBe(16)
-  })
-
-  it('descartar más noches de las que se jugaron deja una en pie', () => {
-    expect(cupoDeTemporada(3, con({ descartaNoches: 9 }))).toBe(1)
-  })
-
-  it('sin nada puesto cuentan todas', () => {
-    expect(cupoDeTemporada(7, con({}))).toBe(0)
-    expect(cupoDeTemporada(7, con({ descartaNoches: 0 }))).toBe(0)
-  })
-
-  it('si por error están las dos, manda la de noches', () => {
-    expect(cupoDeTemporada(7, con({ descartaNoches: 1, mejoresNoches: 50 }))).toBe(6)
-  })
-
-  it('se guarda y se limpia', () => {
-    expect(
-      esquemaDePuntos(JSON.stringify({ reglas: [], descartaNoches: 2 })).descartaNoches,
-    ).toBe(2)
-    expect(
-      esquemaDePuntos(JSON.stringify({ reglas: [], descartaNoches: 0 })).descartaNoches,
-    ).toBeUndefined()
-    expect(
-      esquemaDePuntos(JSON.stringify({ reglas: [], descartaNoches: -2 })).descartaNoches,
-    ).toBeUndefined()
-  })
-})
-
-describe('el podio pedido en noches', () => {
-  const con = (e: Partial<EsquemaPuntos>): EsquemaPuntos => ({ reglas: [], ...e })
-  /** Alguien con tantas noches de tantas jugadas. */
-  const quien = (vino: number, deCuantas: number) => ({
-    partidas: vino,
-    asistencia: (vino / deCuantas) * 100,
-  })
-
-  it('cuenta noches y no por ciento', () => {
-    const e = con({ minimoNoches: 4 })
-    expect(puedeSubir(quien(4, 7), e)).toBe(true)
-    expect(puedeSubir(quien(3, 7), e)).toBe(false)
-    /* Cuatro de veinte es el 20% y aun así alcanza: el número manda. */
-    expect(puedeSubir(quien(4, 20), e)).toBe(true)
-  })
-
-  it('en noches no se mueve aunque la temporada se alargue', () => {
-    const porNoches = con({ minimoNoches: 4 })
-    const porCiento = con({ minimoPodio: 50 })
-    expect(puedeSubir(quien(4, 20), porNoches)).toBe(true)
-    expect(puedeSubir(quien(4, 20), porCiento)).toBe(false)
-  })
-
-  it('si están las dos, manda la de noches', () => {
-    const e = con({ minimoNoches: 2, minimoPodio: 90 })
-    expect(puedeSubir(quien(2, 7), e)).toBe(true)
-  })
-
-  it('sin nada puesto todos pueden', () => {
-    expect(puedeSubir(quien(1, 20), con({}))).toBe(true)
-    expect(puedeSubir(quien(1, 20), con({ minimoNoches: 0, minimoPodio: 0 }))).toBe(true)
-  })
-
-  it('se guarda y se limpia', () => {
-    expect(esquemaDePuntos(JSON.stringify({ reglas: [], minimoNoches: 4 })).minimoNoches).toBe(4)
-    expect(
-      esquemaDePuntos(JSON.stringify({ reglas: [], minimoNoches: 0 })).minimoNoches,
-    ).toBeUndefined()
-    expect(
-      esquemaDePuntos(JSON.stringify({ reglas: [], minimoNoches: 'cuatro' })).minimoNoches,
-    ).toBeUndefined()
-  })
-
-  it('un guardado viejo no trae ninguna de las dos formas nuevas', () => {
-    const viejo = esquemaDePuntos(JSON.stringify({ reglas: [{ id: 'base', puntos: 1 }] }))
-    expect(viejo.descartaNoches).toBeUndefined()
-    expect(viejo.minimoNoches).toBeUndefined()
-    expect(cupoDeTemporada(7, viejo)).toBe(0)
-    expect(puedeSubir({ partidas: 1, asistencia: 14 }, viejo)).toBe(true)
+  it('no cambia lo que suma nadie', () => {
+    expect(puntosDeLaTemporada(900, 20, a(100, 6))).toBe(puntosDeLaTemporada(900, 20, a(100, 0)))
   })
 })

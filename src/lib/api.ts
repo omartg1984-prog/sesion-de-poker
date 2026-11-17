@@ -90,11 +90,13 @@ export interface Miembro {
 }
 
 /*
- * Cómo reparte puntos una liga: una lista de consideraciones, no una fórmula fija.
+ * Cómo se reparte el campeonato: una sola fórmula.
  *
- * El catálogo vive igual aquí y en el servidor. El servidor es el que manda —de ahí
- * salen los puntos de la tabla—; esta copia sólo sirve para que la hoja enseñe el efecto
- * sin tener que preguntar en cada tecla. Si se agrega una consideración, va en los dos.
+ *     puntos = saldo de la temporada ÷ lo que vale un punto + a cuántos les ganaste
+ *
+ * La cuenta vive igual aquí y en el servidor. El servidor es el que manda —de ahí salen
+ * los puntos de la tabla—; esta copia sólo sirve para que la hoja de ajustes enseñe el
+ * efecto sin preguntar en cada tecla. Si cambia una, cambian las dos.
  */
 
 export interface NocheParaPuntos {
@@ -102,242 +104,53 @@ export interface NocheParaPuntos {
   deCuantos: number
   /** Lo que ganó o perdió en dinero. */
   resultado: number
-  recompras: number
-}
-
-export interface Consideracion {
-  id: string
-  etiqueta: string
-  ayuda: string
-  /** Cuántas veces se cobra esa noche. 0 = no aplica. */
-  veces: (n: NocheParaPuntos) => number
-  sugerido: number
-  /** Las que restan se escriben en negativo y se pintan distinto. */
-  castigo?: boolean
-  /** Si depende sólo del lugar: las demás no caben en la tabla de ejemplo. */
-  porLugar?: boolean
-}
-
-export const CONSIDERACIONES: Consideracion[] = [
-  {
-    id: 'base',
-    etiqueta: 'Por presentarte',
-    ayuda: 'Lo que suma venir, aunque te vayas en la primera mano.',
-    veces: () => 1,
-    sugerido: 1,
-    porLugar: true,
-  },
-  {
-    id: 'porJugador',
-    etiqueta: 'Por cada uno al que le ganas',
-    ayuda: 'Es lo que hace que ganarle a siete valga más que ganarle a tres.',
-    veces: (n) => Math.max(0, n.deCuantos - n.lugar),
-    sugerido: 1,
-    porLugar: true,
-  },
-  {
-    id: 'bonoGanar',
-    etiqueta: 'Por ganar la noche',
-    ayuda: 'Un premio aparte para el primer lugar.',
-    veces: (n) => (n.lugar === 1 ? 1 : 0),
-    sugerido: 3,
-    porLugar: true,
-  },
-  {
-    id: 'bonoPodio',
-    etiqueta: 'Por quedar entre los tres primeros',
-    ayuda: 'Sólo en mesas de más de tres: en una de tres, todos estarían en el podio.',
-    veces: (n) => (n.lugar <= 3 && n.deCuantos > 3 ? 1 : 0),
-    sugerido: 2,
-    porLugar: true,
-  },
-  {
-    id: 'bonoPositivo',
-    etiqueta: 'Por salir ganando dinero',
-    ayuda: 'No es lo mismo quedar tercero arriba que tercero abajo.',
-    veces: (n) => (n.resultado > 0 ? 1 : 0),
-    sugerido: 2,
-  },
-  {
-    id: 'porCadaCien',
-    etiqueta: 'Por cada $100 que te llevas',
-    ayuda: 'El dinero contado completo: ganar $1,200 no vale lo mismo que ganar $100.',
-    veces: (n) => Math.floor(Math.max(0, n.resultado) / 100),
-    sugerido: 1,
-  },
-  {
-    id: 'porCadaCienPerdido',
-    etiqueta: 'Por cada $100 que dejas',
-    ayuda: 'Para restar. Con esto, perder poco duele menos que perder mucho.',
-    veces: (n) => Math.floor(Math.max(0, -n.resultado) / 100),
-    sugerido: -1,
-    castigo: true,
-  },
-  {
-    id: 'sinRecompras',
-    etiqueta: 'Por aguantar sin recomprar',
-    ayuda: 'Premia al que hizo rendir su entrada.',
-    veces: (n) => (n.recompras === 0 ? 1 : 0),
-    sugerido: 2,
-  },
-  {
-    id: 'bonoUltimo',
-    etiqueta: 'Por quedar último',
-    ayuda: 'Para restar. Ponlo en negativo si quieres que duela.',
-    veces: (n) => (n.lugar === n.deCuantos && n.deCuantos > 1 ? 1 : 0),
-    sugerido: -1,
-    castigo: true,
-    porLugar: true,
-  },
-  {
-    id: 'porRecompra',
-    etiqueta: 'Por cada recompra',
-    ayuda: 'Para restar. Castiga al que compra su camino de vuelta.',
-    veces: (n) => Math.max(0, n.recompras),
-    sugerido: -1,
-    castigo: true,
-  },
-]
-
-export interface ReglaPuntos {
-  id: string
-  puntos: number
 }
 
 export interface EsquemaPuntos {
-  reglas: ReglaPuntos[]
-  /** Puntos por lugar: [1º, 2º, 3º…]. Vacía o ausente = no se usa. */
-  tabla?: number[]
-  /**
-   * Cuánto hay que haber venido para poder subir al podio, en por ciento de las noches
-   * de la temporada.
-   *
-   * No es una regla de puntos sino del podio, y por eso vive aparte: todos suman desde
-   * su primera noche, pero para salir en el cuadro de campeones hay que haber sostenido
-   * la temporada. Así una racha de dos viernes no desplaza a quien no se ha perdido
-   * una, y no hace falta castigar a nadie en la fórmula. En 0 —o sin poner— nadie queda
-   * fuera, que es como ha funcionado siempre.
-   */
-  minimoPodio?: number
-  /**
-   * Tope de lo que pueden pagar —o cobrar— las consideraciones del dinero en una noche.
-   * En 0, o sin poner, no hay tope.
-   */
-  topeDinero?: number
-  /**
-   * Qué parte de las noches de la temporada cuenta para el campeonato, en por ciento.
-   * En 0, o sin poner, cuentan todas. Esto no cambia lo que vale una noche suelta, así
-   * que la cuenta de aquí abajo no lo mira: se reparte al armar la temporada, y eso lo
-   * hace el servidor.
-   */
-  mejoresNoches?: number
-  /**
-   * Lo mismo dicho en noches: cuántas se descartan. En 1, se cae la peor de cada quien.
-   * Si está puesto, manda sobre el por ciento.
-   */
-  descartaNoches?: number
-  /**
-   * El mínimo del podio dicho en noches: a cuántas hay que haber venido. Si está
-   * puesto, manda sobre `minimoPodio`.
-   */
-  minimoNoches?: number
+  /** Cuántos pesos de saldo valen un punto. */
+  pesosPorPunto: number
+  /** A cuántas noches hay que haber venido para subir al podio. 0 = todos pueden. */
+  minimoNoches: number
 }
+
+/** Lo que vale un punto mientras la liga no diga otra cosa. */
+export const PESOS_POR_PUNTO = 100
+
+/** Los tres que la pantalla ofrece de un toque; igual se puede escribir otro. */
+export const PESOS_SUGERIDOS = [50, 100, 200]
 
 export const PUNTOS_POR_DEFECTO: EsquemaPuntos = {
-  reglas: [
-    { id: 'base', puntos: 1 },
-    { id: 'porJugador', puntos: 1 },
-  ],
+  pesosPorPunto: PESOS_POR_PUNTO,
+  minimoNoches: 0,
 }
 
-/** Lo que dice el reglamento de la liga: asistencia, bono por positivo y tabla fija. */
-export const PUNTOS_DEL_REGLAMENTO: EsquemaPuntos = {
-  reglas: [
-    { id: 'base', puntos: 5 },
-    { id: 'bonoPositivo', puntos: 5 },
-  ],
-  tabla: [25, 20, 15, 10, 5],
+/** A cuántos les ganó esa noche. */
+export function vencidosEn(n: { lugar: number; deCuantos: number }): number {
+  return Math.max(0, n.deCuantos - n.lugar)
 }
 
-/**
- * Contra la mesa: el campeonato mide a cuánta gente le ganaste, no cuánto te llevaste.
- *
- * Ni un punto por dinero a propósito —para eso está la columna de saldo—, y en cambio
- * todo lo que la mesa ve sin sacar la calculadora. Con el descarte de la peor noche y
- * con medio semestre de asistencia para poder coronarse.
- */
-export const PUNTOS_CONTRA_LA_MESA: EsquemaPuntos = {
-  reglas: [
-    { id: 'base', puntos: 3 },
-    { id: 'porJugador', puntos: 1 },
-    { id: 'bonoGanar', puntos: 3 },
-    { id: 'bonoPositivo', puntos: 2 },
-  ],
-  mejoresNoches: 80,
-  minimoPodio: 50,
-}
+const elPunto = (e: EsquemaPuntos) => (e.pesosPorPunto > 0 ? e.pesosPorPunto : PESOS_POR_PUNTO)
 
-/** Las que cuentan pesos, que son las únicas que el tope recorta. */
-export const DEL_DINERO = ['porCadaCien', 'porCadaCienPerdido']
-
-/** Lo que suma una noche. Es la misma cuenta que hace el servidor. */
+/** Lo que aportó una noche, sin redondear. Es la misma cuenta que hace el servidor. */
 export function puntosDeLaNoche(n: NocheParaPuntos, e: EsquemaPuntos): number {
-  let total = 0
-  /* El dinero se junta aparte: el tope se le aplica a la suma de las dos, no a cada
-     una. */
-  let dinero = 0
-  for (const regla of e.reglas) {
-    const c = CONSIDERACIONES.find((x) => x.id === regla.id)
-    if (!c) continue
-    const suma = c.veces(n) * regla.puntos
-    if (DEL_DINERO.indexOf(regla.id) >= 0) dinero += suma
-    else total += suma
-  }
-  const tope = e.topeDinero ?? 0
-  total += tope > 0 ? Math.max(-tope, Math.min(tope, dinero)) : dinero
-  /* Del largo de la tabla en adelante no se suman puntos de lugar. */
-  if (e.tabla && e.tabla.length > 0) total += e.tabla[n.lugar - 1] ?? 0
-  return total
+  return vencidosEn(n) + n.resultado / elPunto(e)
 }
 
-/** Lee lo guardado, entendiendo también la forma vieja de cuatro campos sueltos. */
+/** El número del campeonato: el dinero entra sobre el saldo de toda la temporada. */
+export function puntosDeLaTemporada(saldo: number, vencidos: number, e: EsquemaPuntos): number {
+  return Math.round(saldo / elPunto(e) + vencidos)
+}
+
+/** Lee lo guardado. Lo que no entiende lo deja pasar: la configuración vieja se ignora. */
 export function esquemaGuardado(crudo: string | null): EsquemaPuntos {
   const g = leerJson<Record<string, unknown>>(crudo, {})
-  if (Array.isArray(g.reglas)) {
-    const vistos = new Set<string>()
-    const reglas = (g.reglas as ReglaPuntos[])
-      .filter(
-        (r) =>
-          r &&
-          typeof r.puntos === 'number' &&
-          CONSIDERACIONES.some((c) => c.id === r.id) &&
-          !vistos.has(r.id) &&
-          vistos.add(r.id),
-      )
-      .map((r) => ({ id: r.id, puntos: r.puntos }))
-    const tabla = Array.isArray(g.tabla)
-      ? (g.tabla as unknown[]).map((v) => (typeof v === 'number' ? v : 0))
-      : []
-    const m = typeof g.minimoPodio === 'number' ? Math.max(0, Math.min(100, g.minimoPodio)) : 0
-    const t = typeof g.topeDinero === 'number' ? Math.max(0, g.topeDinero) : 0
-    const mn = typeof g.mejoresNoches === 'number' ? Math.max(0, Math.min(100, g.mejoresNoches)) : 0
-    const dn = typeof g.descartaNoches === 'number' ? Math.max(0, g.descartaNoches) : 0
-    const minN = typeof g.minimoNoches === 'number' ? Math.max(0, g.minimoNoches) : 0
-    return {
-      reglas,
-      ...(tabla.length > 0 ? { tabla } : {}),
-      ...(m > 0 ? { minimoPodio: m } : {}),
-      ...(t > 0 ? { topeDinero: t } : {}),
-      ...(mn > 0 && mn < 100 ? { mejoresNoches: mn } : {}),
-      ...(dn > 0 ? { descartaNoches: dn } : {}),
-      ...(minN > 0 ? { minimoNoches: minN } : {}),
-    }
+  const num = (v: unknown, tope: number) =>
+    typeof v === 'number' && Number.isFinite(v) ? Math.max(0, Math.min(tope, Math.round(v))) : 0
+  const pesos = num(g.pesosPorPunto, 100000)
+  return {
+    pesosPorPunto: pesos > 0 ? pesos : PESOS_POR_PUNTO,
+    minimoNoches: num(g.minimoNoches, 999),
   }
-  const viejas = ['base', 'porJugador', 'bonoGanar', 'bonoPodio']
-  const convertidas = viejas
-    .map((id) => ({ id, puntos: g[id] }))
-    .filter((r): r is ReglaPuntos => typeof r.puntos === 'number' && r.puntos !== 0)
-  return convertidas.length > 0 ? { reglas: convertidas } : PUNTOS_POR_DEFECTO
 }
 
 /*
@@ -626,10 +439,10 @@ export interface Posicion {
    */
   puedePodio?: boolean
 
-  /** Cuántas de sus noches entraron al campeonato. Todas, mientras no haya descarte. */
-  nochesContadas?: number
+  /** A cuántos les ganó en toda la temporada, sumando noche por noche. */
+  vencidos?: number
 
-  /** Sus noches de la temporada, en orden, con las descartadas marcadas. */
+  /** Sus noches de la temporada, en orden, con lo que aportó cada una. */
   detalle?: NocheDeAlguien[]
 
   /** Lo que se ganó presumir. */
@@ -641,9 +454,10 @@ export interface NocheDeAlguien {
   fecha: string
   nombre: string | null
   resultado: number
+  /** A cuántos les ganó esa noche. */
+  vencidos: number
+  /** Lo que aportó esa noche, sin redondear. */
   puntos: number
-  /** `false` si quedó fuera del campeonato por la regla de las mejores noches. */
-  cuenta: boolean
 }
 
 export type IdTitulo =
@@ -696,14 +510,10 @@ export interface TablaPosiciones {
   temporadas: Temporada[]
   /** Cuál se está viendo. En null, la liga entera. */
   temporada: string | null
-  /** El por ciento de noches que cuenta para los puntos. 0 = cuentan todas. */
-  mejoresNoches?: number
-  /** Cuántas noches son ésas, ya sacada la cuenta. 0 = cuentan todas. */
-  cupoDeNoches?: number
-  /** A cuántas noches hay que haber venido para el podio. 0 = no se pide por noches. */
+  /** Cuántos pesos de saldo valen un punto en esta liga. */
+  pesosPorPunto?: number
+  /** A cuántas noches hay que haber venido para el podio. 0 = no se pide. */
   minimoNoches?: number
-  /** O el por ciento, si la liga lo puso así. 0 = no se pide por ciento. */
-  minimoPodio?: number
 }
 
 /**

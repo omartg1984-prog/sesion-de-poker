@@ -11,6 +11,7 @@ import type { DatosLiga, DatosTabla } from '../../lib/imagenTablas'
 import {
   api,
   calificacionDe,
+  PESOS_POR_PUNTO,
   type NocheDeAlguien,
   type PartidaResumen,
   type Posicion,
@@ -47,7 +48,7 @@ const ORDENES: { id: Orden; label: string; ayuda: string }[] = [
     id: 'puntos',
     label: 'Campeonato',
     ayuda:
-      'Los puntos que fue juntando noche tras noche. Aquí no importa cuánto se apostó: gana el más constante, no el que más arriesga. Lo que suma cada noche lo decide la liga, y está escrito en "Cómo se reparten los puntos".',
+      'El saldo de la temporada convertido a puntos, más a cuántos les ha ganado en todas sus noches. Venir suma porque cada mesa deja gente atrás, y el dinero cuenta una sola vez, sobre el saldo del semestre, para que la noche del palazo no se coma el campeonato. Lo que vale un punto lo pone la liga en "Cómo se reparten los puntos".',
   },
   {
     id: 'puntosNoche',
@@ -187,16 +188,31 @@ function Podio({
   )
 }
 
+/** Puntos con decimales: entero cuando lo es, y si no uno solo. */
+const redondo = (v: number) =>
+  Math.abs(v - Math.round(v)) < 0.05 ? String(Math.round(v)) : v.toFixed(1)
+
 /**
  * Las noches de una persona, una por una.
  *
- * Existe por el descarte de las mejores noches: si a alguien le quitaron una noche de
- * la suma, tiene derecho a ver cuál fue y cuánto valía. De paso contesta la pregunta
- * que la app no contestaba —"¿cómo me ha ido a mí?"— sin tener que ir noche por noche.
+ * Existe para que los puntos no sean un número que aparece de la nada: aquí se ve de
+ * dónde salió cada pedazo —a cuántos les ganó esa noche, cuánto dejó en la mesa— y la
+ * cuenta completa al pie. De paso contesta la pregunta que la app no contestaba, "¿cómo
+ * me ha ido a mí?", sin tener que ir noche por noche.
  */
-function SusNoches({ p, onCerrar }: { p: Posicion | null; onCerrar: () => void }) {
+function SusNoches({
+  p,
+  pesos,
+  onCerrar,
+}: {
+  p: Posicion | null
+  /** Lo que vale un punto en esta liga, para poder escribir la cuenta. */
+  pesos: number
+  onCerrar: () => void
+}) {
   const noches: NocheDeAlguien[] = p?.detalle ?? []
-  const fuera = noches.filter((n) => !n.cuenta).length
+  const vencidos = p?.vencidos ?? noches.reduce((a, n) => a + n.vencidos, 0)
+  const delDinero = (p?.balance ?? 0) / (pesos > 0 ? pesos : PESOS_POR_PUNTO)
   return (
     <Sheet abierta={!!p} onCerrar={onCerrar} titulo={p?.nombre ?? ''}>
       {noches.length === 0 ? (
@@ -206,28 +222,23 @@ function SusNoches({ p, onCerrar }: { p: Posicion | null; onCerrar: () => void }
       ) : (
         <>
           <p className="mt-0 mb-3 text-[13px] leading-relaxed text-ink-soft">
-            {fuera === 0
-              ? `${noches.length} ${noches.length === 1 ? 'noche' : 'noches'}, y todas cuentan para el campeonato.`
-              : `${noches.length} noches. ${fuera === 1 ? 'Una no cuenta' : `${fuera} no cuentan`} para el campeonato: la liga puso que sólo sumen tus mejores. El saldo en dinero sí las cuenta todas.`}
+            {noches.length} {noches.length === 1 ? 'noche' : 'noches'}, y todas cuentan. Cada una
+            suma a cuántos les ganó más lo que dejó en la mesa, a ${pesos} el punto.
           </p>
 
           <ul className="m-0 list-none p-0">
             {noches.map((n, i) => (
               <li
                 key={`${n.fecha}-${i}`}
-                className={`flex items-center gap-2.5 border-b border-paper-line py-2 last:border-b-0 ${
-                  n.cuenta ? '' : 'opacity-55'
-                }`}
+                className="flex items-center gap-2.5 border-b border-paper-line py-2 last:border-b-0"
               >
                 <span className="min-w-0 flex-1">
                   <b className="block truncate text-[13.5px] text-ink">
                     {n.nombre || fechaCorta(n.fecha)}
                   </b>
                   <span className="block text-[11px] text-ink-soft">
-                    {n.nombre ? fechaCorta(n.fecha) : null}
-                    {!n.cuenta && (
-                      <span className={n.nombre ? 'ml-1' : ''}>· descartada</span>
-                    )}
+                    {n.nombre ? `${fechaCorta(n.fecha)} · ` : null}
+                    {n.vencidos === 0 ? 'no le ganó a nadie' : `le ganó a ${n.vencidos}`}
                   </span>
                 </span>
                 <span
@@ -236,12 +247,8 @@ function SusNoches({ p, onCerrar }: { p: Posicion | null; onCerrar: () => void }
                   {signed(n.resultado)}
                 </span>
                 <span className="w-[52px] shrink-0 text-right">
-                  <b
-                    className={`font-display text-[15px] font-bold tabular-nums ${
-                      n.cuenta ? 'text-ink' : 'text-ink-soft line-through'
-                    }`}
-                  >
-                    {n.puntos}
+                  <b className="font-display text-[15px] font-bold tabular-nums text-ink">
+                    {redondo(n.puntos)}
                   </b>
                   <span className="block text-[9px] tracking-[.4px] text-ink-soft uppercase">
                     pts
@@ -252,12 +259,10 @@ function SusNoches({ p, onCerrar }: { p: Posicion | null; onCerrar: () => void }
           </ul>
 
           <p className="mt-3 mb-0 text-[12px] leading-snug text-ink-soft">
-            Suman <b className="text-ink">{p?.puntos}</b> puntos en{' '}
-            {p?.nochesContadas ?? noches.length}{' '}
-            {(p?.nochesContadas ?? noches.length) === 1 ? 'noche' : 'noches'}, y el saldo de
-            la temporada es{' '}
-            <b className={claseSaldo(p?.balance ?? 0)}>{signed(p?.balance ?? 0)}</b> contando
-            las {noches.length}.
+            Le ganó a <b className="text-ink">{vencidos}</b> en toda la temporada, y su saldo de{' '}
+            <b className={claseSaldo(p?.balance ?? 0)}>{signed(p?.balance ?? 0)}</b> vale{' '}
+            <b className={claseSaldo(delDinero)}>{redondo(delDinero)}</b>. Juntos,{' '}
+            <b className="text-ink">{p?.puntos}</b> puntos.
           </p>
         </>
       )}
@@ -573,10 +578,6 @@ export default function TablaPosiciones({ tabla, nombreLiga, partidas }: Props) 
    *
    * Los saltados no desaparecen: siguen en la tabla, en su lugar, con su aviso.
    */
-  /* El descarte de las mejores noches: cuántas cuentan de cuántas. */
-  const cupo = tabla.cupoDeNoches ?? 0
-  const hayDescarte = cupo > 0 && cupo < tabla.partidasContadas
-
   const esCampeonato = orden === 'puntos' || orden === 'puntosNoche'
   const alPodio = esCampeonato ? ordenadas.filter((p) => p.puedePodio !== false) : ordenadas
   const hayVetados = esCampeonato && alPodio.length < ordenadas.length
@@ -681,14 +682,6 @@ export default function TablaPosiciones({ tabla, nombreLiga, partidas }: Props) 
       </div>
       <p className="mt-1 mb-3 px-1 text-[11px] leading-snug text-tiza-suave">
         {ayuda}
-        {/* Lo mismo con el descarte: se dice donde se ve. */}
-        {hayDescarte && esCampeonato && (
-          <>
-            {' '}
-            A cada quien le cuentan sus mejores {cupo} de {tabla.partidasContadas} noches; la
-            peor se cae. El saldo en dinero sí las cuenta todas.
-          </>
-        )}
         {/* Hay que decir qué significa el asterisco donde se ve, no en otra pantalla. */}
         {hayVetados && (
           <>
@@ -801,16 +794,7 @@ export default function TablaPosiciones({ tabla, nombreLiga, partidas }: Props) 
               { k: 'Rendim.', v: pct(p.roi), clase: claseSaldo(p.roi) },
               { k: 'Por noche', v: signed(p.promedio), clase: claseSaldo(p.promedio) },
               { k: 'Mejor', v: signed(p.mejor), clase: 'text-win' },
-              /* Con descarte encendido, cuántas noches le contaron es más interesante
-                 que los podios —que casi siempre son cero— y además es lo que explica
-                 su número de puntos. Sin descarte, los podios de siempre. */
-              hayDescarte && p.nochesContadas !== undefined
-                ? {
-                    k: 'Cuentan',
-                    v: `${p.nochesContadas} de ${p.partidas}`,
-                    clase: p.nochesContadas < p.partidas ? 'text-marca' : 'text-ink',
-                  }
-                : { k: 'Podios', v: String(p.podios) },
+              { k: 'Podios', v: String(p.podios) },
             ]}
           />
         ))
@@ -827,7 +811,11 @@ export default function TablaPosiciones({ tabla, nombreLiga, partidas }: Props) 
         <ShareBlock datos={datosImagen} texto={texto} alt="Tabla de la liga" />
       </section>
 
-      <SusNoches p={mirando} onCerrar={() => setMirando(null)} />
+      <SusNoches
+        p={mirando}
+        pesos={tabla.pesosPorPunto ?? PESOS_POR_PUNTO}
+        onCerrar={() => setMirando(null)}
+      />
     </>
   )
 }
