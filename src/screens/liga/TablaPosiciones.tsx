@@ -357,7 +357,7 @@ interface Props {
 export default function TablaPosiciones({ tabla, nombreLiga, partidas }: Props) {
   const [modo, setModo] = useState<'liga' | 'noche'>('liga')
   const [orden, setOrden] = useState<Orden>('puntos')
-  const [vista, setVista] = useState<'tarjetas' | 'tabla'>('tabla')
+  const [vista, setVista] = useState<'tarjetas' | 'tabla' | 'cuenta'>('tabla')
   /** A quién se le están viendo las noches. */
   const [mirando, setMirando] = useState<Posicion | null>(null)
 
@@ -578,6 +578,15 @@ export default function TablaPosiciones({ tabla, nombreLiga, partidas }: Props) 
    *
    * Los saltados no desaparecen: siguen en la tabla, en su lugar, con su aviso.
    */
+  /* Lo que vale un punto en esta liga: hace falta para escribir la cuenta. */
+  const pesos = tabla.pesosPorPunto ?? PESOS_POR_PUNTO
+
+  /* Los totales del renglón de abajo. Los vencidos son los que repartió la mesa y los
+     saldos tienen que dar cero: lo que uno se llevó, otro lo puso. */
+  const totalVencidos = ordenadas.reduce((a, p) => a + (p.vencidos ?? 0), 0)
+  const totalSaldo = ordenadas.reduce((a, p) => a + p.balance, 0)
+  const totalPuntos = ordenadas.reduce((a, p) => a + p.puntos, 0)
+
   const esCampeonato = orden === 'puntos' || orden === 'puntosNoche'
   const alPodio = esCampeonato ? ordenadas.filter((p) => p.puedePodio !== false) : ordenadas
   const hayVetados = esCampeonato && alPodio.length < ordenadas.length
@@ -640,13 +649,15 @@ export default function TablaPosiciones({ tabla, nombreLiga, partidas }: Props) 
         }))}
       />
 
-      {/* Dos maneras de mirar lo mismo: las tarjetas cuentan la historia de cada quien y
-          la tabla sirve para comparar a todos de un vistazo. */}
+      {/* Tres maneras de mirar lo mismo: las tarjetas cuentan la historia de cada quien,
+          la tabla compara a todos de un vistazo y la cuenta enseña de dónde salió cada
+          punto, que es lo que se discute en la mesa. */}
       <div className="mb-2 flex gap-1 rounded-xl bg-black/30 p-1">
         {(
           [
             ['tarjetas', 'Tarjetas'],
             ['tabla', 'Tabla'],
+            ['cuenta', 'La cuenta'],
           ] as const
         ).map(([id, texto]) => (
           <button
@@ -764,6 +775,111 @@ export default function TablaPosiciones({ tabla, nombreLiga, partidas }: Props) 
             </tbody>
           </table>
         </div>
+      ) : vista === 'cuenta' ? (
+        /*
+         * De dónde salieron los puntos, renglón por renglón.
+         *
+         * El campeonato es una suma de dos cosas y aquí están las dos, con el total al
+         * lado: nadie tiene que creerle al número, se puede comprobar con los dedos. Los
+         * encabezados se leen como la fórmula —vencidos, más dinero, igual a puntos—
+         * porque así nadie tiene que acordarse de cuál era el orden.
+         */
+        <div className="mb-3">
+          <p className="mt-0 mb-2 px-1 text-[11px] leading-snug text-tiza-suave">
+            A cuántos les ganó, más su saldo entre ${pesos}. Se redondea al final, así que el
+            total puede caer un peso arriba o abajo de lo que den las dos columnas.
+          </p>
+          <div className="no-scrollbar -mx-1 overflow-x-auto px-1">
+            <table className="w-full border-collapse text-[13px] whitespace-nowrap">
+              <thead>
+                <tr className="text-[9.5px] tracking-[.4px] text-tiza-suave uppercase">
+                  <th className="px-1 pb-2 text-left font-semibold">#</th>
+                  <th className="px-1 pb-2 text-left font-semibold">Jugador</th>
+                  <th className="px-1 pb-2 text-right font-semibold">PJ</th>
+                  <th className="px-1 pb-2 text-right font-semibold">Vencidos</th>
+                  <th className="px-1 pb-2 text-right font-semibold">Saldo</th>
+                  <th className="px-1 pb-2 text-right font-semibold">+ dinero</th>
+                  <th className="px-1 pb-2 text-right font-semibold text-white">= Pts</th>
+                </tr>
+              </thead>
+              <tbody>
+                {ordenadas.map((p, i) => {
+                  const delDinero = p.balance / pesos
+                  return (
+                    <tr key={p.usuarioId} className="border-t border-white/10">
+                      <td className="px-1 py-2 font-display text-[13px] font-bold text-tiza-suave">
+                        {i + 1}
+                        {hayVetados && p.puedePodio === false && (
+                          <span
+                            className="text-marca-alta"
+                            title="Le falta venir para subir al podio"
+                          >
+                            *
+                          </span>
+                        )}
+                      </td>
+                      <td className="max-w-[104px] px-1 py-2">
+                        <span className="flex items-center gap-1.5">
+                          <Cara nombre={p.nombre} foto={p.foto} size={22} />
+                          <span className="truncate font-semibold text-white">{p.nombre}</span>
+                        </span>
+                      </td>
+                      <td className="px-1 py-2 text-right font-display tabular-nums text-tiza-suave">
+                        {p.partidas}
+                      </td>
+                      <td className="px-1 py-2 text-right font-display tabular-nums text-white">
+                        {p.vencidos ?? 0}
+                      </td>
+                      <td
+                        className={`px-1 py-2 text-right font-display tabular-nums ${tonoOscuro(p.balance)}`}
+                      >
+                        {signed(p.balance)}
+                      </td>
+                      <td
+                        className={`px-1 py-2 text-right font-display tabular-nums ${tonoOscuro(delDinero)}`}
+                      >
+                        {delDinero < 0 ? '−' : '+'}
+                        {redondo(Math.abs(delDinero))}
+                      </td>
+                      <td className="px-1 py-2 text-right font-display font-bold tabular-nums text-white">
+                        {/* El mismo menos que las otras columnas: un guión corto al lado de
+                            un menos largo se ve como un error de la app. */}
+                        {p.puntos < 0 ? '−' + Math.abs(p.puntos) : p.puntos}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+              <tfoot>
+                <tr className="border-t-2 border-white/25 text-[12px]">
+                  <td colSpan={2} className="px-1 pt-2 text-left font-semibold text-tiza-suave">
+                    Toda la liga
+                  </td>
+                  <td className="px-1 pt-2 text-right font-display tabular-nums text-tiza-suave">
+                    {tabla.partidasContadas}
+                  </td>
+                  <td className="px-1 pt-2 text-right font-display tabular-nums text-tiza-suave">
+                    {totalVencidos}
+                  </td>
+                  <td className="px-1 pt-2 text-right font-display tabular-nums text-tiza-suave">
+                    {signed(totalSaldo)}
+                  </td>
+                  <td className="px-1 pt-2 text-right font-display tabular-nums text-tiza-suave">
+                    {redondo(totalSaldo / pesos)}
+                  </td>
+                  <td className="px-1 pt-2 text-right font-display font-bold tabular-nums text-tiza-suave">
+                    {totalPuntos}
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+          <p className="mt-2 mb-0 px-1 text-[11px] leading-snug text-tiza-suave">
+            {Math.abs(totalSaldo) < 1
+              ? 'Los saldos de todos suman $0: lo que uno se llevó, otro lo puso. Por eso el campeonato lo acaban decidiendo los vencidos, y el dinero sólo mueve a quien se salió de lo normal.'
+              : 'El saldo de la columna es el de toda la temporada, con todas las noches contadas.'}
+          </p>
+        </div>
       ) : (
         ordenadas.map((p, i) => (
           <Tarjeta
@@ -813,7 +929,7 @@ export default function TablaPosiciones({ tabla, nombreLiga, partidas }: Props) 
 
       <SusNoches
         p={mirando}
-        pesos={tabla.pesosPorPunto ?? PESOS_POR_PUNTO}
+        pesos={pesos}
         onCerrar={() => setMirando(null)}
       />
     </>
