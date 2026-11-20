@@ -25,13 +25,33 @@ import {
  * todo lo que sale de la app al chat se vea de la misma familia.
  */
 
+/**
+ * Una celda de la imagen, ya escrita y con su color.
+ *
+ * La imagen no calcula nada: la pantalla decide qué columnas se mandan y cómo se leen,
+ * y aquí sólo se dibuja. Así el día que la liga quiera mandar otra cosa no hay que
+ * tocar el dibujo.
+ */
+export interface Celda {
+  texto: string
+  tono?: 'win' | 'loss' | 'crema'
+}
+
 export interface FilaLiga {
   puesto: number
   nombre: string
   foto: string | null
-  partidas: number
-  balance: number
-  roi: number
+  /** La cifra grande del podio: la misma por la que está ordenada la tabla. */
+  destacado: Celda
+  /** Las columnas elegidas, en el mismo orden que `columnas`. */
+  celdas: Celda[]
+  /**
+   * Cuántos lugares subió o bajó con la última noche.
+   *
+   * `undefined` en el que debutó esa noche: no se movió de ningún lado, así que no le
+   * toca flecha.
+   */
+  movida?: number
   /** Títulos ganados, para presumir debajo del nombre en el podio. */
   titulos: string[]
 }
@@ -40,6 +60,10 @@ export interface DatosLiga {
   tipo: 'liga'
   titulo: string
   subtitulo: string
+  /** Los encabezados de las columnas elegidas. Caben cuatro. */
+  columnas: string[]
+  /** Si se dibujan las flechas de lo que subió o bajó cada quien. */
+  conMovidas?: boolean
   filas: FilaLiga[]
   partidas: number
   dineroMovido: number
@@ -71,6 +95,57 @@ const TONO_PUESTO = ['#df1f2e', '#c9c5bd', '#a9764a']
 /* El 1º y el 3º son oscuros y el 2º claro, así que el número no puede ir siempre igual. */
 const TINTA_PUESTO = ['#ffffff', '#17171b', '#ffffff']
 
+/* Sobre el escalón claro del segundo lugar, el verde y el rojo de siempre se pierden. */
+const WIN_OSCURO = '#1c7a4e'
+const LOSS_OSCURO = '#b0142b'
+
+/** El color de una celda según cómo la mandó la pantalla. */
+const tintaDe = (c: Celda) =>
+  c.tono === 'win' ? WIN : c.tono === 'loss' ? LOSS : c.tono === 'crema' ? CREAM : '#ffffff'
+
+/**
+ * La flecha de lo que subió o bajó: triángulo y número, en verde o en rojo.
+ *
+ * Se dibuja a mano y no con una letra —▲— porque el triángulo de las fuentes cambia de
+ * tamaño y de posición según el teléfono que abra la imagen, y aquí tiene que verse
+ * igual en todos.
+ */
+function dibujarMovida(
+  ctx: CanvasRenderingContext2D,
+  n: number,
+  x: number,
+  y: number,
+  sobreClaro = false,
+) {
+  if (n === 0) {
+    ctx.fillStyle = sobreClaro ? 'rgba(0,0,0,.45)' : 'rgba(255,255,255,.45)'
+    ctx.font = "600 18px 'Inter',Arial,sans-serif"
+    ctx.textAlign = 'left'
+    ctx.fillText('=', x, y)
+    return
+  }
+  const sube = n > 0
+  ctx.fillStyle = sube ? (sobreClaro ? WIN_OSCURO : WIN) : sobreClaro ? LOSS_OSCURO : LOSS
+  const alto = 9
+  const ancho = 11
+  const cima = y - 15
+  ctx.beginPath()
+  if (sube) {
+    ctx.moveTo(x + ancho / 2, cima)
+    ctx.lineTo(x + ancho, cima + alto)
+    ctx.lineTo(x, cima + alto)
+  } else {
+    ctx.moveTo(x, cima)
+    ctx.lineTo(x + ancho, cima)
+    ctx.lineTo(x + ancho / 2, cima + alto)
+  }
+  ctx.closePath()
+  ctx.fill()
+  ctx.font = "700 19px 'Inter',Arial,sans-serif"
+  ctx.textAlign = 'left'
+  ctx.fillText(String(Math.abs(n)), x + ancho + 4, y)
+}
+
 /** Podio de tres escalones. El primero va en medio y más alto, como en el pódium real. */
 function dibujarPodio(
   ctx: CanvasRenderingContext2D,
@@ -78,6 +153,7 @@ function dibujarPodio(
   caras: (HTMLImageElement | null)[],
   W: number,
   base: number,
+  conMovidas = false,
 ) {
   const alturas = [96, 68, 50]
   const ordenVisual = [1, 0, 2] // plata a la izquierda, oro en medio, bronce a la derecha
@@ -102,10 +178,15 @@ function dibujarPodio(
       ctx.font = "700 32px 'Khand',Arial,sans-serif"
       ctx.fillText(`${idx + 1}º`, medio, cima + 38)
 
-      // de abajo hacia arriba: saldo, nombre, título y la cara hasta arriba
-      ctx.fillStyle = fila.balance > 0.005 ? WIN : fila.balance < -0.005 ? LOSS : NEUTRO
+      /* Lo que se movió con la última noche, en la esquina del escalón: es el único
+         hueco libre que hay, y ahí no le estorba al nombre ni a la cifra. */
+      if (conMovidas && fila.movida !== undefined)
+        dibujarMovida(ctx, fila.movida, x + ancho - 50, cima + 34, idx === 1)
+
+      // de abajo hacia arriba: la cifra, el nombre, el título y la cara hasta arriba
+      ctx.fillStyle = tintaDe(fila.destacado)
       ctx.font = "700 26px 'Khand',Arial,sans-serif"
-      ctx.fillText(signed(fila.balance), medio, cima - 14)
+      ctx.fillText(fila.destacado.texto, medio, cima - 14)
 
       ctx.fillStyle = '#ffffff'
       ctx.font = "600 25px 'Khand',Arial,sans-serif"
@@ -151,23 +232,28 @@ export async function dibujarLiga(d: DatosLiga): Promise<HTMLCanvasElement> {
   const { cv, ctx } = makeCanvas(W, H)
   pintarMesa(ctx, W, H, d.titulo, d.subtitulo, '♠ TABLA DE LA LIGA')
 
-  dibujarPodio(ctx, d.filas, caras.slice(0, 3), W, headerH + podioH - 30)
+  dibujarPodio(ctx, d.filas, caras.slice(0, 3), W, headerH + podioH - 30, d.conMovidas)
 
   let ry = headerH + podioH
   if (restantes.length) {
     const colName = pad + 26
-    const cPartidas = 560
-    const cRoi = 740
-    const cSaldo = W - pad
+    /*
+     * Las columnas se reparten desde la derecha, que es donde tienen que quedar
+     * alineadas. La pantalla manda las que eligió la casa —hasta cuatro— y aquí sólo
+     * se acomodan: con menos columnas, al nombre le queda más aire.
+     */
+    const cols = d.columnas.slice(0, 4)
+    const anchoCol = 168
+    const xDe = (i: number) => W - pad - (cols.length - 1 - i) * anchoCol
+    /* Hasta dónde puede crecer el nombre sin chocar con la primera columna. */
+    const largoNombre = cols.length >= 4 ? 12 : cols.length === 3 ? 16 : 20
 
     ctx.font = "600 16px 'Inter',Arial,sans-serif"
     ctx.fillStyle = 'rgba(255,255,255,.65)'
     ctx.textAlign = 'left'
     ctx.fillText('JUGADOR', colName, ry + theadH / 2 + 5)
     ctx.textAlign = 'right'
-    ctx.fillText('PARTIDAS', cPartidas, ry + theadH / 2 + 5)
-    ctx.fillText('REND.', cRoi, ry + theadH / 2 + 5)
-    ctx.fillText('SALDO', cSaldo, ry + theadH / 2 + 5)
+    cols.forEach((c, i) => ctx.fillText(c, xDe(i), ry + theadH / 2 + 5))
     lineaTenue(ctx, pad, W - pad, ry + theadH)
 
     ry += theadH
@@ -187,16 +273,24 @@ export async function dibujarLiga(d: DatosLiga): Promise<HTMLCanvasElement> {
       ctx.textAlign = 'left'
       ctx.fillStyle = '#ffffff'
       ctx.font = "600 24px 'Khand',Arial,sans-serif"
-      ctx.fillText(ellipsis(f.nombre, 16), colName + 88, midY)
+      const nombre = ellipsis(f.nombre, largoNombre)
+      ctx.fillText(nombre, colName + 88, midY)
+
+      /* La flecha va pegada al nombre, no en una columna suya: así se lee como parte
+         de quién es —"Chuy, que subió tres"— y no como un dato más de la tabla. */
+      if (d.conMovidas && f.movida !== undefined)
+        dibujarMovida(ctx, f.movida, colName + 96 + ctx.measureText(nombre).width, midY)
 
       ctx.textAlign = 'right'
-      ctx.font = "500 20px 'Inter',Arial,sans-serif"
-      ctx.fillStyle = CREAM
-      ctx.fillText(String(f.partidas), cPartidas, midY)
-      ctx.fillStyle = f.roi > 0 ? WIN : f.roi < 0 ? LOSS : NEUTRO
-      ctx.fillText(`${f.roi > 0 ? '+' : ''}${f.roi.toFixed(0)}%`, cRoi, midY)
-      ctx.font = "700 24px 'Khand',Arial,sans-serif"
-      ctx.fillText(signed(f.balance), cSaldo, midY)
+      f.celdas.slice(0, cols.length).forEach((celda, i) => {
+        /* La última columna es la que se mira primero, así que va con el tipo grande. */
+        const grande = i === cols.length - 1
+        ctx.font = grande
+          ? "700 24px 'Khand',Arial,sans-serif"
+          : "500 20px 'Inter',Arial,sans-serif"
+        ctx.fillStyle = celda.tono ? tintaDe(celda) : grande ? '#ffffff' : CREAM
+        ctx.fillText(celda.texto, xDe(i), midY)
+      })
       ry += rowH
     })
   }

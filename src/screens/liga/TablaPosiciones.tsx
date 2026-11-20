@@ -7,7 +7,7 @@ import ShareBlock from '../../components/ShareBlock'
 import LigaEnNumeros from './LigaEnNumeros'
 import Titulos from '../../components/Titulos'
 import { EPS, money, signed } from '../../lib/money'
-import type { DatosLiga, DatosTabla } from '../../lib/imagenTablas'
+import type { Celda, DatosLiga, DatosTabla } from '../../lib/imagenTablas'
 import {
   api,
   calificacionDe,
@@ -132,27 +132,56 @@ function Movida({ n }: { n: number | undefined }) {
   )
 }
 
+/* El menos de verdad, no el guión del teclado: al lado de un −$400 se nota. */
+const conMenos = (s: string) => s.replace('-', '−')
+
 /** Las columnas de la vista de tabla. El `id` es el mismo con el que se ordena. */
 const COLUMNAS: {
   id: Orden | 'caja'
   corto: string
+  /** El mismo dato con todas sus letras, para la imagen que se manda al chat. */
+  largo: string
   dinero?: boolean
   /** Las que están para mirarse y no para competir por ellas: no ordenan la tabla. */
   soloDato?: boolean
   valor: (p: Posicion, movido: number) => { texto: string; n: number }
 }[] = [
-  { id: 'partidas', corto: 'PJ', valor: (p) => ({ texto: String(p.partidas), n: 0 }) },
-  { id: 'puntos', corto: 'Pts', valor: (p) => ({ texto: String(p.puntos), n: 0 }) },
+  {
+    id: 'partidas',
+    corto: 'PJ',
+    largo: 'PARTIDAS',
+    valor: (p) => ({ texto: String(p.partidas), n: 0 }),
+  },
+  {
+    id: 'puntos',
+    corto: 'Pts',
+    largo: 'PUNTOS',
+    valor: (p) => ({ texto: conMenos(String(p.puntos)), n: 0 }),
+  },
   {
     id: 'puntosNoche',
     corto: 'Pts/n',
-    valor: (p) => ({ texto: p.puntosPorNoche.toFixed(1), n: 0 }),
+    largo: 'PTS/NOCHE',
+    valor: (p) => ({ texto: conMenos(p.puntosPorNoche.toFixed(1)), n: 0 }),
   },
-  { id: 'balance', corto: 'Saldo', dinero: true, valor: (p) => ({ texto: signed(p.balance), n: p.balance }) },
-  { id: 'roi', corto: 'Rend.', dinero: true, valor: (p) => ({ texto: pct(p.roi), n: p.roi }) },
+  {
+    id: 'balance',
+    corto: 'Saldo',
+    largo: 'SALDO',
+    dinero: true,
+    valor: (p) => ({ texto: signed(p.balance), n: p.balance }),
+  },
+  {
+    id: 'roi',
+    corto: 'Rend.',
+    largo: 'REND.',
+    dinero: true,
+    valor: (p) => ({ texto: pct(p.roi), n: p.roi }),
+  },
   {
     id: 'promedio',
     corto: 'Por noche',
+    largo: 'POR NOCHE',
     dinero: true,
     valor: (p) => ({ texto: signed(p.promedio), n: p.promedio }),
   },
@@ -167,6 +196,7 @@ const COLUMNAS: {
   {
     id: 'caja',
     corto: '% caja',
+    largo: '% CAJA',
     soloDato: true,
     valor: (p, movido) => ({
       texto: movido > 0 ? `${((p.invertido / movido) * 100).toFixed(1)}%` : '—',
@@ -438,6 +468,18 @@ export default function TablaPosiciones({ tabla, nombreLiga, partidas }: Props) 
   const [vista, setVista] = useState<'tarjetas' | 'tabla' | 'cuenta'>('tabla')
   /** A quién se le están viendo las noches. */
   const [mirando, setMirando] = useState<Posicion | null>(null)
+  /*
+   * Qué columnas van en la imagen que se manda al chat.
+   *
+   * Arranca con las tres de siempre —partidas, rendimiento y saldo— para que quien no
+   * toque nada mande exactamente lo que mandaba antes.
+   */
+  const [enLaImagen, setEnLaImagen] = useState<(Orden | 'caja')[]>([
+    'partidas',
+    'roi',
+    'balance',
+  ])
+  const [conFlechas, setConFlechas] = useState(true)
 
   /* Sólo las cerradas tienen resultado: en una abierta las fichas no están contadas. */
   const jugadas = partidas.filter((p) => p.estado === 'cerrada')
@@ -684,33 +726,6 @@ export default function TablaPosiciones({ tabla, nombreLiga, partidas }: Props) 
   const alPodio = esCampeonato ? ordenadas.filter((p) => p.puedePodio !== false) : ordenadas
   const hayVetados = esCampeonato && alPodio.length < ordenadas.length
 
-  const datosImagen: DatosLiga = {
-    tipo: 'liga',
-    titulo: nombreLiga,
-    subtitulo: `${tabla.partidasContadas} ${tabla.partidasContadas === 1 ? 'partida' : 'partidas'} · por ${ORDENES.find((o) => o.id === orden)!.label.toLowerCase()}`,
-    filas: ordenadas.map((p, i) => ({
-      puesto: i + 1,
-      nombre: p.nombre,
-      foto: p.foto,
-      partidas: p.partidas,
-      balance: p.balance,
-      roi: p.roi,
-      titulos: p.titulos.map((t) => t.etiqueta),
-    })),
-    partidas: tabla.partidasContadas,
-    dineroMovido: tabla.dineroMovido,
-  }
-
-  const texto = () => {
-    const lineas = [`♠ ${nombreLiga} — tabla de la liga`, '']
-    ordenadas.forEach((p, i) => {
-      const medalla = ['🥇', '🥈', '🥉'][i] ?? `${i + 1}º`
-      lineas.push(`${medalla} ${p.nombre}: ${signed(p.balance)} (${pct(p.roi)}, ${p.partidas}p)`)
-    })
-    lineas.push('', `${tabla.partidasContadas} partidas · ${money(tabla.dineroMovido)} movidos`)
-    return lineas.join('\n')
-  }
-
   /** El número grande de la derecha cambia con el orden elegido. */
   /*
    * Cada orden se lee distinto: el dinero lleva signo y color, el rendimiento lleva %,
@@ -726,6 +741,69 @@ export default function TablaPosiciones({ tabla, nombreLiga, partidas }: Props) 
       return { texto: p.puntosPorNoche.toFixed(1), tono: 'text-ink', gana: true }
     if (orden === 'partidas') return { texto: String(p.partidas), tono: 'text-ink', gana: true }
     return { texto: String(p.puntos), tono: 'text-ink', gana: true }
+  }
+
+  /*
+   * Lo que se manda al chat.
+   *
+   * La imagen llevaba siempre lo mismo —partidas, rendimiento y saldo— aunque la tabla
+   * en pantalla estuviera contando otra cosa. Ahora se elige: hasta cuatro columnas,
+   * las que la casa quiera presumir esa semana, y las flechas aparte.
+   */
+  /* En el orden en que las fue picando: la última queda a la derecha del todo, que es
+     el lugar que se mira primero. Así quien no toca nada manda lo de siempre, con el
+     saldo hasta la orilla. */
+  const elegidas = enLaImagen
+    .map((id) => COLUMNAS.find((c) => c.id === id))
+    .filter((c): c is (typeof COLUMNAS)[number] => c !== undefined)
+  const celdaDe = (c: (typeof COLUMNAS)[number], p: Posicion): Celda => {
+    const v = c.valor(p, tabla.dineroMovido)
+    if (!c.dinero) return { texto: v.texto, tono: 'crema' }
+    return { texto: v.texto, tono: v.n > EPS ? 'win' : v.n < -EPS ? 'loss' : undefined }
+  }
+  /* La cifra grande del podio es la misma por la que está ordenada la tabla, para que
+     la imagen diga lo mismo que la pantalla de la que salió. */
+  const destacadoDe = (p: Posicion): Celda => {
+    const c = cifraDe(p)
+    return {
+      texto: c.texto,
+      tono: c.tono === 'text-win' ? 'win' : c.tono === 'text-loss' ? 'loss' : 'crema',
+    }
+  }
+  const conFlechasYa = hayMovidas && conFlechas
+
+  const datosImagen: DatosLiga = {
+    tipo: 'liga',
+    titulo: nombreLiga,
+    subtitulo: `${tabla.partidasContadas} ${tabla.partidasContadas === 1 ? 'partida' : 'partidas'} · por ${ORDENES.find((o) => o.id === orden)!.label.toLowerCase()}`,
+    columnas: elegidas.map((c) => c.largo),
+    conMovidas: conFlechasYa,
+    filas: ordenadas.map((p, i) => ({
+      puesto: i + 1,
+      nombre: p.nombre,
+      foto: p.foto,
+      destacado: destacadoDe(p),
+      celdas: elegidas.map((c) => celdaDe(c, p)),
+      ...(conFlechasYa && movidas.has(p.usuarioId) ? { movida: movidas.get(p.usuarioId) } : {}),
+      titulos: p.titulos.map((t) => t.etiqueta),
+    })),
+    partidas: tabla.partidasContadas,
+    dineroMovido: tabla.dineroMovido,
+  }
+
+  /* El texto plano manda lo mismo que la imagen: si alguien eligió qué presumir, no
+     tiene por qué cambiarle según cómo lo pegue en el chat. */
+  const texto = () => {
+    const lineas = [`♠ ${nombreLiga} — tabla de la liga`, '']
+    ordenadas.forEach((p, i) => {
+      const medalla = ['🥇', '🥈', '🥉'][i] ?? `${i + 1}º`
+      const n = conFlechasYa ? movidas.get(p.usuarioId) : undefined
+      const flecha = n === undefined || n === 0 ? '' : ` ${n > 0 ? '↑' : '↓'}${Math.abs(n)}`
+      const datos = elegidas.map((c) => c.valor(p, tabla.dineroMovido).texto).join(' · ')
+      lineas.push(`${medalla} ${p.nombre}${flecha}${datos ? `: ${datos}` : ''}`)
+    })
+    lineas.push('', `${tabla.partidasContadas} partidas · ${money(tabla.dineroMovido)} movidos`)
+    return lineas.join('\n')
   }
 
   return (
@@ -1026,6 +1104,57 @@ export default function TablaPosiciones({ tabla, nombreLiga, partidas }: Props) 
         <p className="panel-title">
           <span>Presumir la tabla</span>
         </p>
+
+        {/*
+          Qué va en la imagen.
+
+          Antes mandaba siempre partidas, rendimiento y saldo, aunque la tabla en
+          pantalla estuviera contando el campeonato. Aquí se elige, y la vista previa de
+          abajo se rehace al instante: lo que se ve es lo que se manda.
+        */}
+        <p className="field-label mt-0 mb-1.5">Qué mandar</p>
+        <div className="mb-1.5 flex flex-wrap gap-1.5">
+          {COLUMNAS.map((c) => {
+            const puesta = enLaImagen.includes(c.id)
+            /* Más de cuatro columnas no caben sin encoger la letra hasta que la imagen
+               deja de leerse en un teléfono. */
+            const lleno = !puesta && enLaImagen.length >= 4
+            return (
+              <button
+                key={c.id}
+                type="button"
+                aria-pressed={puesta}
+                disabled={lleno}
+                onClick={() =>
+                  setEnLaImagen((xs) => (puesta ? xs.filter((x) => x !== c.id) : [...xs, c.id]))
+                }
+                className={`cursor-pointer rounded-lg border-none px-2.5 py-1.5 text-[12.5px] font-bold transition-colors disabled:cursor-default disabled:opacity-40 ${
+                  puesta ? 'bg-marca text-white' : 'bg-[#e6e1d8] text-ink-soft'
+                }`}
+              >
+                {c.corto}
+              </button>
+            )
+          })}
+          {hayMovidas && (
+            <button
+              type="button"
+              aria-pressed={conFlechas}
+              onClick={() => setConFlechas((v) => !v)}
+              className={`cursor-pointer rounded-lg border-none px-2.5 py-1.5 text-[12.5px] font-bold transition-colors ${
+                conFlechas ? 'bg-marca text-white' : 'bg-[#e6e1d8] text-ink-soft'
+              }`}
+            >
+              Flechas
+            </button>
+          )}
+        </div>
+        <p className="mt-0 mb-1 text-[12px] leading-snug text-ink-soft">
+          {enLaImagen.length >= 4
+            ? 'Ya van cuatro, que es lo que cabe sin que la imagen deje de leerse. Quita una para poner otra.'
+            : 'Hasta cuatro columnas, en el orden en que las piques. El podio siempre lleva la cifra por la que está ordenada la tabla.'}
+        </p>
+
         <ShareBlock datos={datosImagen} texto={texto} alt="Tabla de la liga" />
       </section>
 
