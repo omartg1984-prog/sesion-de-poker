@@ -311,7 +311,10 @@ export default function PartidaCash({
 
   /* ---- conteo final ---- */
   if (pestana === 'final') {
-    const contados = conTotales.filter((p) => p.final > 0).length
+    /* Contado es contado aunque haya dado cero: el que se fue sin fichas también tiene
+       su conteo hecho, y si no se cuenta aquí la cuenta de arriba nunca llega al final. */
+    const estaContado = (p: (typeof conTotales)[number]) => p.contadas_por !== null || p.final > 0
+    const contados = conTotales.filter(estaContado).length
     /*
      * Al que ya cobró se le da por cerrado y su tarjeta se va al final, hecha un
      * renglón. En una mesa de ocho, lo que estorba para llegar al que falta son los seis
@@ -346,7 +349,7 @@ export default function PartidaCash({
 
         {abiertos.map((p) => {
           const fichas = leerJson<Chips>(p.fichas_final, {})
-          const yaContado = p.final > 0
+          const yaContado = estaContado(p)
           return (
             <section
               key={p.id}
@@ -382,6 +385,8 @@ export default function PartidaCash({
                 id={p.id}
                 fichas={fichas}
                 contado={yaContado}
+                registrado={p.contadas_por !== null}
+                onGuardado={recargar}
                 deshabilitado={!puedeContar}
               />
 
@@ -439,14 +444,24 @@ export default function PartidaCash({
                 </b>
               </div>
 
-              {/* Hasta que no se apunta cuánto se le entregó no hay nada que cerrar: el
-                  botón aparece solo cuando ya se le pagó. */}
-              {puedeEditar && p.pagado !== null && (
+              {/*
+                Hasta que no se apunta cuánto se le entregó no hay nada que cerrar: el
+                botón aparece solo cuando ya se le pagó.
+
+                Con una excepción, la del que no cobra nada: pedirle que escriba un cero
+                en "se le dio" para poder cerrarlo es trabajo inventado. Se cierra
+                directo y el cero se apunta solo, que es lo que de verdad pasó.
+              */}
+              {puedeEditar && (p.pagado !== null || p.final <= EPS) && (
                 <button
                   type="button"
                   className="btn btn-marca mt-3"
                   onClick={() =>
-                    tocar(p.id, { cerrado_en: new Date().toISOString() }, { cerrado: true })
+                    tocar(
+                      p.id,
+                      { cerrado_en: new Date().toISOString(), pagado: p.pagado ?? 0 },
+                      { cerrado: true, ...(p.pagado === null ? { pagado: 0 } : {}) },
+                    )
                   }
                 >
                   <Check size={16} strokeWidth={2.6} />

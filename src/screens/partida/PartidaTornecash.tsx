@@ -77,6 +77,7 @@ export default function PartidaTornecash({
   puedeEditar,
   puedeContar,
   tocar,
+  recargar,
   torneo,
   cambiarTorneo,
   onRedondeo,
@@ -269,6 +270,8 @@ export default function PartidaTornecash({
                 id={p.id}
                 fichas={fichas}
                 contado={yaContado}
+                registrado={p.contadas_por !== null}
+                onGuardado={recargar}
                 deshabilitado={!puedeContar}
               />
 

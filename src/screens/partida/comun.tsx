@@ -411,18 +411,40 @@ export function GuardarConteo({
   id,
   fichas,
   contado,
+  registrado,
+  onGuardado,
   deshabilitado,
 }: {
   id: string
   fichas: Chips
   contado: boolean
+  /**
+   * Si ya quedó apuntado quién le contó las fichas.
+   *
+   * Hace falta por el que se va sin una sola ficha. Antes el botón sólo salía cuando
+   * había algo distinto que guardar, y a ése no hay nada que cambiarle: su conteo es
+   * cero y cero era lo que ya decía la pantalla. Se quedaba sin poder guardarse, sin
+   * poder cerrarse, y la noche entera sin poder cerrar. Con esto el botón sale igual,
+   * para dejar dicho que su cero está contado.
+   */
+  registrado?: boolean
+  /**
+   * Se llama la primera vez que queda apuntado quién contó.
+   *
+   * La pantalla de arriba lleva su propia cuenta de "llevas 3 de 4" y de quién frena el
+   * cierre, y eso lo sabe el servidor en cuanto se guarda. Sin este aviso, el que se
+   * fue sin fichas se guardaba bien y la pantalla seguía diciendo que faltaba.
+   */
+  onGuardado?: () => void
   deshabilitado?: boolean
 }) {
   const actual = JSON.stringify(fichas)
   /* Lo que ya estaba al abrir la pantalla vino del servidor: eso ya está guardado. */
   const [guardado, setGuardado] = useState(actual)
+  const [marcado, setMarcado] = useState(registrado !== false)
   const [guardando, setGuardando] = useState(false)
-  const alDia = guardado === actual
+  const alDia = guardado === actual && marcado
+  const vacio = Object.values(fichas).every((n) => !n)
 
   if (deshabilitado) return null
   if (alDia && !contado) return null
@@ -442,13 +464,18 @@ export function GuardarConteo({
       disabled={guardando}
       onClick={async () => {
         setGuardando(true)
+        const primera = !marcado
         const r = await conAviso(() => api.guardarParticipacion(id, { fichasFinal: fichas }))
         setGuardando(false)
-        if (r) setGuardado(actual)
+        if (r) {
+          setGuardado(actual)
+          setMarcado(true)
+          if (primera) onGuardado?.()
+        }
       }}
     >
       <Save size={16} strokeWidth={2.5} />
-      {guardando ? 'Guardando…' : 'Guardar conteo'}
+      {guardando ? 'Guardando…' : vacio ? 'Apuntar que se fue sin fichas' : 'Guardar conteo'}
     </button>
   )
 }

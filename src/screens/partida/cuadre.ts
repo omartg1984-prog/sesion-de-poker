@@ -36,6 +36,10 @@ export interface Cuadre {
   pagadoDeMas: boolean
   /** Cuántos jugadores tienen ya su conteo de fichas capturado. */
   contados: number
+  /** Los que todavía no lo tienen, por nombre: "faltan dos" no sirve para ir por ellos. */
+  faltanContar: string[]
+  /** Igual con el dinero: a quiénes no se les ha apuntado lo que se llevaron. */
+  faltanPagar: string[]
   /** A cuántos ya se les apuntó lo que se les entregó, aunque hayan sido $0. */
   pagados: number
   /**
@@ -75,6 +79,17 @@ export function calcularCuadre(
     return { color, entregadas, contadas, dif: contadas - entregadas }
   })
 
+  /*
+   * Quién tiene su conteo hecho.
+   *
+   * No basta con que le hayan salido fichas: el que se fue sin una sola también tiene
+   * su conteo hecho, y es cero. Por eso manda `contadas_por` —quién lo capturó—, y las
+   * fichas sueltas sólo sirven para las partidas viejas, de antes de que se guardara
+   * quién contó.
+   */
+  const tieneConteo = (p: Participacion) =>
+    p.contadas_por !== null || Object.keys(leerJson<Chips>(p.fichas_final, {})).length > 0
+
   const recaudado = participaciones.reduce((a, p) => a + invertidoDe(p), 0)
   const pagado = participaciones.reduce((a, p) => a + num(p.pagado), 0)
 
@@ -85,7 +100,11 @@ export function calcularCuadre(
     pagado,
     enLaMesa: recaudado - pagado,
     pagadoDeMas: pagado - recaudado > EPS,
-    contados: participaciones.filter((p) => Object.keys(leerJson<Chips>(p.fichas_final, {})).length > 0).length,
+    contados: participaciones.filter(tieneConteo).length,
+    faltanContar: participaciones.filter((p) => !tieneConteo(p)).map((p) => p.nombre),
+    faltanPagar: participaciones
+      .filter((p) => debeCobrar(p) && p.pagado === null)
+      .map((p) => p.nombre),
     /* `pagado` en null es "todavía no se le entrega"; en 0 es "se fue sin nada", que es
        un dato válido y muy común. Por eso se cuenta el null, no el cero. */
     pagados: participaciones.filter((p) => debeCobrar(p) && p.pagado !== null).length,
@@ -112,8 +131,11 @@ export function calcularCuadre(
  */
 export function porQueNoSePuedeCerrar(c: Cuadre): string | null {
   if (c.jugadores === 0) return 'Todavía no hay jugadores cargados.'
-  if (c.contados < c.jugadores)
-    return `Falta contarle las fichas a ${c.jugadores - c.contados} de ${c.jugadores}.`
+  if (c.faltanContar.length > 0)
+    return (
+      `Falta contarle las fichas a ${enLista(c.faltanContar)}.` +
+      ' Si se fue sin una sola, abre su conteo y guárdalo en ceros.'
+    )
   if (!c.fichasCuadran) {
     const malas = c.fichas.filter((f) => f.dif !== 0)
     const detalle = malas
@@ -122,9 +144,21 @@ export function porQueNoSePuedeCerrar(c: Cuadre): string | null {
     return `Las fichas no cuadran: ${detalle}.`
   }
   if (c.pagadoDeMas) return 'Se repartió más dinero del que entró a la mesa.'
-  if (c.pagados < c.porCobrar) {
-    const faltan = c.porCobrar - c.pagados
-    return `Falta apuntar cuánto se le dio a ${faltan} de ${c.porCobrar}. Si se fue sin nada, ponle 0.`
-  }
+  if (c.faltanPagar.length > 0)
+    return `Falta apuntar cuánto se le dio a ${enLista(c.faltanPagar)}. Si se fue sin nada, ponle 0.`
   return null
+}
+
+/**
+ * Una lista de nombres dicha como se dice: "Chuy y Omar", "Chuy, Omar y Beto".
+ *
+ * Pasado el tope se corta —"y 3 más"— porque un aviso de catorce nombres no se lee, y
+ * con tres ya se sabe a quién hay que ir a buscar.
+ */
+export function enLista(nombres: string[], tope = 3): string {
+  if (nombres.length === 0) return ''
+  if (nombres.length === 1) return nombres[0]
+  if (nombres.length <= tope + 1)
+    return `${nombres.slice(0, -1).join(', ')} y ${nombres[nombres.length - 1]}`
+  return `${nombres.slice(0, tope).join(', ')} y ${nombres.length - tope} más`
 }
