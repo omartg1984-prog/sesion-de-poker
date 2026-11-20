@@ -134,10 +134,12 @@ function Movida({ n }: { n: number | undefined }) {
 
 /** Las columnas de la vista de tabla. El `id` es el mismo con el que se ordena. */
 const COLUMNAS: {
-  id: Orden
+  id: Orden | 'caja'
   corto: string
   dinero?: boolean
-  valor: (p: Posicion) => { texto: string; n: number }
+  /** Las que están para mirarse y no para competir por ellas: no ordenan la tabla. */
+  soloDato?: boolean
+  valor: (p: Posicion, movido: number) => { texto: string; n: number }
 }[] = [
   { id: 'partidas', corto: 'PJ', valor: (p) => ({ texto: String(p.partidas), n: 0 }) },
   { id: 'puntos', corto: 'Pts', valor: (p) => ({ texto: String(p.puntos), n: 0 }) },
@@ -153,6 +155,23 @@ const COLUMNAS: {
     corto: 'Por noche',
     dinero: true,
     valor: (p) => ({ texto: signed(p.promedio), n: p.promedio }),
+  },
+  /*
+   * Qué parte de todo el dinero que ha pasado por la mesa la puso él.
+   *
+   * Va como dato y no como puntos a propósito: esto no premia jugar bien, premia meter
+   * dinero. El que recompra tres veces cada noche y se va perdiendo sube su número; el
+   * que entra una vez, aguanta y se lleva la bolsa, lo baja. Como columna dice algo
+   * —quién sostiene la liga—; como campeonato coronaría al que más la financia.
+   */
+  {
+    id: 'caja',
+    corto: '% caja',
+    soloDato: true,
+    valor: (p, movido) => ({
+      texto: movido > 0 ? `${((p.invertido / movido) * 100).toFixed(1)}%` : '—',
+      n: 0,
+    }),
   },
 ]
 const pct = (v: number) => `${v > 0 ? '+' : ''}${v.toFixed(0)}%`
@@ -799,10 +818,10 @@ export default function TablaPosiciones({ tabla, nombreLiga, partidas }: Props) 
                 {COLUMNAS.map((c) => (
                   <th
                     key={c.id}
-                    className={`cursor-pointer px-1.5 pb-2 text-right font-semibold ${
-                      orden === c.id ? 'text-white' : ''
-                    }`}
-                    onClick={() => setOrden(c.id)}
+                    className={`px-1.5 pb-2 text-right font-semibold ${
+                      c.soloDato ? '' : 'cursor-pointer'
+                    } ${orden === c.id ? 'text-white' : ''}`}
+                    onClick={() => !c.soloDato && setOrden(c.id as Orden)}
                   >
                     {c.corto}
                   </th>
@@ -834,7 +853,7 @@ export default function TablaPosiciones({ tabla, nombreLiga, partidas }: Props) 
                     </span>
                   </td>
                   {COLUMNAS.map((c) => {
-                    const v = c.valor(p)
+                    const v = c.valor(p, tabla.dineroMovido)
                     return (
                       <td
                         key={c.id}
@@ -850,6 +869,13 @@ export default function TablaPosiciones({ tabla, nombreLiga, partidas }: Props) 
               ))}
             </tbody>
           </table>
+          {/* La única columna que no ordena la tabla necesita decir qué es, porque no
+              tiene su renglón de ayuda arriba como las demás. */}
+          <p className="mt-2 mb-0 px-1 text-[11px] leading-snug text-tiza-suave">
+            <b className="text-white">% caja</b> es qué parte de todo el dinero que ha pasado por
+            la mesa la puso cada quien, entradas y recompras. Es un dato, no da puntos: mide
+            cuánto mueve, no qué tan bien juega.
+          </p>
         </div>
       ) : vista === 'cuenta' ? (
         /*
