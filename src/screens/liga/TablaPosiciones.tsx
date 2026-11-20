@@ -1,4 +1,4 @@
-import { Flame, Snowflake, Trophy } from 'lucide-react'
+import { ChevronDown, ChevronUp, Flame, Snowflake, Trophy } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import Cara from '../../components/Cara'
 import Esqueleto from '../../components/Esqueleto'
@@ -72,6 +72,65 @@ const claseSaldo = (v: number) => (v > EPS ? 'text-win' : v < -EPS ? 'text-loss'
    tarjetas crema no se leen. */
 const tonoOscuro = (v: number) =>
   v > EPS ? '!text-win-alto' : v < -EPS ? '!text-loss-alto' : ''
+
+/** Lo que hace falta para ordenar a alguien, hoy o en la foto de antes. */
+interface ParaOrdenar {
+  puntos: number
+  puntosPorNoche: number
+  balance: number
+  roi: number
+  promedio: number
+  partidas: number
+}
+
+/**
+ * El orden de la tabla, en una función aparte.
+ *
+ * Vive fuera porque se usa dos veces con el mismo criterio: para la tabla de hoy y para
+ * la de antes de la última noche, que es de donde sale la flecha. Si fueran dos órdenes
+ * distintos, la flecha diría cualquier cosa.
+ */
+const porOrden = (orden: Orden) => (a: ParaOrdenar, b: ParaOrdenar) => {
+  if (orden === 'puntos') return b.puntos - a.puntos || b.balance - a.balance
+  if (orden === 'puntosNoche') return b.puntosPorNoche - a.puntosPorNoche || b.partidas - a.partidas
+  if (orden === 'roi') return b.roi - a.roi
+  if (orden === 'promedio') return b.promedio - a.promedio
+  if (orden === 'partidas') return b.partidas - a.partidas
+  return b.balance - a.balance
+}
+
+/**
+ * Cuántos lugares subió o bajó alguien con la última noche.
+ *
+ * Es la pregunta que se hace en la mesa el sábado en la mañana, y hasta ahora había que
+ * acordarse de cómo iba la tabla el viernes. En verde lo que subió, en rojo lo que
+ * bajó, y el que debutó esa noche sale como nuevo: no se movió de ningún lado.
+ */
+function Movida({ n }: { n: number | undefined }) {
+  if (n === undefined)
+    return (
+      <span className="shrink-0 text-[9px] font-bold tracking-[.3px] text-marca-alta uppercase">
+        nuevo
+      </span>
+    )
+  if (n === 0) return <span className="shrink-0 text-[11px] text-tiza-suave">=</span>
+  const sube = n > 0
+  return (
+    <span
+      className={`flex shrink-0 items-center text-[11px] font-bold tabular-nums ${
+        sube ? 'text-win-alto' : 'text-loss-alto'
+      }`}
+      title={`${sube ? 'Subió' : 'Bajó'} ${Math.abs(n)} con la última noche`}
+    >
+      {sube ? (
+        <ChevronUp size={12} strokeWidth={3} />
+      ) : (
+        <ChevronDown size={12} strokeWidth={3} />
+      )}
+      {Math.abs(n)}
+    </span>
+  )
+}
 
 /** Las columnas de la vista de tabla. El `id` es el mismo con el que se ordena. */
 const COLUMNAS: {
@@ -557,16 +616,31 @@ export default function TablaPosiciones({ tabla, nombreLiga, partidas }: Props) 
   }
 
   /* ---- toda la liga ---- */
-  const ordenadas = [...tabla.posiciones].sort((a, b) => {
-    if (orden === 'puntos') return b.puntos - a.puntos || b.balance - a.balance
-    if (orden === 'puntosNoche')
-      return b.puntosPorNoche - a.puntosPorNoche || b.partidas - a.partidas
-    if (orden === 'roi') return b.roi - a.roi
-    if (orden === 'promedio') return b.promedio - a.promedio
-    if (orden === 'partidas') return b.partidas - a.partidas
-    return b.balance - a.balance
-  })
+  const ordenadas = [...tabla.posiciones].sort(porOrden(orden))
   const ayuda = ORDENES.find((o) => o.id === orden)!.ayuda
+
+  /*
+   * La flecha: dónde estaba cada quien antes de la última noche.
+   *
+   * Se arma aquí y no en el servidor porque depende de por dónde se esté ordenando la
+   * tabla: el que subió tres en el campeonato pudo no moverse en el saldo. Con la foto
+   * de antes puesta en el mismo orden, la resta de lugares sale sola.
+   *
+   * Con una sola noche jugada no hay de dónde moverse y no se enseña nada.
+   */
+  const movidas = (() => {
+    const mapa = new Map<string, number>()
+    if (tabla.partidasContadas < 2) return mapa
+    const conFoto = tabla.posiciones.filter((p) => p.antes)
+    const antes = [...conFoto].sort((a, b) => porOrden(orden)(a.antes!, b.antes!))
+    const lugarAntes = new Map(antes.map((p, i) => [p.usuarioId, i + 1]))
+    ordenadas.forEach((p, i) => {
+      const ayer = lugarAntes.get(p.usuarioId)
+      if (ayer !== undefined) mapa.set(p.usuarioId, ayer - (i + 1))
+    })
+    return mapa
+  })()
+  const hayMovidas = tabla.partidasContadas >= 2
 
   /*
    * El mínimo de asistencia sólo manda en el campeonato.
@@ -750,11 +824,13 @@ export default function TablaPosiciones({ tabla, nombreLiga, partidas }: Props) 
                       </span>
                     )}
                   </td>
-                  <td className="max-w-[112px] px-1 py-2">
+                  <td className="max-w-[136px] px-1 py-2">
                     <span className="flex items-center gap-1.5">
                       <Cara nombre={p.nombre} foto={p.foto} size={22} />
                       <span className="truncate font-semibold text-white">{p.nombre}</span>
                       <Calificacion p={p} soloEmoji />
+                      {/* Cuántos lugares se movió con la última noche. */}
+                      {hayMovidas && <Movida n={movidas.get(p.usuarioId)} />}
                     </span>
                   </td>
                   {COLUMNAS.map((c) => {

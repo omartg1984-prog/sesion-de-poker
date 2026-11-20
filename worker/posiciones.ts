@@ -240,8 +240,28 @@ export interface Posicion {
    */
   puedePodio: boolean
 
+  /**
+   * Cómo iba antes de la última noche. Falta en el que debutó ese día.
+   *
+   * Es lo que hace posible la flecha de la tabla: con la foto de antes y la de ahora,
+   * la pantalla saca cuántos lugares subió o bajó cada quien, y lo saca para el orden
+   * que se esté mirando —campeonato, saldo, rendimiento— sin pedirle nada más al
+   * servidor.
+   */
+  antes?: ComoIba
+
   /** Lo que se ganó presumir. */
   titulos: Titulo[]
+}
+
+/** La foto de alguien antes de la última noche, con lo que hace falta para ordenar. */
+export interface ComoIba {
+  partidas: number
+  puntos: number
+  puntosPorNoche: number
+  balance: number
+  roi: number
+  promedio: number
 }
 
 /**
@@ -621,6 +641,33 @@ export async function calcularPosiciones(
     const vencidos = noches.reduce((a, n) => a + vencidosEn(paraPuntos(n)), 0)
     const puntos = puntosDeLaTemporada(balance, vencidos, esquema)
 
+    /*
+     * Cómo iba antes de la última noche.
+     *
+     * Se saca en la misma pasada, quitándole la última noche a la suma: volver a armar
+     * la temporada entera para esto costaría el doble y daría exactamente lo mismo. El
+     * que debutó esa noche no tiene foto de antes, y eso también es un dato: en la
+     * tabla sale como nuevo en vez de como si no se hubiera movido.
+     */
+    const previas = noches.filter((n) => n.indice < partidas.length - 1)
+    const antes = previas.length
+      ? (() => {
+          const puso = previas.reduce((a, n) => a + n.puesto, 0)
+          const saco = previas.reduce((a, n) => a + n.saco, 0)
+          const saldo = saco - puso
+          const vencidosAntes = previas.reduce((a, n) => a + vencidosEn(paraPuntos(n)), 0)
+          const puntosAntes = puntosDeLaTemporada(saldo, vencidosAntes, esquema)
+          return {
+            partidas: previas.length,
+            puntos: puntosAntes,
+            puntosPorNoche: puntosAntes / previas.length,
+            balance: saldo,
+            roi: puso > 0 ? (saldo / puso) * 100 : 0,
+            promedio: saldo / previas.length,
+          }
+        })()
+      : undefined
+
     return {
       usuarioId: datos.usuario_id,
       nombre: datos.nombre,
@@ -656,6 +703,7 @@ export async function calcularPosiciones(
       recompras: noches.reduce((a, n) => a + n.recompras, 0),
       montoRecompras: noches.reduce((a, n) => a + n.montoRecompras, 0),
       esMiembro: dentro.has(datos.usuario_id),
+      ...(antes ? { antes } : {}),
       puedePodio: true,
       titulos: [],
     }

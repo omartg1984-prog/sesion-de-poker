@@ -445,8 +445,21 @@ export interface Posicion {
   /** Sus noches de la temporada, en orden, con lo que aportó cada una. */
   detalle?: NocheDeAlguien[]
 
+  /** Cómo iba antes de la última noche. Falta en el que debutó ese día. */
+  antes?: ComoIba
+
   /** Lo que se ganó presumir. */
   titulos: Titulo[]
+}
+
+/** La foto de alguien antes de la última noche, con lo que hace falta para ordenar. */
+export interface ComoIba {
+  partidas: number
+  puntos: number
+  puntosPorNoche: number
+  balance: number
+  roi: number
+  promedio: number
 }
 
 /** Una de las noches de alguien, como se ve al abrir su tarjeta. */
